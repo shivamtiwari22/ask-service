@@ -15,17 +15,6 @@ const contactSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const otpSchema = new mongoose.Schema(
-  {
-    email_otp: { type: String, default: null },
-    phone_otp: { type: String, default: null },
-    expires_at: { type: Date, default: null },
-    verified_email: { type: Boolean, default: false },
-    verified_phone: { type: Boolean, default: false },
-  },
-  { _id: false }
-);
-
 const ServiceRequestSchema = new mongoose.Schema(
   {
     reference_no: { type: String, required: true, unique: true },
@@ -54,16 +43,18 @@ const ServiceRequestSchema = new mongoose.Schema(
     preferred_start_date: { type: Date, default: null },
     preferred_time_of_day: { type: String, default: null, trim: true },
     note: { type: String, default: null, trim: true },
-    address: { type: String, required: true, trim: true },
+    address_1: { type: String, required: true, trim: true },
+    address_2: { type: String, required: true, trim: true },
+    city: { type: String, required: true, trim: true },
+    state: { type: String, required: true, trim: true },
+    country: { type: String, required: true, trim: true },
     pincode: { type: String, default: null, trim: true },
     status: {
       type: String,
-      enum: ["PENDING_VERIFICATION", "SUBMITTED", "CANCELLED"],
+      enum: ["PENDING_VERIFICATION", "Active", "CANCELLED", "EXPIRED"],
       default: "PENDING_VERIFICATION",
     },
     contact_details: { type: contactSchema, required: true },
-    otp_meta: { type: otpSchema, default: () => ({}) },
-    generated_password: { type: String, default: null },
     vendor_requests: [
       {
         vendor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

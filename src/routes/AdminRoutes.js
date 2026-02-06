@@ -27,7 +27,7 @@ import {
   validateLoginAdmin,
   verifyOTPValidation,
 } from "../../middleware/validation.js";
-import { userProfileUpload } from "../../utils/multer.js";
+import { serviceCategoryUpload, userProfileUpload } from "../../utils/multer.js";
 import {
   authenticateForgotPasswordToken,
   authenticateToken,
@@ -50,6 +50,8 @@ import {
   getAllServiceDocumentRequirements,
   getAllTestimonialMasters,
   getAllTokenMasters,
+  getTestimonialMasterById,
+  getTokenMasterById,
   restoreDeletedServiceDocumentRequirement,
   restoreDeletedTestimonialMaster,
   restoreDeletedTokenMaster,
@@ -86,6 +88,7 @@ router.get("/get-all-users", authenticateToken, getAllUsers);
 router.post(
   "/service-categories",
   authenticateToken,
+  serviceCategoryUpload,
   createServiceCategoryValidation,
   createServiceCategory
 );
@@ -94,6 +97,7 @@ router.get("/service-categories/:id", authenticateToken, getServiceCategoryById)
 router.put(
   "/service-categories/:id",
   authenticateToken,
+  serviceCategoryUpload,
   updateServiceCategoryValidation,
   updateServiceCategory
 );
@@ -112,6 +116,7 @@ router.post(
   createTokenMaster
 );
 router.get("/token-masters", authenticateToken, getAllTokenMasters);
+router.get("/token-masters/:id", authenticateToken, getTokenMasterById);
 router.put(
   "/token-masters/:id",
   authenticateToken,
@@ -133,6 +138,7 @@ router.post(
   createTestimonialMaster
 );
 router.get("/testimonial-masters", authenticateToken, getAllTestimonialMasters);
+router.get("/testimonial-masters/:id", authenticateToken, getTestimonialMasterById);
 router.put(
   "/testimonial-masters/:id",
   authenticateToken,
@@ -155,6 +161,11 @@ router.post(
 );
 router.get(
   "/service-document-requirements",
+  authenticateToken,
+  getAllServiceDocumentRequirements
+);
+router.get(
+  "/service-document-requirements/:id",
   authenticateToken,
   getAllServiceDocumentRequirements
 );

@@ -11,14 +11,14 @@ const UserSchema = mongoose.Schema(
       type: String,
       required: true,
     },
-    profile_pic:{
-        type: String,
-        default: null,
-        get:(val)=>{
-            if(!val) return null;
-            if(val.startsWith("http")) return val;
-            return process.env.IMAGE_URL + val;
-        }
+    profile_pic: {
+      type: String,
+      default: null,
+      get: (val) => {
+        if (!val) return null;
+        if (val.startsWith("http")) return val;
+        return process.env.IMAGE_URL + val;
+      }
     },
     // user_type: {
     //   type: String,
@@ -41,6 +41,10 @@ const UserSchema = mongoose.Schema(
       default: false,
     },
     otp: {
+      type: String,
+      default: null,
+    },
+    otp_phone: {
       type: String,
       default: null,
     },

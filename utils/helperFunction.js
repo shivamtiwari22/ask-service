@@ -2,43 +2,9 @@ import QRCode from "qrcode";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import moment from "moment";
-// import Counter from "../src/model/CounterSchema.js";
-// import SequenceCounter from "../src/model/SequenceCounterSchema.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const rolePrefixes = {
-  admin: "AD",
-  user: "US",
-  owner: "OW",
-  sales_person: "SP",
-  store: "ST",
-};
-
-function generateRandomString(length = 12) {
-  const chars = "abcdefghijklmnopqrstuvwxyz";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result.toUpperCase();
-}
-
-// export const generateUserId = async (role) => {
-//   const prefix = rolePrefixes[role?.toLowerCase()] || "UN";
-
-//   const counter = await SequenceCounter.findOneAndUpdate(
-//     { key: prefix },
-//     { $inc: { seq: 1 } },
-//     { new: true, upsert: true }
-//   );
-
-//   const paddedNumber = String(counter.seq).padStart(4, "0");
-
-//   return `${prefix}-${paddedNumber}`;
-// };
 
 export function generatePassword(length = 8) {
   const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -92,32 +58,11 @@ export async function generateReceiptNumber() {
   return `${prefix}-${random}-${Date.now()}`;
 }
 
-// export const generateInvoiceNumber = async () => {
-//   const counter = await Counter.findOneAndUpdate(
-//     { name: "invoice" },
-//     { $inc: { value: 1 } },
-//     { new: true, upsert: true }
-//   );
-
-//   return `INV-${String(counter.value).padStart(6, "0")}`;
-// };
-
 export const roundAmount = (value) => {
   if (!value || isNaN(value)) return 0;
   return Math.round(Number(value));
 };
 
-// export const generateEmail = async () => {
-//   const counter = await SequenceCounter.findOneAndUpdate(
-//     { key: "Email" },
-//     { $inc: { seq: 1 } },
-//     { new: true, upsert: true }
-//   );
-
-//   const paddedNumber = String(counter.seq).padStart(6, "0");
-
-//   return `#${paddedNumber}`;
-// };
 
 export const sanitizeObjectId = (value) =>
   value === "" || value === "undefined" || typeof value === "undefined"
@@ -130,3 +75,14 @@ export const cookieOptions = {
   secure: false,
   sameSite: "lax",
 };
+
+
+export const createReference = () => {
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `REQ-${random}`;
+};
+
+const sendGeneratedPasswordToPhone = async ({ phone, password }) => {
+  console.log(`Generated password for ${phone}: ${password}`);
+};
+

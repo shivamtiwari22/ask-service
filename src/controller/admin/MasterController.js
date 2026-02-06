@@ -88,6 +88,20 @@ export const getAllTokenMasters = async (req, resp) => {
   }
 };
 
+// get single token master by id
+export const getTokenMasterById = async (req, resp) => {
+  try {
+    const token = await TokenMaster.findOne({ _id: req.params.id }).lean();
+
+    if (!token) {
+      return handleResponse(404, "Token master not found", {}, resp);
+    }
+    return handleResponse(200, "Token master fetched successfully", token, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+}
+
 // update token master
 export const updateTokenMaster = async (req, resp) => {
   try {
@@ -194,6 +208,19 @@ export const getAllTestimonialMasters = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+// get testimonial master by id
+export const getTestimonialMasterById = async (req, resp) => {
+  try {
+    const testimonial = await TestimonialMaster.findOne({ _id: req.params.id }).lean();
+    if (!testimonial) {
+      return handleResponse(404, "Testimonial master not found", {}, resp);
+    }
+    return handleResponse(200, "Testimonial master fetched successfully", testimonial, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+}
 
 // update testimonial master
 export const updateTestimonialMaster = async (req, resp) => {
@@ -339,6 +366,19 @@ export const getAllServiceDocumentRequirements = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+// get single service document requirement by id
+export const getServiceDocumentRequirementById = async (req, resp) => {
+  try {
+    const requirement = await ServiceDocumentRequirement.findOne({ _id: req.params.id }).populate("service_category", "title").lean();
+    if (!requirement) {
+      return handleResponse(404, "Service document requirement not found", {}, resp);
+    }
+    return handleResponse(200, "Service document requirement fetched successfully", requirement, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+}
 
 // update service document / license requirement master
 export const updateServiceDocumentRequirement = async (req, resp) => {
