@@ -17,6 +17,7 @@ const normalizeOptions = (options = []) => {
     .filter((option) => option.label);
 };
 
+// create service category
 export const createServiceCategory = async (req, resp) => {
   try {
     const { title, description, image, status, parent_category, options } = req.body;
@@ -61,6 +62,7 @@ export const createServiceCategory = async (req, resp) => {
   }
 };
 
+// update service category
 export const updateServiceCategory = async (req, resp) => {
   try {
     const { id } = req.params;
@@ -112,14 +114,85 @@ export const updateServiceCategory = async (req, resp) => {
 
     return handleResponse(200, "Service category updated successfully", updatedCategory, resp);
   } catch (err) {
-    if (err?.code === 11000) {
-      return handleResponse(409, "Category with same title already exists", {}, resp);
-    }
-
     return handleResponse(500, err.message, {}, resp);
   }
 };
 
+// get all service categories (deleted / non-deleted) with pagination & search
+export const getAllServiceCategories = async (req, resp) => {
+  try {
+    const { search, status, parent_category, isDeleted, isParentOnly=false } = req.query;
+
+    const page = parseInt(req.query.page ?? "1");
+    const limit = parseInt(req.query.limit ?? "10");
+
+    const isPaginationDisabled = page === 0 && limit === 0;
+    const skip = isPaginationDisabled ? 0 : (page - 1) * limit;
+
+    const filter = {};
+
+    if (isDeleted === "true") {
+      filter.deletedAt = { $ne: null };
+    } else {
+      filter.deletedAt = null;
+    }
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if(isParentOnly==true){
+      filter.parent_category = null;
+    }
+
+    if (parent_category === "null") {
+      filter.parent_category = null;
+    } else if (parent_category) {
+      filter.parent_category = parent_category;
+    }
+
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    let query = ServiceCategory.find(filter)
+      .populate("parent_category", "title")
+      .sort({ createdAt: -1 });
+
+    if (!isPaginationDisabled) {
+      query = query.skip(skip).limit(limit);
+    }
+
+    const [categories, total] = await Promise.all([
+      query,
+      ServiceCategory.countDocuments(filter),
+    ]);
+
+    return handleResponse(
+      200,
+      "Service categories fetched successfully",
+      {
+        list: categories,
+        pagination: isPaginationDisabled
+          ? null
+          : {
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+            },
+      },
+      resp
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// get service cateogory by id
 export const getServiceCategoryById = async (req, resp) => {
   try {
     const { id } = req.params;
@@ -138,57 +211,7 @@ export const getServiceCategoryById = async (req, resp) => {
   }
 };
 
-export const getAllServiceCategories = async (req, resp) => {
-  try {
-    const { search, status, parent_category } = req.query;
-    const page = parseInt(req.query.page || "1");
-    const limit = parseInt(req.query.limit || "10");
-    const skip = (page - 1) * limit;
-
-    const filter = { deletedAt: null };
-    if (status) filter.status = status;
-
-    if (parent_category === "null") {
-      filter.parent_category = null;
-    } else if (parent_category) {
-      filter.parent_category = parent_category;
-    }
-
-    if (search) {
-      filter.$or = [
-        { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const [categories, total] = await Promise.all([
-      ServiceCategory.find(filter)
-        .populate("parent_category", "title")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      ServiceCategory.countDocuments(filter),
-    ]);
-
-    return handleResponse(
-      200,
-      "Service categories fetched successfully",
-      {
-        list: categories,
-        pagination: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-        },
-      },
-      resp
-    );
-  } catch (err) {
-    return handleResponse(500, err.message, {}, resp);
-  }
-};
-
+// delete service category (soft delete)
 export const deleteServiceCategory = async (req, resp) => {
   try {
     const { id } = req.params;
@@ -220,3 +243,32 @@ export const deleteServiceCategory = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+// restore deleted service category
+export const restoreServiceCategory = async (req, resp) => {
+  try{
+    const { id } = req.params;
+    const category = await ServiceCategory.findOne({ _id: id, deletedAt: { $ne: null } });
+    if(!category){
+      return handleResponse(404, "Deleted service category not found", {}, resp);
+    }
+
+    if(category.parent_category){
+      const parentCategory = await ServiceCategory.findOne({
+        _id: category.parent_category,
+        deletedAt: null,
+      });
+      if(!parentCategory){
+        return handleResponse(400, "Cannot restore category without restoring its parent category", {}, resp);
+      }
+    }
+
+    category.deletedAt = null;
+    await category.save();
+
+    return handleResponse(200, "Service category restored successfully", {}, resp);
+
+  }catch(err){
+    return handleResponse(500, err.message, {}, resp);
+  }
+}

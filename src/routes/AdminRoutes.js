@@ -37,6 +37,7 @@ import {
   deleteServiceCategory,
   getAllServiceCategories,
   getServiceCategoryById,
+  restoreServiceCategory,
   updateServiceCategory,
 } from "../controller/admin/ServiceCategoryController.js";
 import {
@@ -49,6 +50,9 @@ import {
   getAllServiceDocumentRequirements,
   getAllTestimonialMasters,
   getAllTokenMasters,
+  restoreDeletedServiceDocumentRequirement,
+  restoreDeletedTestimonialMaster,
+  restoreDeletedTokenMaster,
   updateServiceDocumentRequirement,
   updateTestimonialMaster,
   updateTokenMaster,
@@ -94,6 +98,11 @@ router.put(
   updateServiceCategory
 );
 router.delete("/service-categories/:id", authenticateToken, deleteServiceCategory);
+router.put(
+  "/service-categories/:id/restore",
+  authenticateToken,
+  restoreServiceCategory
+);
 
 // token master
 router.post(
@@ -110,6 +119,11 @@ router.put(
   updateTokenMaster
 );
 router.delete("/token-masters/:id", authenticateToken, deleteTokenMaster);
+router.put(
+  "/token-masters/:id/restore",
+  authenticateToken,
+  restoreDeletedTokenMaster
+);
 
 // testimonial master
 router.post(
@@ -126,6 +140,11 @@ router.put(
   updateTestimonialMaster
 );
 router.delete("/testimonial-masters/:id", authenticateToken, deleteTestimonialMaster);
+router.put(
+  "/testimonial-masters/:id/restore",
+  authenticateToken,
+  restoreDeletedTestimonialMaster
+);
 
 // service document / license requirement master
 router.post(
@@ -149,6 +168,12 @@ router.delete(
   "/service-document-requirements/:id",
   authenticateToken,
   deleteServiceDocumentRequirement
+);
+
+router.put(
+  "/service-document-requirements/:id/restore",
+  authenticateToken,
+  restoreDeletedServiceDocumentRequirement
 );
 
 export default router;
