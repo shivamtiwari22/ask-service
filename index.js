@@ -12,6 +12,7 @@ import handleResponse from "./utils/http-response.js";
 import logger from "./utils/logger.js";
 import cookieParser from "cookie-parser";
 import AdminRoutes from "./src/routes/AdminRoutes.js";
+import UserRoutes from "./src/routes/UserRoutes.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -88,7 +89,7 @@ app.use(express.static("public"));
 app.use("", express.static(path.join(__dirname, "")));
 
 app.use("/api/admin", AdminRoutes);
-// app.use("/api/user", UserRoutes);
+app.use("/api/user", UserRoutes);
 app.get("/download", async (req, res) => {
   const fileUrl = req.query.url;
 

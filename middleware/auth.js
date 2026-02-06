@@ -22,7 +22,7 @@ export const authenticateToken = async (req, res, next) => {
 
     if (
       user.status != "ACTIVE" &&
-      !user.role.name.includes(["User", "Vendor"])
+      !["User", "Vendor"].includes(user.role.name)
     ) {
       return handleResponse(401, "User is not active", {}, res);
     }
@@ -124,7 +124,7 @@ export const authenticateForgotPasswordToken = async (req, res, next) => {
 
     if (
       user.status != "ACTIVE" &&
-      !user.role.name.includes(["User", "Vendor"])
+      !["User", "Vendor"].includes(user.role.name)
     ) {
       return handleResponse(401, "User is not active", {}, res);
     }
@@ -136,5 +136,33 @@ export const authenticateForgotPasswordToken = async (req, res, next) => {
       return handleResponse(401, "Token has expired", {}, res);
     }
     return handleResponse(401, "Invalid token", {}, res);
+  }
+};
+
+
+export const optionalAuthenticateToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+      return next();
+    }
+
+    const decoded = verifyToken(token, JWT_SECRET);
+    const user = await User.findById(decoded._id).populate("role");
+
+    if (!user) {
+      return next();
+    }
+
+    if (user.status !== "ACTIVE") {
+      return next();
+    }
+
+    req.user = user;
+    return next();
+  } catch (error) {
+    return next();
   }
 };

@@ -21,7 +21,7 @@ export const adminLogin = async (req, resp) => {
       return handleResponse(401, "Invalid password", {}, resp);
     }
 
-    if (user.role.name.includes(["User", "Vendor"])) {
+    if (["User", "Vendor"].includes(user.role.name)) {
       return handleResponse(
         401,
         "You are not authorized to access this resource",
