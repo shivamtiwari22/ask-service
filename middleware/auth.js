@@ -54,10 +54,6 @@ export const userAuthenticateToken = async (req, res, next) => {
       return handleResponse(404, "User not found", {}, res);
     }
 
-    // if (user.role != "User") {
-    //     return handleResponse(401, "Not allowed to access this", {}, res)
-    // }
-
     if (user.status != "ACTIVE") {
       return handleResponse(401, "User is not active", {}, res);
     }
@@ -95,7 +91,7 @@ export const checkRoleAuth = (allowedRoles = []) => {
           403,
           "You are not allowed to access this resource",
           {},
-          res
+          res,
         );
       }
 
@@ -138,7 +134,6 @@ export const authenticateForgotPasswordToken = async (req, res, next) => {
     return handleResponse(401, "Invalid token", {}, res);
   }
 };
-
 
 export const optionalAuthenticateToken = async (req, res, next) => {
   try {

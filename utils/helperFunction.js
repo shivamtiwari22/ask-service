@@ -63,7 +63,6 @@ export const roundAmount = (value) => {
   return Math.round(Number(value));
 };
 
-
 export const sanitizeObjectId = (value) =>
   value === "" || value === "undefined" || typeof value === "undefined"
     ? null
@@ -76,7 +75,6 @@ export const cookieOptions = {
   sameSite: "lax",
 };
 
-
 export const createReference = () => {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `REQ-${random}`;
@@ -86,3 +84,10 @@ const sendGeneratedPasswordToPhone = async ({ phone, password }) => {
   console.log(`Generated password for ${phone}: ${password}`);
 };
 
+export const getIdentifierQuery = ({ email, phone }) => {
+  if (email) return { email };
+  if (phone) return { phone };
+  throw new Error("Email or phone required");
+};
+
+export const isVendor = (user) => user?.role?.name === "Vendor";

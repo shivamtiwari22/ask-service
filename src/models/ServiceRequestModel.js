@@ -12,7 +12,7 @@ const contactSchema = new mongoose.Schema(
     phone: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const ServiceRequestSchema = new mongoose.Schema(
@@ -39,31 +39,64 @@ const ServiceRequestSchema = new mongoose.Schema(
       enum: ["One-time service", "Daily", "Weekly", "Bi-weekly", "Monthly"],
       required: true,
     },
-    selected_options: [{ type: String, trim: true }],
-    preferred_start_date: { type: Date, default: null },
-    preferred_time_of_day: { type: String, default: null, trim: true },
-    note: { type: String, default: null, trim: true },
-    address_1: { type: String, required: true, trim: true },
-    address_2: { type: String, required: true, trim: true },
-    city: { type: String, required: true, trim: true },
-    state: { type: String, required: true, trim: true },
-    country: { type: String, required: true, trim: true },
-    pincode: { type: String, default: null, trim: true },
-    status: {
-      type: String,
-      enum: ["PENDING_VERIFICATION", "Active", "CANCELLED", "EXPIRED"],
-      default: "PENDING_VERIFICATION",
-    },
-    contact_details: { type: contactSchema, required: true },
-    vendor_requests: [
+    selected_options: [
       {
-        vendor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-        requestedAt: { type: Date, default: Date.now },
+        type: String,
+        trim: true,
       },
     ],
+    preferred_start_date: {
+      type: Date,
+      default: null,
+    },
+    preferred_time_of_day: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    note: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    address_1: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    address_2: {
+      type: String,
+      trim: true,
+    },
+    city: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    state: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    country: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    pincode: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    status: {
+      type: String,
+      enum: ["ACTIVE", "CANCELLED", "EXPIRED"],
+      default: "ACTIVE",
+    },
+    contact_details: { type: contactSchema, required: true },
     deletedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 ServiceRequestSchema.index({ user: 1, createdAt: -1 });

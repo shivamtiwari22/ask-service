@@ -18,7 +18,7 @@ const UserSchema = mongoose.Schema(
         if (!val) return null;
         if (val.startsWith("http")) return val;
         return process.env.IMAGE_URL + val;
-      }
+      },
     },
     // user_type: {
     //   type: String,
@@ -52,9 +52,13 @@ const UserSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    otp_phone_expiry_at: {
+      type: String,
+      default: null,
+    },
     otp_for: {
       type: String,
-      enum: ["SIGNUP", "FORGOT_PASSWORD", "VERIFY_EMAIL", "VERIFY_PHONE"],
+      enum: ["SIGNUP", "FORGOT_PASSWORD", "VERIFY_EMAIL", "VERIFY_PHONE","LOGIN"],
       default: null,
     },
     password: {
@@ -82,7 +86,7 @@ const UserSchema = mongoose.Schema(
     retainNullValues: true,
     toJSON: { getters: true },
     toObject: { getters: true },
-  }
+  },
 );
 
 UserSchema.index({ email: 1 }, { unique: true });
