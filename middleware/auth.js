@@ -48,7 +48,7 @@ export const userAuthenticateToken = async (req, res, next) => {
 
     const decoded = verifyToken(token, JWT_SECRET);
 
-    const user = await User.findById(decoded._id);
+    const user = await User.findById(decoded._id).populate("role");
 
     if (!user) {
       return handleResponse(404, "User not found", {}, res);
@@ -86,7 +86,7 @@ export const checkRoleAuth = (allowedRoles = []) => {
         return handleResponse(401, "Unauthorized", {}, res);
       }
 
-      if (!allowedRoles.includes(user.role)) {
+      if (!allowedRoles.includes(user.role.name)) {
         return handleResponse(
           403,
           "You are not allowed to access this resource",

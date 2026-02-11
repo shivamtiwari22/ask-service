@@ -8,8 +8,21 @@ import {
 import {
   checkRoleAuth,
   optionalAuthenticateToken,
+  userAuthenticateToken,
 } from "../../middleware/auth.js";
-import { googleLogin, loginWithPassword, requestLoginOTP, resendOTP, signup, verifyLoginOTP, verifySignup } from "../controller/user/AuthController.js";
+
+import {
+  login,
+  requestEmailLoginOTP,
+  resendEmailVerification,
+  resendPhoneOTP,
+  signup,
+  updateUserProfile,
+  verifyEmail,
+  verifyPhone,
+  verifyPhoneAndLogin,
+} from "../controller/user/AuthController.js";
+import { userProfileUpload } from "../../utils/multer.js";
 
 const router = express.Router();
 
@@ -18,36 +31,48 @@ const router = express.Router();
 router.get("/service-categories", getUserServiceCategories);
 
 // service created by user (without login)
-router.post("/service-request",optionalAuthenticateToken,initiateServiceRequest);
+router.post(
+  "/service-request",
+  optionalAuthenticateToken,
+  initiateServiceRequest,
+);
 
 // verify signup login
 router.post("/verify-signup-login", verifySignupLogin);
-
 
 // ==============================AUTH=================================
 // signup
 router.post("/signup", signup);
 
-// verify signup
-router.post("/verify-signup", verifySignup);
+// verify phone
+router.post("/verify-phone", verifyPhone);
 
-// login with password
-router.post("/login/password", loginWithPassword);
+// verify phone and login
+router.post("/verify-phone-login", verifyPhoneAndLogin);
 
-// request login otp
-router.post("/login/otp/request", requestLoginOTP);
+// resend phone otp
+router.post("/resend-phone-otp", resendPhoneOTP);
 
-// verify login otp
-router.post("/login/otp/verify", verifyLoginOTP);
+// resend email verification link
+router.post("/resend-email-verification", resendEmailVerification);
 
-// resend otp
-router.post("/resend-otp", resendOTP);
+// verify email
+router.get("/verify-email", verifyEmail);
 
-// google login
-router.post("/auth/google", googleLogin);
+// login
+router.post("/login", login);
 
+// request email login otp
+router.post("/login/email-otp", requestEmailLoginOTP);
 
-
+// update profile
+router.put(
+  "/update-profile",
+  userProfileUpload,
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  updateUserProfile,
+);
 
 router.get("/test", (req, res) => {
   return handleResponse(200, "User route is working fine", {}, res);

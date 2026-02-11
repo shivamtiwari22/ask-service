@@ -1,7 +1,6 @@
 import { sendEmail } from "../../../config/emailConfig.js";
 import handleResponse from "../../../utils/http-response.js";
 import {
-  comparePassword,
   generateOTP,
   generateToken,
   hashPassword,
@@ -16,6 +15,7 @@ import ServiceRequest from "../../models/ServiceRequestModel.js";
 import User from "../../models/UserModel.js";
 import moment from "moment";
 import mongoose from "mongoose";
+import crypto from "crypto";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -131,14 +131,37 @@ export const initiateServiceRequest = async (req, resp) => {
       contact_details,
     } = req.body;
 
-    const { email, phone } = contact_details || {};
-
-    if (!email && !phone) {
+    if (!contact_details) {
       await session.abortTransaction();
-      return handleResponse(400, "Email or phone is required", {}, resp);
+      return handleResponse(400, "Contact details are required", {}, resp);
     }
 
-    // ===== CATEGORY VALIDATION =====
+    const { phone, email, first_name, last_name } = contact_details;
+
+    // ================= REQUIRED VALIDATION =================
+    if (!phone || !first_name || !last_name) {
+      await session.abortTransaction();
+      return handleResponse(
+        400,
+        "Phone, first name and last name are required",
+        {},
+        resp,
+      );
+    }
+
+    if (
+      !service_category ||
+      !frequency ||
+      !address_1 ||
+      !city ||
+      !state ||
+      !country
+    ) {
+      await session.abortTransaction();
+      return handleResponse(400, "Missing required service fields", {}, resp);
+    }
+
+    // ================= CATEGORY VALIDATION =================
     const parentCategory = await ServiceCategory.findOne({
       _id: service_category,
       deletedAt: null,
@@ -147,47 +170,50 @@ export const initiateServiceRequest = async (req, resp) => {
 
     if (!parentCategory) {
       await session.abortTransaction();
-      return handleResponse(404, "Service category not found", {}, resp);
+      return handleResponse(404, "Invalid service category", {}, resp);
     }
 
     if (child_category) {
-      const childCategoryData = await ServiceCategory.findOne({
+      const child = await ServiceCategory.findOne({
         _id: child_category,
         parent_category: service_category,
         deletedAt: null,
         status: "ACTIVE",
       });
 
-      if (!childCategoryData) {
+      if (!child) {
         await session.abortTransaction();
         return handleResponse(400, "Invalid child category", {}, resp);
       }
     }
 
-    const payload = {
-      reference_no: createReference(),
-      service_category,
-      child_category: child_category || null,
-      manual_child_category: manual_child_category || null,
-      frequency,
-      selected_options: Array.isArray(selected_options) ? selected_options : [],
-      preferred_start_date: preferred_start_date || null,
-      preferred_time_of_day: preferred_time_of_day || null,
-      note: note || null,
-      address_1,
-      address_2,
-      city,
-      state,
-      country,
-      pincode: pincode || null,
-      contact_details,
-      status: "ACTIVE",
-    };
-
-    // ===== LOGGED-IN USER =====
+    // ================= LOGGED-IN USER =================
     if (req.user) {
       const [request] = await ServiceRequest.create(
-        [{ ...payload, user: req.user._id }],
+        [
+          {
+            reference_no: createReference(),
+            service_category,
+            child_category: child_category || null,
+            manual_child_category: manual_child_category || null,
+            frequency,
+            selected_options: Array.isArray(selected_options)
+              ? selected_options
+              : [],
+            preferred_start_date: preferred_start_date || null,
+            preferred_time_of_day: preferred_time_of_day || null,
+            note: note || null,
+            address_1,
+            address_2,
+            city,
+            state,
+            country,
+            pincode: pincode || null,
+            contact_details,
+            user: req.user._id,
+            status: "ACTIVE",
+          },
+        ],
         { session },
       );
 
@@ -201,117 +227,132 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
-    // ===== EXISTING USER =====
-    let user = await User.findOne({
-      $or: [{ email }, { phone }],
-    });
+    // ================= FIND USER BY PHONE =================
+    const existingUser = await User.findOne({ phone });
 
-    if (user) {
-      const emailRequired = !!user.email && !user.is_email_verified;
-      const phoneRequired = !!user.phone && !user.is_phone_verified;
+    // ================= EMAIL COLLISION CHECK =================
+    if (email) {
+      const emailOwner = await User.findOne({ email });
 
-      // Fully verified → login
-      if (!emailRequired && !phoneRequired) {
+      if (
+        emailOwner &&
+        (!existingUser ||
+          emailOwner._id.toString() !== existingUser._id.toString())
+      ) {
         await session.abortTransaction();
         return handleResponse(
-          200,
-          "User already exists. Please login.",
-          { flow: "LOGIN_REQUIRED" },
+          400,
+          "Email already associated with another account",
+          {},
+          resp,
+        );
+      }
+    }
+
+    // ================= EXISTING USER =================
+    if (existingUser) {
+      if (!existingUser.is_phone_verified) {
+        existingUser.phone_otp = generateOTP();
+        existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
+        await existingUser.save({ session });
+
+        await session.commitTransaction();
+
+        return handleResponse(
+          403,
+          "Phone verification required",
+          { flow: "PHONE_VERIFICATION_REQUIRED" },
           resp,
         );
       }
 
-      if (emailRequired) {
-        user.otp = generateOTP();
-        user.otp_expires_at = moment().add(1, "minutes").toDate();
-      }
-
-      if (phoneRequired) {
-        user.otp_phone = generateOTP();
-        user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
-      }
-
-      user.otp_for = "SIGNUP";
-      await user.save({ session });
-      await session.commitTransaction();
-
-      if (emailRequired) {
-        await sendEmail({
-          to: user.email,
-          subject: "Email OTP",
-          html: `<p>Your email OTP is <b>${user.otp}</b></p>`,
-        });
-      }
+      await session.abortTransaction();
 
       return handleResponse(
         200,
-        "Verification required",
-        {
-          flow: "VERIFICATION_REQUIRED",
-          verification: {
-            email_required: emailRequired,
-            phone_required: phoneRequired,
-          },
-        },
+        "User already exists. Please login.",
+        { flow: "LOGIN_REQUIRED" },
         resp,
       );
     }
 
-    // ===== NEW USER =====
+    // ================= NEW USER =================
     const role = await Role.findOne({ name: "User" });
 
-    const emailOtp = email ? generateOTP() : null;
-    const phoneOtp = phone ? generateOTP() : null;
+    const phoneOtp = generateOTP();
+    const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
 
     const [newUser] = await User.create(
       [
         {
-          first_name: contact_details.first_name || "Guest User",
-          last_name: contact_details.last_name,
-          email,
+          first_name,
+          last_name,
           phone,
-          password: await hashPassword(generatePassword(10)),
+          email: email || null,
+          password: await hashPassword(generatePassword(8)),
           role: role._id,
-          status: "ACTIVE",
-          otp_for: "SIGNUP",
-          otp: emailOtp,
+          is_phone_verified: false,
+          is_email_verified: false,
           otp_phone: phoneOtp,
-          otp_expires_at: emailOtp ? moment().add(1, "minutes").toDate() : null,
-          otp_phone_expiry_at: phoneOtp
-            ? moment().add(1, "minutes").toDate()
-            : null,
+          otp_phone_expiry_at: moment().add(5, "minutes").toDate(),
+          otp_for: "VERIFY_PHONE",
+          email_verification_token: emailToken,
+          status: "ACTIVE",
         },
       ],
       { session },
     );
 
-    await ServiceRequest.create([{ ...payload, user: newUser._id }], {
-      session,
-    });
+    const [request] = await ServiceRequest.create(
+      [
+        {
+          reference_no: createReference(),
+          service_category,
+          child_category: child_category || null,
+          manual_child_category: manual_child_category || null,
+          frequency,
+          selected_options: Array.isArray(selected_options)
+            ? selected_options
+            : [],
+          preferred_start_date: preferred_start_date || null,
+          preferred_time_of_day: preferred_time_of_day || null,
+          note: note || null,
+          address_1,
+          address_2,
+          city,
+          state,
+          country,
+          pincode: pincode || null,
+          contact_details,
+          user: newUser._id,
+          status: "ACTIVE",
+        },
+      ],
+      { session },
+    );
 
     await session.commitTransaction();
 
-    if (emailOtp) {
-      await sendEmail({
-        to: email,
-        subject: "Email OTP",
-        html: `<p>Your email OTP is <b>${emailOtp}</b></p>`,
-      });
-    }
+    // if (email && emailToken) {
+    //   setImmediate(async () => {
+    //     const link = `${process.env.BASE_URL}/api/user/verify-email?token=${emailToken}`;
+    //     await sendEmail({
+    //       to: email,
+    //       subject: "Verify your email",
+    //       html: `<p>Click below to verify your email:</p>
+    //              <a href="${link}">${link}</a>`,
+    //     });
+    //   });
+    // }
 
     return handleResponse(
       201,
-      "Verification required",
-      {
-        flow: "VERIFICATION_REQUIRED",
-        verification: {
-          email_required: !!email,
-          phone_required: !!phone,
-        },
-      },
+      "Phone verification required",
+      { flow: "PHONE_VERIFICATION_REQUIRED", request },
       resp,
     );
   } catch (err) {
+    console.log("Service request error:", err);
     await session.abortTransaction();
     return handleResponse(500, err.message, {}, resp);
   } finally {

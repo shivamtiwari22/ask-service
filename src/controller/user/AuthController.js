@@ -4,178 +4,176 @@ import {
   comparePassword,
   generateOTP,
   generateToken,
+  hashPassword,
 } from "../../../utils/auth.js";
-import { OAuth2Client } from "google-auth-library";
 import Role from "../../models/RoleModel.js";
+import moment from "moment";
+import crypto from "crypto";
+import { sendEmail } from "../../../config/emailConfig.js";
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-// signup
+// SIGNUP
 export const signup = async (req, resp) => {
-  const session = await mongoose.startSession();
-
   try {
-    session.startTransaction();
+    const { first_name, last_name, phone, email, password } = req.body;
 
-    const { first_name, last_name, email, phone } = req.body;
-
-    if (!email && !phone) {
-      return handleResponse(400, "Email or phone required", {}, resp);
+    if (!phone || !password) {
+      return handleResponse(400, "Phone and password are required", {}, resp);
     }
 
     const existingUser = await User.findOne({
-      $or: [{ email }, { phone }],
+      $or: [{ phone }, ...(email ? [{ email }] : [])],
     });
 
     if (existingUser) {
-      return handleResponse(
-        200,
-        "User already exists",
-        { flow: "LOGIN_REQUIRED" },
-        resp,
-      );
+      return handleResponse(409, "User already exists", {}, resp);
     }
 
     const role = await Role.findOne({ name: "User" });
 
-    const emailOtp = email ? generateOTP() : null;
-    const phoneOtp = phone ? generateOTP() : null;
+    const phoneOtp = generateOTP();
+    const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
 
-    const [user] = await User.create(
-      [
-        {
-          first_name,
-          last_name,
-          email,
-          phone,
-          role: role._id,
-          password: await hashPassword(generatePassword(10)),
-          status: "ACTIVE",
-          otp_for: "SIGNUP",
-          otp: emailOtp,
-          otp_phone: phoneOtp,
-          otp_expires_at: emailOtp ? moment().add(1, "minutes").toDate() : null,
-          otp_phone_expiry_at: phoneOtp
-            ? moment().add(1, "minutes").toDate()
-            : null,
-        },
-      ],
-      { session },
-    );
+    await User.create({
+      first_name,
+      last_name,
+      phone,
+      email: email || null,
+      password: await hashPassword(password),
+      role: role._id,
+      status: "ACTIVE",
+      is_phone_verified: false,
+      is_email_verified: false,
+      phone_otp: phoneOtp,
+      phone_otp_expiry: moment().add(5, "minutes").toDate(),
+      email_verification_token: emailToken,
+    });
 
-    await session.commitTransaction();
+    if (email) {
+      const link = `${process.env.BASE_URL}/api/user/verify-email?token=${emailToken}`;
 
-    if (emailOtp) {
       await sendEmail({
         to: email,
-        subject: "Email OTP",
-        html: `<p>Your email OTP is <b>${emailOtp}</b></p>`,
+        subject: "Verify your email",
+        html: `<p>Click below to verify your email:</p>
+               <a href="${link}">${link}</a>`,
       });
     }
 
     return handleResponse(
       201,
-      "Signup successful. Verification required.",
-      {
-        flow: "VERIFICATION_REQUIRED",
-        verification: {
-          email_required: !!email,
-          phone_required: !!phone,
-        },
-      },
+      "Signup successful. Verify phone to continue.",
+      { flow: "PHONE_VERIFICATION_REQUIRED" },
       resp,
     );
   } catch (err) {
-    await session.abortTransaction();
     return handleResponse(500, err.message, {}, resp);
-  } finally {
-    session.endSession();
   }
 };
 
-// verify signup
-export const verifySignup = async (req, resp) => {
+// VERIFY PHONE
+export const verifyPhone = async (req, resp) => {
   try {
-    const { email, phone, otp_email, otp_phone, type = "SIGNUP" } = req.body;
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return handleResponse(400, "Phone and OTP are required", {}, resp);
+    }
+
+    const user = await User.findOne({ phone });
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+
+    if (
+      !user.phone_otp ||
+      !user.phone_otp_expiry ||
+      moment().isAfter(user.phone_otp_expiry)
+    ) {
+      return handleResponse(400, "OTP expired", {}, resp);
+    }
+
+    if (user.phone_otp !== otp) {
+      return handleResponse(401, "Invalid OTP", {}, resp);
+    }
+
+    user.is_phone_verified = true;
+    user.phone_otp = null;
+    user.phone_otp_expiry = null;
+
+    await user.save();
+
+    return handleResponse(200, "Phone verified successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+//  VERIFY EMAIL (LINK BASED)
+export const verifyEmail = async (req, resp) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return handleResponse(400, "Invalid verification link", {}, resp);
+    }
 
     const user = await User.findOne({
-      $or: [{ email }, { phone }],
+      email_verification_token: token,
     });
 
     if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
+      return handleResponse(400, "Invalid or expired link", {}, resp);
     }
 
-    const errors = {};
+    user.is_email_verified = true;
+    user.email_verification_token = null;
 
-    // ===== EMAIL =====
-    if (user.email && !user.is_email_verified) {
-      if (!otp_email) errors.email = "Email OTP required";
-      else if (moment().isAfter(user.otp_expires_at))
-        errors.email = "Email OTP expired";
-      else if (user.otp !== otp_email) errors.email = "Invalid Email OTP";
-      else {
-        user.is_email_verified = true;
-        user.otp = null;
-        user.otp_expires_at = null;
-      }
-    }
-
-    // ===== PHONE =====
-    if (user.phone && !user.is_phone_verified) {
-      if (!otp_phone) errors.phone = "Phone OTP required";
-      else if (moment().isAfter(user.otp_phone_expiry_at))
-        errors.phone = "Phone OTP expired";
-      else if (user.otp_phone !== otp_phone) errors.phone = "Invalid Phone OTP";
-      else {
-        user.is_phone_verified = true;
-        user.otp_phone = null;
-        user.otp_phone_expiry_at = null;
-      }
-    }
-
-    if (Object.keys(errors).length > 0) {
-      await user.save();
-      return handleResponse(
-        400,
-        "Verification incomplete",
-        {
-          flow: "VERIFICATION_REQUIRED",
-          errors,
-          email_verified: user.is_email_verified,
-          phone_verified: user.is_phone_verified,
-        },
-        resp,
-      );
-    }
-
-    user.otp_for = null;
     await user.save();
 
-    // 🔐 CONDITIONAL LOGIN
-    if (type === "SIGNUP_LOGIN") {
-      const token = generateToken(user);
+    return handleResponse(200, "Email verified successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// REQUEST EMAIL LOGIN OTP
+export const requestEmailLoginOTP = async (req, resp) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+
+    if (!user.is_phone_verified)
       return handleResponse(
-        200,
-        "Verification successful",
-        {
-          flow: "LOGIN_SUCCESS",
-          token,
-          user,
-        },
+        403,
+        "Phone verification required",
+        { flow: "PHONE_VERIFICATION_REQUIRED" },
         resp,
       );
-    }
 
-    // 🧾 SIGNUP-ONLY FLOW
+    if (!user.is_email_verified)
+      return handleResponse(
+        403,
+        "Email not verified",
+        { flow: "EMAIL_VERIFICATION_REQUIRED" },
+        resp,
+      );
+
+    const otp = generateOTP();
+
+    user.email_login_otp = otp;
+    user.email_login_otp_expiry = moment().add(5, "minutes").toDate();
+    await user.save();
+
+    await sendEmail({
+      to: email,
+      subject: "Login OTP",
+      html: `<p>Your login OTP is <b>${otp}</b></p>`,
+    });
+
     return handleResponse(
       200,
-      "Verification successful",
-      {
-        flow: "SIGNUP_VERIFIED",
-        email_verified: user.is_email_verified,
-        phone_verified: user.is_phone_verified,
-      },
+      "OTP sent to email",
+      { flow: "OTP_REQUIRED" },
       resp,
     );
   } catch (err) {
@@ -183,17 +181,69 @@ export const verifySignup = async (req, resp) => {
   }
 };
 
-// login with password
-export const loginWithPassword = async (req, resp) => {
+// LOGIN API
+export const login = async (req, resp) => {
   try {
     const { identifier, password } = req.body;
 
+    if (!identifier || !password) {
+      return handleResponse(
+        400,
+        "Identifier and password are required",
+        {},
+        resp,
+      );
+    }
+
     const user = await User.findOne({
-      $or: [{ email: identifier }, { phone: identifier }],
+      $or: [{ phone: identifier }, { email: identifier }],
     });
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
+    }
+
+    // Phone must exist
+    if (!user.phone) {
+      const token = generateToken(user.toObject());
+      return handleResponse(
+        403,
+        "Phone number required to access account",
+        { flow: "PHONE_REQUIRED", user: user.toObject(), token },
+        resp,
+      );
+    }
+
+    // Phone must be verified
+    if (!user.is_phone_verified) {
+      const otp = generateOTP();
+      user.otp_phone = otp;
+      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      user.otp_for = "VERIFY_PHONE";
+      await user.save();
+
+      return handleResponse(
+        403,
+        "Phone verification required",
+        { flow: "PHONE_VERIFICATION_REQUIRED" },
+        resp,
+      );
+    }
+
+    const isEmailLogin = user.email === identifier;
+
+    if (isEmailLogin && !user.is_email_verified) {
+      const newToken = crypto.randomBytes(32).toString("hex");
+
+      user.email_verification_token = newToken;
+      await user.save();
+
+      return handleResponse(
+        403,
+        "Email verification required",
+        { flow: "EMAIL_VERIFICATION_REQUIRED" },
+        resp,
+      );
     }
 
     const isMatch = await comparePassword(password, user.password);
@@ -201,170 +251,249 @@ export const loginWithPassword = async (req, resp) => {
       return handleResponse(401, "Invalid credentials", {}, resp);
     }
 
-    const token = generateToken(user);
-
-    return handleResponse(200, "Login successful", { token, user }, resp);
-  } catch (err) {
-    return handleResponse(500, err.message, {}, resp);
-  }
-};
-
-// request login otp
-export const requestLoginOTP = async (req, resp) => {
-  try {
-    const { identifier } = req.body;
-
-    const user = await User.findOne({
-      $or: [{ email: identifier }, { phone: identifier }],
-    });
-
-    if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
-    }
-
-    const otp = generateOTP();
-    user.otp = otp;
-    user.otp_for = "LOGIN";
-    user.otp_expires_at = moment().add(5, "minutes").toDate();
-    await user.save();
-
-    // send email or SMS here
-
-    return handleResponse(
-      200,
-      "OTP sent for login",
-      { flow: "OTP_REQUIRED" },
-      resp,
-    );
-  } catch (err) {
-    return handleResponse(500, err.message, {}, resp);
-  }
-};
-
-// verify login otp
-export const verifyLoginOTP = async (req, resp) => {
-  try {
-  } catch (err) {
-    const { identifier, otp } = req.body;
-
-    const user = await User.findOne({
-      $or: [{ email: identifier }, { phone: identifier }],
-    });
-
-    if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
-    }
-
-    if (moment().isAfter(user.otp_expires_at)) {
-      return handleResponse(400, "OTP expired", {}, resp);
-    }
-
-    if (user.otp !== otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp);
-    }
-
-    user.otp = null;
-    user.otp_expires_at = null;
-    user.otp_for = null;
-    await user.save();
-
-    const token = generateToken(user);
-
-    return handleResponse(200, "Login successful", { token, user }, resp);
-  }
-};
-
-// resend otp
-export const resendOTP = async (req, resp) => {
-  try {
-    const { email, phone, type } = req.body;
-
-    const user = await User.findOne({
-      $or: [{ email }, { phone }],
-    });
-
-    if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
-    }
-
-    const otp = generateOTP();
-
-    if (type === "email" && user.email) {
-      user.otp = otp;
-      user.otp_expires_at = moment().add(1, "minutes").toDate();
-    }
-
-    if (type === "phone" && user.phone) {
-      user.otp_phone = otp;
-      user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
-    }
-
-    user.otp_for = "SIGNUP";
-    await user.save();
-
-    return handleResponse(
-      200,
-      "OTP resent successfully",
-      { flow: "OTP_REQUIRED" },
-      resp,
-    );
-  } catch (err) {
-    return handleResponse(500, err.message, {}, resp);
-  }
-};
-
-// google login
-export const googleLogin = async (req, resp) => {
-  try {
-    const { id_token } = req.body;
-
-    if (!id_token) {
-      return handleResponse(400, "Google ID token required", {}, resp);
-    }
-
-    const ticket = await client.verifyIdToken({
-      idToken: id_token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const payload = ticket.getPayload();
-
-    const { email, given_name, family_name, email_verified } = payload;
-
-    if (!email || !email_verified) {
-      return handleResponse(401, "Google email not verified", {}, resp);
-    }
-
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      const role = await Role.findOne({ name: "User" });
-
-      user = await User.create({
-        first_name: given_name || "Google",
-        last_name: family_name || "User",
-        email,
-        is_email_verified: true,
-        role: role._id,
-        password: await hashPassword(generatePassword(16)),
-        status: "ACTIVE",
-      });
-    }
-
-    const token = generateToken(user);
+    const token = generateToken(user.toObject());
 
     return handleResponse(
       200,
       "Login successful",
+      { flow: "LOGIN_SUCCESS", token, user },
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// RESEND PHONE OTP
+export const resendPhoneOTP = async (req, resp) => {
+  try {
+    const { phone, type } = req.body;
+
+    if (!phone) {
+      return handleResponse(400, "Phone is required", {}, resp);
+    }
+
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    if (user.is_phone_verified) {
+      return handleResponse(400, "Phone already verified", {}, resp);
+    }
+
+    const otp = generateOTP();
+
+    user.otp_phone = otp;
+    user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+    user.otp_for = type;
+
+    await user.save();
+
+    return handleResponse(
+      200,
+      "Phone OTP resent successfully",
+      { flow: "PHONE_VERIFICATION_REQUIRED" },
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// RESEND EMAIL VERIFICATION LINK
+export const resendEmailVerification = async (req, resp) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return handleResponse(400, "Email is required", {}, resp);
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    if (!user.email) {
+      return handleResponse(400, "No email found for this user", {}, resp);
+    }
+
+    if (user.is_email_verified) {
+      return handleResponse(400, "Email already verified", {}, resp);
+    }
+
+    const newToken = crypto.randomBytes(32).toString("hex");
+
+    user.email_verification_token = newToken;
+    await user.save();
+
+    const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
+
+    await sendEmail({
+      to: email,
+      subject: "Verify your email",
+      html: `<p>Click below to verify your email:</p>
+             <a href="${link}">${link}</a>`,
+    });
+
+    return handleResponse(
+      200,
+      "Verification link resent successfully",
+      { flow: "EMAIL_VERIFICATION_REQUIRED" },
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// VERIFY PHONE + AUTO LOGIN
+export const verifyPhoneAndLogin = async (req, resp) => {
+  try {
+    const { phone, otp, type } = req.body;
+
+    if (!phone || !otp) {
+      return handleResponse(400, "Phone and OTP are required", {}, resp);
+    }
+
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    if (type !== "VERIFY_PHONE") {
+      return handleResponse(400, "Invalid type", {}, resp);
+    }
+
+    if (
+      !user.otp_phone ||
+      !user.otp_phone_expiry_at ||
+      moment().isAfter(user.otp_phone_expiry_at)
+    ) {
+      return handleResponse(400, "OTP expired", {}, resp);
+    }
+
+    if (user.otp_phone !== otp) {
+      return handleResponse(401, "Invalid OTP", {}, resp);
+    }
+
+    user.is_phone_verified = true;
+    user.otp_phone = null;
+    user.otp_phone_expiry_at = null;
+    user.otp_for = null;
+
+    await user.save();
+
+    // resend email verification if email exists but not verified
+    if (user.email && !user.is_email_verified) {
+      const newToken = crypto.randomBytes(32).toString("hex");
+      user.email_verification_token = newToken;
+      await user.save();
+
+      const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
+
+      await sendEmail({
+        to: user.email,
+        subject: "Verify your email",
+        html: `<p>Click below to verify your email:</p>
+               <a href="${link}">${link}</a>`,
+      });
+    }
+
+    const token = generateToken(user.toObject());
+
+    return handleResponse(
+      200,
+      "Phone verified and login successful",
+      { flow: "LOGIN_SUCCESS", token, user },
+      resp,
+    );
+  } catch (err) {
+    console.log("verifyPhoneAndLogin error : ", err);
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// UPDATE PROFILE
+export const updateUserProfile = async (req, resp) => {
+  try {
+    const userId = req.user?._id;
+
+    if (!userId) {
+      return handleResponse(401, "Unauthorized", {}, resp);
+    }
+
+    const { first_name, last_name, email, phone, password } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    if (first_name !== undefined) user.first_name = first_name;
+    if (last_name !== undefined) user.last_name = last_name;
+
+    if (email !== undefined && email !== user.email) {
+      const existingEmail = await User.findOne({
+        email,
+        _id: { $ne: userId },
+      });
+      if (existingEmail) {
+        return handleResponse(409, "Email already in use", {}, resp);
+      }
+
+      user.email = email;
+      user.is_email_verified = false;
+
+      const newToken = crypto.randomBytes(32).toString("hex");
+      user.email_verification_token = newToken;
+
+      const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
+
+      await sendEmail({
+        to: email,
+        subject: "Verify your email",
+        html: `<p>Click below to verify your email:</p>
+               <a href="${link}">${link}</a>`,
+      });
+    }
+
+    if (phone !== undefined && phone !== user.phone) {
+      const existingPhone = await User.findOne({
+        phone,
+        _id: { $ne: userId },
+      });
+      if (existingPhone) {
+        return handleResponse(409, "Phone already in use", {}, resp);
+      }
+
+      user.phone = phone;
+      user.is_phone_verified = false;
+
+      const otp = generateOTP();
+      user.otp_phone = otp;
+      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      user.otp_for = "VERIFY_PHONE";
+    }
+
+    if (password !== undefined) {
+      user.password = await hashPassword(password);
+    }
+
+    await user.save();
+
+    return handleResponse(
+      200,
+      "Profile updated successfully",
       {
-        flow: "LOGIN_SUCCESS",
-        token,
-        user,
+        flow: "PROFILE_UPDATED",
+        email_verified: user.is_email_verified,
+        phone_verified: user.is_phone_verified,
       },
       resp,
     );
   } catch (err) {
-    console.error("Google login error:", err);
-    return handleResponse(500, "Google authentication failed", {}, resp);
+    return handleResponse(500, err.message, {}, resp);
   }
 };

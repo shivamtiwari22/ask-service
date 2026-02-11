@@ -20,14 +20,8 @@ const UserSchema = mongoose.Schema(
         return process.env.IMAGE_URL + val;
       },
     },
-    // user_type: {
-    //   type: String,
-    //   enum: ["Individual", "Company"],
-    //   default: null,
-    // },
     email: {
       type: String,
-      required: true,
     },
     is_email_verified: {
       type: Boolean,
@@ -35,6 +29,7 @@ const UserSchema = mongoose.Schema(
     },
     phone: {
       type: String,
+      required: true,
     },
     is_phone_verified: {
       type: Boolean,
@@ -53,12 +48,22 @@ const UserSchema = mongoose.Schema(
       default: null,
     },
     otp_phone_expiry_at: {
+      type: Date,
+      default: null,
+    },
+    email_verification_token: {
       type: String,
       default: null,
     },
     otp_for: {
       type: String,
-      enum: ["SIGNUP", "FORGOT_PASSWORD", "VERIFY_EMAIL", "VERIFY_PHONE","LOGIN"],
+      enum: [
+        "SIGNUP",
+        "FORGOT_PASSWORD",
+        "VERIFY_EMAIL",
+        "VERIFY_PHONE",
+        "LOGIN",
+      ],
       default: null,
     },
     password: {
