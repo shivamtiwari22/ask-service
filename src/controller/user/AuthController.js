@@ -3,6 +3,7 @@ import handleResponse from "../../../utils/http-response.js";
 import {
   comparePassword,
   generateOTP,
+  generateOneMinToken,
   generateToken,
   hashPassword,
 } from "../../../utils/auth.js";
@@ -10,6 +11,8 @@ import Role from "../../models/RoleModel.js";
 import moment from "moment";
 import crypto from "crypto";
 import { sendEmail } from "../../../config/emailConfig.js";
+import { cookieOptions } from "../../../utils/helperFunction.js";
+import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -46,6 +49,10 @@ export const signup = async (req, resp) => {
       phone_otp: phoneOtp,
       phone_otp_expiry: moment().add(5, "minutes").toDate(),
       email_verification_token: emailToken,
+    });
+
+    await VendorCreditWallet.create({
+      user_id: user._id,
     });
 
     if (email) {
@@ -424,7 +431,7 @@ export const updateUserProfile = async (req, resp) => {
       return handleResponse(401, "Unauthorized", {}, resp);
     }
 
-    const { first_name, last_name, email, phone, password } = req.body;
+    const { first_name, last_name, email, phone, profile_pic } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -477,9 +484,8 @@ export const updateUserProfile = async (req, resp) => {
       user.otp_for = "VERIFY_PHONE";
     }
 
-    if (password !== undefined) {
-      user.password = await hashPassword(password);
-    }
+    user.profile_pic =
+      req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
 
     await user.save();
 
@@ -520,9 +526,106 @@ export const changePassword = async (req, resp) => {
   }
 };
 
+// get profile
+export const getProfile = async (req, resp) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+    return handleResponse(200, "Profile fetched successfully", user, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
 // forgot password
 export const forgotPassword = async (req, resp) => {
   try {
+    const { email, phone, type } = req.body;
+    if (!email && !phone)
+      return handleResponse(400, "Email or phone is required", {}, resp);
+
+    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+
+    user.otp = generateOTP();
+    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_for = type;
+    await user.save();
+    return handleResponse(
+      200,
+      "OTP sent successfully",
+      { otp: user.otp },
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// verify forgot password otp
+export const verifyOTP = async (req, resp) => {
+  try {
+    const { email, phone, otp, type } = req.body;
+
+    if (!email && !phone) {
+      return handleResponse(400, "Email or phone is required", {}, resp);
+    }
+
+    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    if (type !== "FORGOT_PASSWORD") {
+      return handleResponse(400, "Invalid type", {}, resp);
+    }
+
+    if (user.otp != otp) {
+      return handleResponse(401, "Invalid OTP", {}, resp);
+    }
+    user.otp = null;
+    user.otp_expires_at = null;
+    user.otp_for = null;
+    await user.save();
+
+    const token = generateOneMinToken(user.toObject());
+    await resp.cookie("forgot-password", token, cookieOptions);
+    return handleResponse(200, "OTP verified successfully", { token }, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// resend phone email OTP
+export const resendPhoneEmailOTP = async (req, resp) => {
+  try {
+    const { phone, email, type } = req.body;
+    if (!phone && !email) {
+      return handleResponse(400, "Phone or email is required", {}, resp);
+    }
+    const user = await User.findOne({ $or: [{ phone }, { email }] });
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+    user.otp = generateOTP();
+    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_for = type;
+    await user.save();
+    return handleResponse(200, "OTP sent successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// reset password
+export const resetPassword = async (req, resp) => {
+  try {
+    const { password } = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+    user.password = await hashPassword(password);
+    await user.save();
+    return handleResponse(200, "Password reset successfully", {}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

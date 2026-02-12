@@ -20,12 +20,12 @@ export const authenticateToken = async (req, res, next) => {
       return handleResponse(404, "User not found", {}, res);
     }
 
-    if (
-      user.status != "ACTIVE" &&
-      !["User", "Vendor"].includes(user.role.name)
-    ) {
-      return handleResponse(401, "User is not active", {}, res);
-    }
+    // if (
+    //   user.status != "ACTIVE" &&
+    //   !["User", "Vendor"].includes(user.role.name)
+    // ) {
+    //   return handleResponse(401, "User is not active", {}, res);
+    // }
     req.user = user;
 
     next();

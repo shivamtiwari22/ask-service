@@ -95,6 +95,10 @@ const ServiceRequestSchema = new mongoose.Schema(
     },
     contact_details: { type: contactSchema, required: true },
     deletedAt: { type: Date, default: null },
+    reason: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true },
 );

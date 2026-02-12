@@ -435,3 +435,115 @@ export const verifySignupLogin = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+// get applied services
+export const getCreatedServiceRequests = async (req, resp) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const { search, service, status, fromDate, toDate } = req.query;
+
+    const query = {};
+
+    if (search) {
+      query.reference_no = { $regex: search, $options: "i" };
+    }
+
+    if (service) {
+      query.$or = [
+        {
+          service_category: service,
+        },
+        {
+          child_category: service,
+        },
+      ];
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (fromDate) query.createdAt = { $gte: new Date(fromDate) };
+    if (toDate) query.createdAt = { $lte: new Date(toDate) };
+
+    if (page == 0 && limit == 0) {
+      const service = await ServiceRequest.find(query)
+        .populate("service_category", "title description image options")
+        .populate("child_category", "title description image options");
+
+      const fianalData = {
+        data: service,
+        pagination: {
+          total: service.length,
+          page,
+          limit,
+          totalPages: Math.ceil(service.length / limit),
+        },
+      };
+
+      return handleResponse(
+        200,
+        "Services fetched successfully",
+        fianalData,
+        resp,
+      );
+    } else {
+      const [service, total] = await Promise.all([
+        ServiceRequest.find(query)
+          .populate("service_category", "title description image options")
+          .populate("child_category", "title description image options")
+          .skip(skip)
+          .limit(limit),
+        ServiceRequest.countDocuments(query),
+      ]);
+
+      const fianalData = {
+        data: service,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+      return handleResponse(
+        200,
+        "Services fetched successfully",
+        fianalData,
+        resp,
+      );
+    }
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// close service request
+export const closeServiceRequest = async (req, resp) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const serviceRequest = await ServiceRequest.findOne({
+      _id: id,
+      user: req.user._id,
+    });
+
+    if (!serviceRequest)
+      return handleResponse(404, "Service request not found", {}, resp);
+
+    if (serviceRequest.status !== "ACTIVE")
+      return handleResponse(400, "Service request is not active", {}, resp);
+
+    serviceRequest.status = "CLOSED";
+    serviceRequest.reason = reason || null;
+    await serviceRequest.save();
+    return handleResponse(200, "Service request closed successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+
