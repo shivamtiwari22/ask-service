@@ -75,6 +75,13 @@ export const cookieOptions = {
   sameSite: "lax",
 };
 
+export const documentUploadCookieOptions = {
+  maxAge: 15 * 60 * 1000,
+  httpOnly: true,
+  secure: false,
+  sameSite: "lax"
+};
+
 export const createReference = () => {
   const random = Math.random().toString(36).substring(2, 8).toUpperCase();
   return `REQ-${random}`;

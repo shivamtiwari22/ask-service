@@ -125,7 +125,7 @@ router.post("/resend-phone-email-otp", resendPhoneEmailOTP);
 router.post("/verify-forgot-password-otp", verifyOTP);
 
 // reset password
-router.post("/reset-password", authenticateForgotPasswordToken, resetPassword);
+router.post("/reset-password", authenticateForgotPasswordToken("forgot-password"), resetPassword);
 
 router.get("/test", (req, res) => {
   return handleResponse(200, "User route is working fine", {}, res);

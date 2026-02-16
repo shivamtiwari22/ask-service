@@ -3,12 +3,16 @@ import handleResponse from "../../utils/http-response";
 import {
   changePassword,
   forgotPassword,
+  getAllServices,
+  getDocumentRequiredForService,
   getProfile,
   loginVendor,
   registerVendor,
   resendOTP,
   resendPhoneEmailOTP,
   resetPassword,
+  updateDocumentRequiredForService,
+  updateUserServiceData,
   updateVendorProfile,
   verifyOTP,
   verifyRegistrationOTP,
@@ -68,7 +72,20 @@ router.post("/resend-phone-email-otp", resendPhoneEmailOTP);
 router.post("/verify-forgot-password-otp", verifyOTP);
 
 // reset password
-router.post("/reset-password", authenticateForgotPasswordToken, resetPassword);
+router.post("/reset-password", authenticateForgotPasswordToken("forgot-password"), resetPassword);
+
+// get all services
+router.get("/get-all-services",   getAllServices);
+
+// get all services document required
+router.get("/get-all-services-document-required", userAuthenticateToken, checkRoleAuth(["Vendor"]), getDocumentRequiredForService);
+
+// update user's service data
+router.put("/update-service-data", authenticateForgotPasswordToken("service-selection-document-upload"), checkRoleAuth(["Vendor"]), updateUserServiceData);
+
+// upload service selection document
+router.get("/upload-service-selection-document", authenticateForgotPasswordToken("service-selection-document-upload"), updateDocumentRequiredForService);
+
 
 
 router.get("/vendor-test", (req, resp) => {

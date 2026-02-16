@@ -11,6 +11,10 @@ export const generateOneMinToken = (payload) => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "1m" });
 };
 
+export const generate15minToken = (payload) => {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+};
+
 // Verify JWT token
 export const verifyToken = (token) => {
   return jwt.verify(token, JWT_SECRET);

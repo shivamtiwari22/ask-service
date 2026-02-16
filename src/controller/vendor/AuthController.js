@@ -1,6 +1,9 @@
 import moment from "moment";
 import {
+  comparePassword,
   generateOTP,
+  generateOneMinToken,
+  generate15minToken,
   generateToken,
   hashPassword,
 } from "../../../utils/auth.js";
@@ -10,12 +13,21 @@ import User from "../../models/UserModel.js";
 import ServiceRequest from "../../models/ServiceRequestModel.js";
 import normalizePath from "../../../utils/imageNormalizer.js";
 import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
+import ServiceCategory from "../../models/ServiceCategoryModel.js";
+import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
+import extractFiles from "../../../utils/extractNestedFiles.js";
+import {
+  cookieOptions,
+  documentUploadCookieOptions,
+} from "../../../utils/helperFunction.js";
 
 // register vendor
 export const registerVendor = async (req, resp) => {
   try {
     const { first_name, last_name, email, phone, password } = req.body;
-    const existingEmail = await User.find({ email });
+
+    const existingEmail = await User.findOne({ email });
+
     if (existingEmail)
       return handleResponse(
         400,
@@ -24,7 +36,7 @@ export const registerVendor = async (req, resp) => {
         resp,
       );
 
-    const existingPhone = await User.find({ phone });
+    const existingPhone = await User.findOne({ phone });
     if (existingPhone)
       return handleResponse(
         400,
@@ -43,7 +55,8 @@ export const registerVendor = async (req, resp) => {
       phone,
       password: hashedPassword,
       role: role._id,
-      status: "PENDING",
+      status: "ACTIVE",
+      kyc_status: "PENDING",
       otp: generateOTP(),
       otp_phone: generateOTP(),
       otp_expires_at: moment().add(1, "minutes").toDate(),
@@ -86,7 +99,7 @@ export const resendOTP = async (req, resp) => {
       );
     }
 
-    const user = await User.findONe({
+    const user = await User.findOne({
       $or: [{ email: identifier }, { phone: identifier }],
     });
 
@@ -120,9 +133,7 @@ export const verifyRegistrationOTP = async (req, resp) => {
   try {
     const { email, phone, otp_phone, otp_email, type } = req.body;
 
-    const user = await User.findOne({ email, phone }).select(
-      "-password -otp -otp_phone -otp_expires_at -otp_phone_expiry_at -otp_for",
-    );
+    const user = await User.findOne({ email, phone });
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
@@ -138,6 +149,9 @@ export const verifyRegistrationOTP = async (req, resp) => {
       if (user.otp != otp_email) {
         return handleResponse(401, "Invalid Email OTP", {}, resp);
       }
+      if (moment(user.otp_expires_at).isBefore(moment())) {
+        return handleResponse(401, "Email Verification OTP expired", {}, resp);
+      }
 
       user.otp = null;
       user.otp_expires_at = null;
@@ -149,6 +163,9 @@ export const verifyRegistrationOTP = async (req, resp) => {
     if (!phoneVerified) {
       if (user.otp_phone != otp_phone) {
         return handleResponse(401, "Invalid Phone OTP", {}, resp);
+      }
+      if (moment(user.otp_phone_expiry_at).isBefore(moment())) {
+        return handleResponse(401, "Phone Verification OTP expired", {}, resp);
       }
       user.otp_phone = null;
       user.otp_phone_expiry_at = null;
@@ -162,13 +179,19 @@ export const verifyRegistrationOTP = async (req, resp) => {
 
     await user.save();
 
-    const token = generateToken(user.toObject());
+    if (emailVerified && phoneVerified) {
+      const token = generate15minToken(user.toObject());
+      await resp.cookie(
+        "service-selection-document-upload",
+        token,
+        documentUploadCookieOptions,
+      );
+    }
 
     const fialResponse = {
       emailVerified,
       phoneVerified,
       userData: user.toObject(),
-      token,
     };
 
     return handleResponse(200, "OTP verified successfully", fialResponse, resp);
@@ -202,7 +225,7 @@ export const loginVendor = async (req, resp) => {
     let phoneVerified = user.is_phone_verified;
 
     if (type == "OTP") {
-      if (emailVerified || phoneVerified) {
+      if (emailVerified && phoneVerified && user.status == "ACTIVE") {
         user.otp = generateOTP();
         user.otp_expires_at = moment().add(1, "minutes").toDate();
         user.otp_for = "LOGIN";
@@ -231,7 +254,13 @@ export const loginVendor = async (req, resp) => {
         user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
       }
       user.otp_for = "SIGNUP";
+
+      if (user.status !== "ACTIVE") {
+        return handleResponse(401, "Your account is not active", {}, resp);
+      }
+
       await user.save();
+
       const fialResponse = {
         emailVerified,
         phoneVerified,
@@ -246,7 +275,11 @@ export const loginVendor = async (req, resp) => {
         resp,
       );
     } else {
-      if (emailVerified || phoneVerified) {
+      const isPasswordMatch = await comparePassword(password, user.password);
+      if (!isPasswordMatch) {
+        return handleResponse(401, "Invalid password", {}, resp);
+      }
+      if (emailVerified && phoneVerified && user.status == "ACTIVE") {
         const token = generateToken(user.toObject());
 
         const fialResponse = {
@@ -257,6 +290,20 @@ export const loginVendor = async (req, resp) => {
           token,
         };
         return handleResponse(200, "Login Successful", fialResponse, resp);
+      }
+
+      if (!user.service) {
+        const token = generate15minToken(user.toObject());
+        await resp.cookie("forgot-password", token, cookieOptions);
+        return handleResponse(
+          401,
+          "Please select a service",
+          { flow: "SERVICE_SELECTION" },
+          resp,
+        );
+      }
+      if (user.status !== "ACTIVE") {
+        return handleResponse(401, "Your account is not active", {}, resp);
       }
 
       if (!emailVerified) {
@@ -501,6 +548,93 @@ export const resetPassword = async (req, resp) => {
     user.password = await hashPassword(password);
     await user.save();
     return handleResponse(200, "Password reset successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// get all services
+export const getAllServices = async (req, resp) => {
+  try {
+    const services = await ServiceCategory.find({
+      status: "ACTIVE",
+      parent_category: null,
+    }).select("title image");
+
+    return handleResponse(200, "Services fetched successfully", services, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// update user's service data
+export const updateUserServiceData = async (req, resp) => {
+  try {
+    const { service } = req.body;
+    const user = await User.findById(id);
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    user.service = service;
+    await user.save();
+    return handleResponse(200, "Service data updated successfully", user, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// get service required document
+export const getDocumentRequiredForService = async (req, resp) => {
+  try {
+    const user = req.user;
+    const service = await ServiceCategory.findById(user.service);
+    if (!service) {
+      return handleResponse(404, "Service not found", {}, resp);
+    }
+    const documents = await ServiceDocumentRequirement.find({
+      service_category: service._id,
+    });
+    return handleResponse(
+      200,
+      "Documents fetched successfully",
+      documents,
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// upload document required for service
+export const updateDocumentRequiredForService = async (req, resp) => {
+  try {
+    const files = extractFiles(req.files);
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+    const documentRequired = await ServiceDocumentRequirement.findById(
+      user.service,
+    );
+
+    const vendorUploadedDocument = documentRequired?.map((item) => {
+      const document = Object.keys(files).find(
+        (key) => key === item?._id?.toString(),
+      );
+      return {
+        user_id: req.user._id,
+        document_id: item?._id,
+        file: document?.path || null,
+        name: item?.name || null,
+        required: item?.is_required || false,
+        type: item?.type || null,
+      };
+    });
+
+    await VendorDocument.insertMany(vendorUploadedDocument);
+
+    return handleResponse(200, "Documents updated successfully", {}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
