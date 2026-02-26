@@ -1,0 +1,457 @@
+{
+  "info": {
+    "name": "Ask Service - Admin APIs",
+    "description": "Collection for testing Admin APIs. Set `baseUrl` (e.g. http://localhost:3000) and after login set `token` from the response to use authenticated endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "faqId", "value": "" },
+    { "key": "tokenMasterId", "value": "" },
+    { "key": "testimonialId", "value": "" },
+    { "key": "documentReqId", "value": "" },
+    { "key": "serviceCategoryId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/login",
+            "description": "Login with admin credentials. Copy the token from response to collection variable `token` for other requests."
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/get-profile"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "first_name", "value": "Admin", "type": "text" },
+                { "key": "last_name", "value": "User", "type": "text" },
+                { "key": "profile_image", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{baseUrl}}/api/admin/update-profile"
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"old_password\": \"oldpassword123\",\n  \"new_password\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/change-password"
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/forgot-password"
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp_for\": \"FORGOT_PASSWORD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/resend-otp",
+            "description": "otp_for: SIGNUP | FORGOT_PASSWORD | VERIFY_EMAIL | VERIFY_PHONE"
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp\": \"1234\",\n  \"otp_for\": \"FORGOT_PASSWORD\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/verify-otp",
+            "description": "Response may set a cookie (forgot-password token) needed for Reset Password."
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Cookie", "value": "forgot-password={{forgotPasswordToken}}", "disabled": true }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/reset-password",
+            "description": "Requires cookie 'forgot-password' set by Verify OTP. Enable Cookie header and set forgotPasswordToken if using token in header."
+          }
+        },
+        {
+          "name": "Get All Role Options",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/get-all-role-options"
+          }
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/get-all-users"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Service Categories",
+      "item": [
+        {
+          "name": "Create Service Category",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Category Title", "type": "text" },
+                { "key": "status", "value": "ACTIVE", "type": "text", "description": "ACTIVE | INACTIVE" },
+                { "key": "parent_category", "value": "", "type": "text", "description": "MongoId (optional)" },
+                { "key": "options", "value": "[{\"label\":\"Option 1\",\"status\":\"ACTIVE\"}]", "type": "text", "description": "JSON array (optional)" },
+                { "key": "image", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{baseUrl}}/api/admin/service-categories"
+          }
+        },
+        {
+          "name": "Get All Service Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/service-categories"
+          }
+        },
+        {
+          "name": "Get Service Category By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/service-categories/{{categoryId}}"
+          }
+        },
+        {
+          "name": "Update Service Category",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Updated Title", "type": "text" },
+                { "key": "status", "value": "ACTIVE", "type": "text" },
+                { "key": "parent_category", "value": "", "type": "text" },
+                { "key": "options", "value": "[]", "type": "text" },
+                { "key": "image", "type": "file", "src": [] }
+              ]
+            },
+            "url": "{{baseUrl}}/api/admin/service-categories/{{categoryId}}"
+          }
+        },
+        {
+          "name": "Delete Service Category",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/service-categories/{{categoryId}}"
+          }
+        },
+        {
+          "name": "Restore Service Category",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/service-categories/{{categoryId}}/restore"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FAQs",
+      "item": [
+        {
+          "name": "Create FAQ",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What is this service?\",\n  \"answer\": \"This is the answer.\",\n  \"type\": \"general\",\n  \"status\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/faqs",
+            "description": "type: general | payments | licensing | support"
+          }
+        },
+        {
+          "name": "Get All FAQs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/faqs"
+          }
+        },
+        {
+          "name": "Get FAQ By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/faqs/{{faqId}}"
+          }
+        },
+        {
+          "name": "Update FAQ",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"Updated question?\",\n  \"answer\": \"Updated answer.\",\n  \"type\": \"general\",\n  \"status\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/faqs/{{faqId}}"
+          }
+        },
+        {
+          "name": "Delete FAQ",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/faqs/{{faqId}}"
+          }
+        },
+        {
+          "name": "Restore FAQ",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/faqs/{{faqId}}/restore"
+          }
+        },
+        {
+          "name": "Get All Contact Us",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/all-contact-us"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Token Masters",
+      "item": [
+        {
+          "name": "Create Token Master",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Starter Pack\",\n  \"credits\": 100,\n  \"bonus_credits\": 10,\n  \"price\": 9.99,\n  \"currency\": \"USD\",\n  \"per_credit_price\": 0.09,\n  \"is_most_popular\": false,\n  \"sort_order\": 1,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/token-masters"
+          }
+        },
+        {
+          "name": "Get All Token Masters",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/token-masters"
+          }
+        },
+        {
+          "name": "Get Token Master By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/token-masters/{{tokenMasterId}}"
+          }
+        },
+        {
+          "name": "Update Token Master",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Starter Pack Updated\",\n  \"credits\": 150,\n  \"bonus_credits\": 15,\n  \"price\": 12.99,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/token-masters/{{tokenMasterId}}"
+          }
+        },
+        {
+          "name": "Delete Token Master",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/token-masters/{{tokenMasterId}}"
+          }
+        },
+        {
+          "name": "Restore Token Master",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/token-masters/{{tokenMasterId}}/restore"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Testimonial Masters",
+      "item": [
+        {
+          "name": "Create Testimonial",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"message\": \"Great service!\",\n  \"rating\": 5,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/testimonial-masters"
+          }
+        },
+        {
+          "name": "Get All Testimonial Masters",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/testimonial-masters"
+          }
+        },
+        {
+          "name": "Get Testimonial Master By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/testimonial-masters/{{testimonialId}}"
+          }
+        },
+        {
+          "name": "Update Testimonial Master",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"message\": \"Updated message.\",\n  \"rating\": 4.5,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/testimonial-masters/{{testimonialId}}"
+          }
+        },
+        {
+          "name": "Delete Testimonial Master",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/testimonial-masters/{{testimonialId}}"
+          }
+        },
+        {
+          "name": "Restore Testimonial Master",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/testimonial-masters/{{testimonialId}}/restore"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Service Document Requirements",
+      "item": [
+        {
+          "name": "Create Service Document Requirement",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_category\": \"{{serviceCategoryId}}\",\n  \"name\": \"Passport Copy\",\n  \"type\": \"DOCUMENT\",\n  \"is_required\": true,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/service-document-requirements",
+            "description": "type: DOCUMENT | LICENSE"
+          }
+        },
+        {
+          "name": "Get All Service Document Requirements",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/service-document-requirements"
+          }
+        },
+        {
+          "name": "Get Service Document Requirement By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/service-document-requirements/{{documentReqId}}"
+          }
+        },
+        {
+          "name": "Update Service Document Requirement",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_category\": \"{{serviceCategoryId}}\",\n  \"name\": \"Updated Name\",\n  \"type\": \"LICENSE\",\n  \"is_required\": false,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/service-document-requirements/{{documentReqId}}"
+          }
+        },
+        {
+          "name": "Delete Service Document Requirement",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/service-document-requirements/{{documentReqId}}"
+          }
+        },
+        {
+          "name": "Restore Service Document Requirement",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/service-document-requirements/{{documentReqId}}/restore"
+          }
+        }
+      ]
+    }
+  ]
+}

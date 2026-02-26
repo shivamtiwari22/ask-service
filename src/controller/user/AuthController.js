@@ -195,7 +195,7 @@ export const loginPhoneEmail = async (req, resp) => {
        await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: `<p>One time password:${otp}</p>
+        html: `<p>One time password:${user.otp}</p>
                 `,
       });
 
