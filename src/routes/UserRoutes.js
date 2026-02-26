@@ -40,7 +40,9 @@ import {
   verifyPhoneAndLogin,
     saveNotificationPreferences ,
   getNotificationPreferences ,
-  PostContactUs
+  PostContactUs ,
+  loginPhoneEmail ,
+  NewPassword
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
@@ -115,26 +117,31 @@ router.post(
 
 // signup
 router.post("/signup", signup);
+router.post("/login", login);
 
 // verify phone
 router.post("/verify-phone", verifyPhone);
+router.post("/verify-email", verifyEmail);
+
+router.post("/login-phone-email", loginPhoneEmail);
+
+
+router.post("/resend-phone-otp", resendPhoneOTP);
+router.post("/resend-email-verification", resendEmailVerification);
+
 
 // verify phone and login
 router.post("/verify-phone-login", verifyPhoneAndLogin);
 
 // resend phone otp
-router.post("/resend-phone-otp", resendPhoneOTP);
 
 router.post("/post-contact-us", PostContactUs);
 
 // resend email verification link
-router.post("/resend-email-verification", resendEmailVerification);
 
 // verify email
-router.get("/verify-email", verifyEmail);
 
 // login
-router.post("/login", login);
 
 // request email login otp
 router.post("/login/email-otp", requestEmailLoginOTP);
@@ -155,6 +162,15 @@ router.put(
   checkRoleAuth(["User"]),
   changePassword,
 );
+
+
+router.put(
+  "/new-password",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  NewPassword,
+);
+
 
 // get profile
 router.get(

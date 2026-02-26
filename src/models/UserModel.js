@@ -29,7 +29,7 @@ const UserSchema = mongoose.Schema(
     },
     phone: {
       type: String,
-      required: true,
+      default: null
     },
     is_phone_verified: {
       type: Boolean,

@@ -329,6 +329,8 @@ export const loginVendor = async (req, resp) => {
         return handleResponse(200, "Login Successful", fialResponse, resp);
       }
 
+      
+
       if (!user.service) {
         const token = generate15minToken(user.toObject());
         await resp.cookie("forgot-password", token, cookieOptions);
@@ -351,6 +353,9 @@ export const loginVendor = async (req, resp) => {
         user.otp_phone = generateOTP();
         user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
       }
+
+
+
       user.otp_for = "SIGNUP";
       await user.save();
       const fialResponse = {

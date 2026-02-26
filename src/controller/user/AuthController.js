@@ -14,19 +14,36 @@ import { sendEmail } from "../../../config/emailConfig.js";
 import { cookieOptions } from "../../../utils/helperFunction.js";
 import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
 import UserNotification from "../../models/userNotificationModel.js";
+import { log } from "console";
 
 // SIGNUP
 export const signup = async (req, resp) => {
   try {
     const { first_name, last_name, phone, email, password } = req.body;
 
-    if (!phone || !password) {
-      return handleResponse(400, "Phone and password are required", {}, resp);
+    if (!phone && !email) {
+      return handleResponse(400, "Phone or email are required", {}, resp);
     }
 
     const existingUser = await User.findOne({
       $or: [{ phone }, ...(email ? [{ email }] : [])],
     });
+
+    // let existingUser ;
+    // if(email){
+    // let existingUser = await User.findOne({
+    //      email:email,
+    // });
+    // }
+
+    // if(phone){
+    //      let existingUser = await User.findOne({
+    //    phone:phone,
+    // });
+    // }
+
+
+
 
     if (existingUser) {
       return handleResponse(409, "User already exists", {}, resp);
@@ -35,6 +52,7 @@ export const signup = async (req, resp) => {
     const role = await Role.findOne({ name: "User" });
 
     const phoneOtp = generateOTP();
+    const emailOtp = generateOTP() ;
     const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
 
  const user =   await User.create({
@@ -49,6 +67,7 @@ export const signup = async (req, resp) => {
       is_email_verified: false,
       phone_otp: phoneOtp,
       phone_otp_expiry: moment().add(5, "minutes").toDate(),
+      otp : emailOtp ,
       email_verification_token: emailToken,
     });
 
@@ -57,20 +76,20 @@ export const signup = async (req, resp) => {
     });
 
     if (email) {
-      const link = `${process.env.BASE_URL}/api/user/verify-email?token=${emailToken}`;
+      const link = `https://ask.webdesignnoida.in/api/user/verify-email?token=${emailToken}`;
 
       await sendEmail({
         to: email,
-        subject: "Verify your email",
-        html: `<p>Click below to verify your email:</p>
-               <a href="${link}">${link}</a>`,
+        subject: "Verification OTP",
+        html: `<p>One time password:${emailOtp}</p>
+                `,
       });
     }
 
     return handleResponse(
       201,
-      "Signup successful. Verify phone to continue.",
-      { flow: "PHONE_VERIFICATION_REQUIRED" },
+      "Signup successful. Verify to continue.",
+      { flow: phone ?"PHONE_VERIFICATION_REQUIRED" : "EMAIL_VERIFICATION_REQUIRED" },
       resp,
     );
   } catch (err) {
@@ -89,16 +108,17 @@ export const verifyPhone = async (req, resp) => {
 
     const user = await User.findOne({ phone });
     if (!user) return handleResponse(404, "User not found", {}, resp);
+         const role = await Role.findById(user.role).select("id name");
 
-    if (
-      !user.phone_otp ||
-      !user.phone_otp_expiry ||
-      moment().isAfter(user.phone_otp_expiry)
-    ) {
-      return handleResponse(400, "OTP expired", {}, resp);
-    }
+    // if (
+    //   !user.phone_otp ||
+    //   !user.phone_otp_expiry ||
+    //   moment().isAfter(user.phone_otp_expiry)
+    // ) {
+    //   return handleResponse(400, "OTP expired", {}, resp);
+    // }
 
-    if (user.phone_otp !== otp) {
+    if (user.otp_phone !== otp) {
       return handleResponse(401, "Invalid OTP", {}, resp);
     }
 
@@ -108,7 +128,12 @@ export const verifyPhone = async (req, resp) => {
 
     await user.save();
 
-    return handleResponse(200, "Phone verified successfully", {}, resp);
+
+       const token = generateToken(user.toObject());
+
+
+
+    return handleResponse(200, "verified successfully", {token,role}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -117,30 +142,134 @@ export const verifyPhone = async (req, resp) => {
 //  VERIFY EMAIL (LINK BASED)
 export const verifyEmail = async (req, resp) => {
   try {
-    const { token } = req.query;
+    const { email , otp} = req.body;
 
-    if (!token) {
-      return handleResponse(400, "Invalid verification link", {}, resp);
-    }
+  
+     const user = await User.findOne({ email });
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+         const role = await Role.findById(user.role).select("id name");
 
-    const user = await User.findOne({
-      email_verification_token: token,
-    });
 
-    if (!user) {
-      return handleResponse(400, "Invalid or expired link", {}, resp);
+
+    if (user.otp !== otp) {
+      return handleResponse(401, "Invalid OTP", {}, resp);
     }
 
     user.is_email_verified = true;
-    user.email_verification_token = null;
+    user.otp = null;
 
     await user.save();
 
-    return handleResponse(200, "Email verified successfully", {}, resp);
+       const token = generateToken(user.toObject());
+
+
+    return handleResponse(200, "OTP Verified successfully", {token,role}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+
+
+export const loginPhoneEmail = async (req, resp) => {
+  try {
+    const { email, phone, type } = req.body;
+    if (!email && !phone)
+      return handleResponse(400, "Email or phone is required", {}, resp);
+
+    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+         const role = await Role.findById(user.role).select("id name");
+
+        
+
+
+    user.otp = generateOTP();
+    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_for = type;
+    user.otp_phone = generateOTP() ;
+
+
+    if(email){
+
+       await sendEmail({
+        to: email,
+        subject: "Verification OTP",
+        html: `<p>One time password:${otp}</p>
+                `,
+      });
+
+    }
+
+
+    if(role.name == "Vendor"  && (!user.is_email_verified || !user.is_phone_verified)){
+        return handleResponse(
+      400,
+      "Please Verify Your account",
+      {  role:role },
+      resp,
+    );
+         
+    }
+
+    await user.save();
+    return handleResponse(
+      200,
+      "OTP sent successfully",
+      { otp: user.otp , role:role },
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+
+  export const NewPassword = async (req, res) => {
+    const { password, confirm_password } = req.body;
+    try {
+      const requiredFields = [
+        { field: "password", value: password },
+        { field: "confirm_password", value: confirm_password },
+      ];
+      const validationErrors = validateFields(requiredFields);
+      if (validationErrors.length > 0) {
+        return handleResponse(
+          400,
+          "Validation error",
+          { errors: validationErrors },
+          res
+        );
+      }
+
+      if (password == confirm_password) {
+        const salt = await bcrypt.genSalt(10);
+        const hasPassword = await bcrypt.hash(password, salt);
+
+        await User.findByIdAndUpdate(req.user._id, {
+          $set: {
+            password: hasPassword,
+          },
+        });
+
+        handleResponse(200, "Password Changed Successfully", {}, res);
+      } else {
+        handleResponse(
+          400,
+          "New password & confirm password does not match",
+          {},
+          res
+        );
+      }
+    } catch (e) {
+      return handleResponse(500, err.message, {}, res);
+    }
+  };
+
+
+
+
+
 
 // REQUEST EMAIL LOGIN OTP
 export const requestEmailLoginOTP = async (req, resp) => {
@@ -198,7 +327,7 @@ export const login = async (req, resp) => {
       return handleResponse(
         400,
         "Identifier and password are required",
-        {},
+        {} ,
         resp,
       );
     }
@@ -211,18 +340,21 @@ export const login = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
+    const role = await Role.findById(user.role).select("id name");
+
     // Phone must exist
-    if (!user.phone) {
-      const token = generateToken(user.toObject());
-      return handleResponse(
-        403,
-        "Phone number required to access account",
-        { flow: "PHONE_REQUIRED", user: user.toObject(), token },
-        resp,
-      );
-    }
+    // if (!user.phone) {
+    //   const token = generateToken(user.toObject());
+    //   return handleResponse(
+    //     403,
+    //     "Phone number required to access account",
+    //     { flow: "PHONE_REQUIRED", user: user.toObject(), token },
+    //     resp,
+    //   );
+    // }
 
     // Phone must be verified
+
     if (!user.is_phone_verified) {
       const otp = generateOTP();
       user.otp_phone = otp;
@@ -233,7 +365,7 @@ export const login = async (req, resp) => {
       return handleResponse(
         403,
         "Phone verification required",
-        { flow: "PHONE_VERIFICATION_REQUIRED" },
+        { flow: "PHONE_VERIFICATION_REQUIRED"  , role : role  },
         resp,
       );
     }
@@ -242,14 +374,23 @@ export const login = async (req, resp) => {
 
     if (isEmailLogin && !user.is_email_verified) {
       const newToken = crypto.randomBytes(32).toString("hex");
-
-      user.email_verification_token = newToken;
+   const otp = generateOTP();
+      user.otp = otp;
+      // user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      user.otp_for = "VERIFY_EMAIL";
       await user.save();
+
+   await sendEmail({
+        to: email,
+        subject: "Verification OTP",
+        html: `<p>One time password:${otp}</p>
+                `,
+      });
 
       return handleResponse(
         403,
         "Email verification required",
-        { flow: "EMAIL_VERIFICATION_REQUIRED" },
+        { flow: "EMAIL_VERIFICATION_REQUIRED" , role : role },
         resp,
       );
     }
@@ -261,10 +402,11 @@ export const login = async (req, resp) => {
 
     const token = generateToken(user.toObject());
 
+
     return handleResponse(
       200,
       "Login successful",
-      { flow: "LOGIN_SUCCESS", token, user },
+      { flow: "LOGIN_SUCCESS", token, user  , role},
       resp,
     );
   } catch (err) {
@@ -312,7 +454,7 @@ export const resendPhoneOTP = async (req, resp) => {
 // RESEND EMAIL VERIFICATION LINK
 export const resendEmailVerification = async (req, resp) => {
   try {
-    const { email } = req.body;
+    const { email , type } = req.body;
 
     if (!email) {
       return handleResponse(400, "Email is required", {}, resp);
@@ -327,27 +469,31 @@ export const resendEmailVerification = async (req, resp) => {
       return handleResponse(400, "No email found for this user", {}, resp);
     }
 
-    if (user.is_email_verified) {
-      return handleResponse(400, "Email already verified", {}, resp);
-    }
+    // if (user.is_email_verified) {
+    //   return handleResponse(400, "Email already verified", {}, resp);
+    // }
 
     const newToken = crypto.randomBytes(32).toString("hex");
 
-    user.email_verification_token = newToken;
+    // user.email_verification_token = newToken;
+    // const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
+
+       const otp = generateOTP();
+
+    user.otp = otp;
     await user.save();
 
-    const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
 
-    await sendEmail({
-      to: email,
-      subject: "Verify your email",
-      html: `<p>Click below to verify your email:</p>
-             <a href="${link}">${link}</a>`,
-    });
+   await sendEmail({
+        to: email,
+        subject: "Verification OTP",
+        html: `<p>One time password:${otp}</p>
+                `,
+      });
 
     return handleResponse(
       200,
-      "Verification link resent successfully",
+      "Verification OTP Send successfully",
       { flow: "EMAIL_VERIFICATION_REQUIRED" },
       resp,
     );
@@ -551,6 +697,19 @@ export const forgotPassword = async (req, resp) => {
     user.otp = generateOTP();
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
+    user.otp_phone = generateOTP() ;
+
+       if(email){
+       await sendEmail({
+        to: email,
+        subject: "Verification OTP",
+        html: `<p>One time password:${otp}</p>
+                `,
+      });
+
+    }
+
+
     await user.save();
     return handleResponse(
       200,
