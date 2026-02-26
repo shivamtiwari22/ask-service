@@ -106,6 +106,51 @@ export const registerVendor = async (req, resp) => {
   }
 };
 
+
+export const NewPassword = async (req, res) => {
+    const { password, confirm_password } = req.body;
+    try {
+      const requiredFields = [
+        { field: "password", value: password },
+        { field: "confirm_password", value: confirm_password },
+      ];
+      const validationErrors = validateFields(requiredFields);
+      if (validationErrors.length > 0) {
+        return handleResponse(
+          400,
+          "Validation error",
+          { errors: validationErrors },
+          res
+        );
+      }
+
+      if (password == confirm_password) {
+        const salt = await bcrypt.genSalt(10);
+        const hasPassword = await bcrypt.hash(password, salt);
+
+        await User.findByIdAndUpdate(req.user._id, {
+          $set: {
+            password: hasPassword,
+          },
+        });
+
+        handleResponse(200, "Password Changed Successfully", {}, res);
+      } else {
+        handleResponse(
+          400,
+          "New password & confirm password does not match",
+          {},
+          res
+        );
+      }
+    } catch (e) {
+      return handleResponse(500, err.message, {}, res);
+    }
+  };
+
+
+
+
 // resend otp
 export const resendOTP = async (req, resp) => {
   try {
@@ -329,7 +374,7 @@ export const loginVendor = async (req, resp) => {
         return handleResponse(200, "Login Successful", fialResponse, resp);
       }
 
-      
+
 
       if (!user.service) {
         const token = generate15minToken(user.toObject());

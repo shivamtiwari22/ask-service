@@ -25,7 +25,8 @@ import {
   getNotificationPreferences ,
   VerificationDocument ,
   allReviews ,
-  getTransactions
+  getTransactions ,
+  NewPassword
 } from "../controller/vendor/AuthController.js";
 import {
   getDashboardStats,
@@ -89,6 +90,14 @@ router.put(
   userAuthenticateToken,
   checkRoleAuth(["Vendor"]),
   deleteAccount,
+);
+
+
+router.put(
+  "/new-password",
+  userAuthenticateToken,
+  checkRoleAuth(["Vendor"]),
+  NewPassword,
 );
 
 

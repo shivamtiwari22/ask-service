@@ -444,9 +444,9 @@ export const resendPhoneOTP = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    if (user.is_phone_verified) {
-      return handleResponse(400, "Phone already verified", {}, resp);
-    }
+    // if (user.is_phone_verified) {
+    //   return handleResponse(400, "Phone already verified", {}, resp);
+    // }
 
     const otp = generateOTP();
 
@@ -594,7 +594,7 @@ export const updateUserProfile = async (req, resp) => {
       return handleResponse(401, "Unauthorized", {}, resp);
     }
 
-    const { first_name, last_name, email, phone, profile_pic } = req.body;
+    const { first_name, last_name, email, phone, profile_pic , address , postal_code , city} = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -603,6 +603,10 @@ export const updateUserProfile = async (req, resp) => {
 
     if (first_name !== undefined) user.first_name = first_name;
     if (last_name !== undefined) user.last_name = last_name;
+    if(address !== undefined) user.address = address ;
+    if(address !== undefined) user.postal_code = postal_code ;
+    if(address !== undefined) user.city = city ;
+
 
     if (email !== undefined && email !== user.email) {
       const existingEmail = await User.findOne({
@@ -615,18 +619,16 @@ export const updateUserProfile = async (req, resp) => {
 
       user.email = email;
       user.is_email_verified = false;
-
-      const newToken = crypto.randomBytes(32).toString("hex");
-      user.email_verification_token = newToken;
-
-      const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
+           user.otp = generateOTP();
+           user.otp_for = "VERIFY_EMAIL";
 
       await sendEmail({
         to: email,
-        subject: "Verify your email",
-        html: `<p>Click below to verify your email:</p>
-               <a href="${link}">${link}</a>`,
+        subject: "Verification OTP",
+        html: `<p>One time password:${user.otp}</p>
+                `,
       });
+
     }
 
     if (phone !== undefined && phone !== user.phone) {

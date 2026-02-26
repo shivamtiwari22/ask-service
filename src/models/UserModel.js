@@ -29,7 +29,7 @@ const UserSchema = mongoose.Schema(
     },
     phone: {
       type: String,
-      default: null
+      default: null,
     },
     is_phone_verified: {
       type: Boolean,
@@ -90,10 +90,19 @@ const UserSchema = mongoose.Schema(
       ref: "ServiceCategory",
       set: sanitizeObjectId,
     },
-    password_updateAt : {
-         type: Date ,
-    }
+    password_updateAt: {
+      type: Date,
+    },
+    address: {
+      type: String,
+    },
 
+    postal_code: {
+      type: String,
+    },
+    city: {
+      type: String,
+    },
   },
   {
     timestamps: {},
