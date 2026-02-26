@@ -42,7 +42,8 @@ import {
   getNotificationPreferences ,
   PostContactUs ,
   loginPhoneEmail ,
-  NewPassword
+  NewPassword ,
+  deleteAccount
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
@@ -163,6 +164,13 @@ router.put(
   changePassword,
 );
 
+
+router.put(
+  "/delete-account",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  deleteAccount,
+);
 
 router.put(
   "/new-password",

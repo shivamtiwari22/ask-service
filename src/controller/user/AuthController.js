@@ -225,6 +225,22 @@ export const loginPhoneEmail = async (req, resp) => {
 };
 
 
+export const deleteAccount = async (req, resp) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    User.findByIdAndDelete(user._id);
+
+    return handleResponse(200, "Account deleted successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+
   export const NewPassword = async (req, res) => {
     const { password, confirm_password } = req.body;
     try {
@@ -703,7 +719,7 @@ export const forgotPassword = async (req, resp) => {
        await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: `<p>One time password:${otp}</p>
+        html: `<p>One time password:${user.otp}</p>
                 `,
       });
 
