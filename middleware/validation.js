@@ -320,3 +320,25 @@ export const createVendorReviewValidation = [
   handleValidationErrors,
 ];
 
+export const createFaqValidation = [
+  body("question").notEmpty().trim().withMessage("Question is required"),
+  body("answer").notEmpty().trim().withMessage("Answer is required"),
+  body("type")
+    .optional()
+    .isIn(["general", "payments", "licensing", "support"])
+    .withMessage("Invalid FAQ type"),
+  body("status").optional().isBoolean().withMessage("Status must be boolean"),
+  handleValidationErrors,
+];
+
+export const updateFaqValidation = [
+  body("question").optional().notEmpty().trim().withMessage("Question cannot be empty"),
+  body("answer").optional().notEmpty().trim().withMessage("Answer cannot be empty"),
+  body("type")
+    .optional()
+    .isIn(["general", "payments", "licensing", "support"])
+    .withMessage("Invalid FAQ type"),
+  body("status").optional().isBoolean().withMessage("Status must be boolean"),
+  handleValidationErrors,
+];
+

@@ -16,6 +16,11 @@ const RoleModelSchema = mongoose.Schema({
       count: { type: Number, default: 0 },
     },
   ],
+  
+  quote_id : {
+    type: mongoose.Schema.Types.ObjectId,
+     ref : "VendorQuote"
+  }
 }, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 RoleModelSchema.virtual("id").get(function () {

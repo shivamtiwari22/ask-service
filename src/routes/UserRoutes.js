@@ -40,15 +40,20 @@ import {
   verifyPhoneAndLogin,
     saveNotificationPreferences ,
   getNotificationPreferences ,
+  PostContactUs
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
+import { getFaqsForUser } from "../controller/admin/FaqsController.js";
 
 const router = express.Router();
 
 // ==============================SERVICE==============================
 // get service category list for users
 router.get("/service-categories", getUserServiceCategories);
+
+// get FAQs for users (active only, optional type filter)
+router.get("/faqs", getFaqsForUser);
 
 // service created by user (without login)
 router.post(
@@ -119,6 +124,8 @@ router.post("/verify-phone-login", verifyPhoneAndLogin);
 
 // resend phone otp
 router.post("/resend-phone-otp", resendPhoneOTP);
+
+router.post("/post-contact-us", PostContactUs);
 
 // resend email verification link
 router.post("/resend-email-verification", resendEmailVerification);

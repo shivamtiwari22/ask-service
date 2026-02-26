@@ -12,6 +12,7 @@ import {
   verifyOTP,
 } from "../controller/admin/AuthController.js";
 import {
+  createFaqValidation,
   createServiceCategoryValidation,
   createServiceDocumentRequirementValidation,
   createTestimonialMasterValidation,
@@ -20,6 +21,7 @@ import {
   passwordChangeValidatrion,
   resendOTPValidation,
   resetPasswordValidation,
+  updateFaqValidation,
   updateServiceCategoryValidation,
   updateServiceDocumentRequirementValidation,
   updateTestimonialMasterValidation,
@@ -44,6 +46,15 @@ import {
   restoreServiceCategory,
   updateServiceCategory,
 } from "../controller/admin/ServiceCategoryController.js";
+import {
+  createFaq,
+  deleteFaq,
+  getAllFaqs,
+  getFaqById,
+  restoreFaq,
+  updateFaq,
+  contactUs
+} from "../controller/admin/FaqsController.js";
 import {
   createServiceDocumentRequirement,
   createTestimonialMaster,
@@ -147,6 +158,50 @@ router.put(
   restoreServiceCategory,
 );
 
+// FAQs
+router.post(
+  "/faqs",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  createFaqValidation,
+  createFaq,
+);
+router.get(
+  "/faqs",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getAllFaqs,
+);
+router.get(
+  "/faqs/:id",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getFaqById,
+);
+router.put(
+  "/faqs/:id",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  updateFaqValidation,
+  updateFaq,
+);
+router.delete(
+  "/faqs/:id",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  deleteFaq,
+);
+
+router.put(
+  "/faqs/:id/restore",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  restoreFaq,
+);
+
+router.get( "/all-contact-us", authenticateToken, checkRoleAuth(["Admin"]), contactUs);
+
+
 // token master
 router.post(
   "/token-masters",
@@ -155,18 +210,21 @@ router.post(
   createTokenMasterValidation,
   createTokenMaster,
 );
+
 router.get(
   "/token-masters",
   authenticateToken,
   checkRoleAuth(["Admin"]),
   getAllTokenMasters,
 );
+
 router.get(
   "/token-masters/:id",
   authenticateToken,
   checkRoleAuth(["Admin"]),
   getTokenMasterById,
 );
+
 router.put(
   "/token-masters/:id",
   authenticateToken,
@@ -174,6 +232,7 @@ router.put(
   updateTokenMasterValidation,
   updateTokenMaster,
 );
+
 router.delete(
   "/token-masters/:id",
   authenticateToken,

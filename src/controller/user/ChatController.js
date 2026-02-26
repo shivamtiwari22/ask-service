@@ -80,7 +80,7 @@ class ChatController {
   };
 
   static accessChat = async (req, res) => {
-    const { userId } = req.body;
+    const { userId , quote_id } = req.body;
     const base_url = `${req.protocol}://${req.get("host")}`;
     try {
       if (!userId) {
@@ -136,6 +136,7 @@ class ChatController {
           chatName: "sender",
           isGroupChat: false,
           users: [req.user._id, userId],
+          quote_id : quote_id
         };
 
         try {
@@ -181,10 +182,8 @@ class ChatController {
       const chats = await Chat.find({
         users: { $in: userIds },
         isGroupChat: false,
-      })
-        .sort({ createdAt: -1 })
-        .lean();
-
+      }).populate("quote_id").sort({ createdAt: -1 }).lean();
+      
       console.log(chats);
 
       for (const item of chats) {
@@ -211,6 +210,7 @@ class ChatController {
           (uc) => uc.user.toString() === req.user._id.toString()
         );
         item.unreadCount = unreadCount ? unreadCount.count : 0;
+
       }
 
       return handleResponse(200, "chat fetched", chats, res);

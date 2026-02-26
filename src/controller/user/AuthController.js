@@ -37,7 +37,7 @@ export const signup = async (req, resp) => {
     const phoneOtp = generateOTP();
     const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
 
-    await User.create({
+ const user =   await User.create({
       first_name,
       last_name,
       phone,
@@ -683,4 +683,87 @@ export const getNotificationPreferences = async (req, res) => {
   } catch (error) {
     return handleResponse(500, error.message, {}, res);
   }
+
+
 };
+
+
+    export const PostContactUs = async (req, res) => {
+    try {
+      const { name, email, message } = req.body;
+
+      const post = new ContactUs({
+         name ,
+        email,
+        message,
+      });
+      await post.save();
+
+//       try {
+//         transporter.sendMail({
+//           from: process.env.EMAIL_FROM,
+//           to: "st4272333@gmail.com",
+//           subject: `New Contact Us Inquiry from ${first_name}`,
+//           html: `<!DOCTYPE html>
+// <html>
+// <head>
+//   <style>
+//     body {
+//       font-family: Arial, sans-serif;
+//       background-color: #f4f4f4;
+//       margin: 0;
+//       padding: 0;
+//     }
+//     .container {
+//       max-width: 600px;
+//       margin: 50px auto;
+//       background: #ffffff;
+//       padding: 20px;
+//       border-radius: 10px;
+//       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+//     }
+//     h2 {
+//       color: #333333;
+//     }
+//     .info {
+//       margin-bottom: 20px;
+//     }
+//     .info p {
+//       margin: 5px 0;
+//       line-height: 1.5;
+//     }
+//     .footer {
+//       text-align: center;
+//       color: #777777;
+//       font-size: 12px;
+//       margin-top: 20px;
+//     }
+//   </style>
+// </head>
+// <body>
+//   <div class="container">
+//     <h2>New Contact Us Message</h2>
+//     <div class="info">
+//       <p><strong>Name:</strong> ${first_name}</p>
+//       <p><strong>Email:</strong> ${email}</p>
+//       <p><strong>Message:</strong></p>
+//       <p>${message}</p>
+//     </div>
+//     <div class="footer">
+//       <p>&copy; 2025 Fill My SKip. All rights reserved.</p>
+//     </div>
+//   </div>
+// </body>
+// </html>
+// `,
+//         });
+//       } catch (e) {
+//         console.log(e);
+//       }
+
+      return handleResponse(200, "Form Submit Successfully", post, res);
+    } catch (e) {
+      return handleResponse(500, error.message, {}, res);
+    }
+  };
+
