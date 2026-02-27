@@ -15,6 +15,7 @@ import { cookieOptions } from "../../../utils/helperFunction.js";
 import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
 import UserNotification from "../../models/userNotificationModel.js";
 import { log } from "console";
+import bcrypt from "bcryptjs";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -244,20 +245,7 @@ export const deleteAccount = async (req, resp) => {
   export const NewPassword = async (req, res) => {
     const { password, confirm_password } = req.body;
     try {
-      const requiredFields = [
-        { field: "password", value: password },
-        { field: "confirm_password", value: confirm_password },
-      ];
-      const validationErrors = validateFields(requiredFields);
-      if (validationErrors.length > 0) {
-        return handleResponse(
-          400,
-          "Validation error",
-          { errors: validationErrors },
-          res
-        );
-      }
-
+   
       if (password == confirm_password) {
         const salt = await bcrypt.genSalt(10);
         const hasPassword = await bcrypt.hash(password, salt);
@@ -267,6 +255,8 @@ export const deleteAccount = async (req, resp) => {
             password: hasPassword,
           },
         });
+
+
 
        return handleResponse(200, "Password Changed Successfully", {}, res);
       } else {
@@ -278,7 +268,7 @@ export const deleteAccount = async (req, resp) => {
         );
       }
     } catch (e) {
-      return handleResponse(500, err.message, {}, res);
+      return handleResponse(500, e.message, {}, res);
     }
   };
 

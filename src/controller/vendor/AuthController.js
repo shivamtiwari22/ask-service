@@ -28,6 +28,8 @@ import Transaction from "../../models/TransactionModel.js";
 import VendorLeadUnlock from "../../models/VendorLeadUnlockModel.js";
 import VendorQuote from "../../models/VendorQuoteModel.js";
 import { sendEmail } from "../../../config/emailConfig.js";
+import bcrypt from "bcryptjs";
+
 
 // register vendor
 export const registerVendor = async (req, resp) => {
@@ -114,16 +116,7 @@ export const NewPassword = async (req, res) => {
         { field: "password", value: password },
         { field: "confirm_password", value: confirm_password },
       ];
-      const validationErrors = validateFields(requiredFields);
-      if (validationErrors.length > 0) {
-        return handleResponse(
-          400,
-          "Validation error",
-          { errors: validationErrors },
-          res
-        );
-      }
-
+      
       if (password == confirm_password) {
         const salt = await bcrypt.genSalt(10);
         const hasPassword = await bcrypt.hash(password, salt);
@@ -144,7 +137,10 @@ export const NewPassword = async (req, res) => {
         );
       }
     } catch (e) {
-      return handleResponse(500, err.message, {}, res);
+      console.log('====================================');
+      console.log(e);
+      console.log('====================================');
+      return handleResponse(500, e.message, {}, res);
     }
   };
 
