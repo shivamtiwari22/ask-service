@@ -268,9 +268,9 @@ export const deleteAccount = async (req, resp) => {
           },
         });
 
-        handleResponse(200, "Password Changed Successfully", {}, res);
+       return handleResponse(200, "Password Changed Successfully", {}, res);
       } else {
-        handleResponse(
+      return  handleResponse(
           400,
           "New password & confirm password does not match",
           {},
