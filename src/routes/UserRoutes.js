@@ -225,6 +225,8 @@ router.post("/access-chat", userAuthenticateToken , checkRoleAuth(["User"])  ,Ch
 router.get("/all-messages/:chatId", userAuthenticateToken , checkRoleAuth(["User"])  ,ChatController.allMessages)
 router.post("/send-msg", userAuthenticateToken , checkRoleAuth(["User"]) , chatMediaUpload , ChatController.sendMessage)
 
+
+
 router.post("/react-message", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.reactToMessage)
 router.put("/read-all-message/:chatId", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.MarkAllMessagesSeen)
 router.put("/read-message/:id", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.MarkMessagesSeen)

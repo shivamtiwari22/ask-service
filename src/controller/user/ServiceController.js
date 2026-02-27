@@ -274,7 +274,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
       return handleResponse(
         200,
-        "User already exists. Please login.",
+        "User already exists with phone. Please login.",
         { flow: "LOGIN_REQUIRED" },
         resp,
       );
@@ -842,7 +842,7 @@ export const submitReview = async (req, res) => {
     const userId = req.user._id;
     const { id } = req.params;
 
-    const vendor = await User.findById(id);
+    const vendor = await User.findById(id).select("-password -otp -otp_phone");
     if (!vendor) return handleResponse(404, "Vendor not found", {}, resp);
 
 
@@ -888,7 +888,7 @@ export const submitReview = async (req, res) => {
         reviews,
       }
 
-    return handleResponse(200, "Vendor Detail", { vendor , businessInformation , review}, resp);
+    return handleResponse(200, "Vendor Detail", { vendor , review}, resp);
 
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);

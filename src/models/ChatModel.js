@@ -19,7 +19,8 @@ const RoleModelSchema = mongoose.Schema({
   
   quote_id : {
     type: mongoose.Schema.Types.ObjectId,
-     ref : "VendorQuote"
+     ref : "VendorQuote" ,
+     default : null
   }
 }, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 

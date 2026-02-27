@@ -29,6 +29,9 @@ import VendorLeadUnlock from "../../models/VendorLeadUnlockModel.js";
 import VendorQuote from "../../models/VendorQuoteModel.js";
 import { sendEmail } from "../../../config/emailConfig.js";
 import bcrypt from "bcryptjs";
+import { Parser as Json2CsvParser } from "json2csv";
+import PDFDocument from "pdfkit";
+import { drawPdfTable } from "../../../utils/pdfTable.js";
 
 
 // register vendor
@@ -1067,6 +1070,7 @@ export const saveNotificationPreferences = async (req, res) => {
   export const GoogleLogin = async (req, res) => {
     try {
       const users = req.user;
+      const {role} = req.body ;
 
       if (!users) {
         return handleResponse(401, "Unauthorized user", {}, res);
@@ -1409,6 +1413,151 @@ export const getTransactions = async (req, res) => {
       },
       res,
     );
+  } catch (error) {
+    return handleResponse(500, error.message, {}, res);
+  }
+};
+
+export const exportTransactionsCsv = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { from_date, to_date, status, period } = req.query;
+
+    const filter = { user_id: userId };
+
+    if (status && status.toLowerCase() !== "all") {
+      filter.status = status.toLowerCase();
+    }
+
+    let startDate;
+    let endDate;
+    if (period) {
+      const now = new Date();
+      endDate = new Date(now);
+      startDate = new Date(now);
+      const p = (typeof period === "string" ? period : "").toLowerCase();
+      if (p === "last_30_days" || p === "last 30 days") {
+        startDate.setDate(now.getDate() - 30);
+      } else if (p === "last_3_months" || p === "last 3 months") {
+        startDate.setMonth(now.getMonth() - 3);
+      } else if (p === "last_6_months" || p === "last 6 months") {
+        startDate.setMonth(now.getMonth() - 6);
+      }
+    }
+    if (from_date && to_date) {
+      startDate = new Date(from_date);
+      endDate = new Date(to_date);
+    }
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+
+    const rows = transactions.map((t) => ({
+      id: t._id?.toString(),
+      transaction_id: toTransactionId(t.transaction_number, t._id, t.createdAt),
+      date_time: formatTransactionDateTime(t.createdAt),
+      payment_method: maskPaymentMethod(t.payment_method) || (t.plat_form === "manual" ? null : t.plat_form),
+      amount_paid: t.amount_paid != null ? t.amount_paid : "",
+      currency: t.currency || "EUR",
+      credit_added: t.type === "credit" && t.amount != null ? `+${t.amount} credits` : "",
+      status: t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Pending",
+      description: t.description || "",
+    }));
+
+    const parser = new Json2CsvParser({
+      fields: [
+        "id",
+        "transaction_id",
+        "date_time",
+        "payment_method",
+        "amount_paid",
+        "currency",
+        "credit_added",
+        "status",
+        "description",
+      ],
+    });
+    const csv = parser.parse(rows);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions.csv"');
+    return res.status(200).send(csv);
+  } catch (error) {
+    return handleResponse(500, error.message, {}, res);
+  }
+};
+
+export const exportTransactionsPdf = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { from_date, to_date, status, period } = req.query;
+
+    const filter = { user_id: userId };
+
+    if (status && status.toLowerCase() !== "all") {
+      filter.status = status.toLowerCase();
+    }
+
+    let startDate;
+    let endDate;
+    if (period) {
+      const now = new Date();
+      endDate = new Date(now);
+      startDate = new Date(now);
+      const p = (typeof period === "string" ? period : "").toLowerCase();
+      if (p === "last_30_days" || p === "last 30 days") {
+        startDate.setDate(now.getDate() - 30);
+      } else if (p === "last_3_months" || p === "last 3 months") {
+        startDate.setMonth(now.getMonth() - 3);
+      } else if (p === "last_6_months" || p === "last 6 months") {
+        startDate.setMonth(now.getMonth() - 6);
+      }
+    }
+    if (from_date && to_date) {
+      startDate = new Date(from_date);
+      endDate = new Date(to_date);
+    }
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions.pdf"');
+
+    const doc = new PDFDocument({ margin: 40 });
+    doc.pipe(res);
+
+    doc.fontSize(18).font("Helvetica-Bold").text("Transactions", { align: "center" });
+    doc.moveDown(1.2);
+    doc.font("Helvetica").fontSize(10);
+
+    const headers = [
+      "Transaction ID",
+      "Date/Time",
+      "Payment",
+      "Amount",
+      "Currency",
+      "Credits",
+      "Status",
+    ];
+    const columnWidths = [88, 78, 62, 58, 48, 72, 126];
+    const rows = transactions.map((t) => [
+      toTransactionId(t.transaction_number, t._id, t.createdAt) || "",
+      formatTransactionDateTime(t.createdAt) || "",
+      maskPaymentMethod(t.payment_method) || (t.plat_form === "manual" ? "" : t.plat_form) || "",
+      t.amount_paid != null ? String(t.amount_paid) : "",
+      t.currency || "EUR",
+      t.type === "credit" && t.amount != null ? `+${t.amount} credits` : "",
+      t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Pending",
+    ]);
+
+    drawPdfTable(doc, { headers, rows, columnWidths });
+
+    doc.end();
   } catch (error) {
     return handleResponse(500, error.message, {}, res);
   }

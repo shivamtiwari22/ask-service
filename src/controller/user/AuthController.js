@@ -775,6 +775,8 @@ export const verifyOTP = async (req, resp) => {
   export const GoogleLogin = async (req, res) => {
     try {
       const users = req.user;
+      const {role_type} = req.body ;
+
 
       if (!users) {
         return handleResponse(401, "Unauthorized user", {}, res);
@@ -791,12 +793,12 @@ export const verifyOTP = async (req, resp) => {
         lastName = name[1] || "Last";
       }
 
-      const requiredFields = [
-        { field: "first_name", value: firstName },
-        { field: "last_name", value: lastName },
-        { field: "email", value: users.email },
-        { field: "device_id", value: users.uid },
-      ];
+      // const requiredFields = [
+      //   { field: "first_name", value: firstName },
+      //   { field: "last_name", value: lastName },
+      //   { field: "email", value: users.email },
+      //   { field: "device_id", value: users.uid },
+      // ];
 
       // const validationErrors = validateFields(requiredFields);
       // if (validationErrors.length > 0) {
@@ -810,7 +812,7 @@ export const verifyOTP = async (req, resp) => {
 
       let user = await User.findOne({
          email: users.email,
-      });
+      }).populate("role");
 
       console.log(user);
       //   const role = await Role.findOne({ user_id: user.id });
@@ -822,8 +824,12 @@ export const verifyOTP = async (req, resp) => {
       const salt = await bcrypt.genSalt(10);
       const hasPassword = await bcrypt.hash(password, salt);
       if (!user) {
+        const role = await Role.findOne({ name: role_type});
 
-        const role = await Role.findOne({ name: "User" });
+          if (!role) {
+        return handleResponse(400, "Invalid role type", {}, res);
+      }
+
     
         user = new User({
           first_name: firstName,
@@ -836,16 +842,37 @@ export const verifyOTP = async (req, resp) => {
         });
         await user.save();
 
-      }
-      const token = jwt.sign(
-        {
-          userID: user._id,
-        },
-        process.env.JWT_SECRET_KEY,
-        { expiresIn: "30d" }
-      );
+       user = await User.findById(user._id).populate("role");
 
-      return handleResponse(200, "Login successful", {token }, res);
+      }
+
+      if (user.role?.name == "Vendor") {
+      if (!user.phone || !user.is_phone_verified) {
+        const otp = generateOTP();
+
+        user.otp_phone = otp;
+        user.otp_phone_expiry_at = moment()
+          .add(20, "minutes")
+          .toDate();
+        user.otp_for = "VERIFY_PHONE";
+
+        await user.save();
+
+        return handleResponse(
+          403,
+          "Phone verification required",
+          {
+            flow: "PHONE_VERIFICATION_REQUIRED",
+            phone_verified: false,
+          },
+          res
+        );
+      }
+    }
+
+       const token = generateOneMinToken(user.toObject());
+
+      return handleResponse(200, "Login successful", {token , role: user.role}, res);
     } catch (e) {
       console.log("e", e);
 

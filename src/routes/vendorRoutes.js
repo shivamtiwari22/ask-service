@@ -9,25 +9,27 @@ import {
   loginVendor,
   registerVendor,
   resendOTP,
-  resendPhoneEmailOTP ,
+  resendPhoneEmailOTP,
   resetPassword,
-  updateDocumentRequiredForService ,
-  updateUserServiceData ,
-  updateVendorProfile ,
-  verifyOTP ,
-  verifyRegistrationOTP ,
-  availableLeads ,
-  singleService ,
-  getBusinessInfo ,
-  createUpdateBusinessInfo ,
-  deleteAccount ,
-  saveNotificationPreferences ,
-  getNotificationPreferences ,
-  VerificationDocument ,
-  allReviews ,
-  getTransactions ,
-  NewPassword ,
-  GoogleLogin
+  updateDocumentRequiredForService,
+  updateUserServiceData,
+  updateVendorProfile,
+  verifyOTP,
+  verifyRegistrationOTP,
+  availableLeads,
+  singleService,
+  getBusinessInfo,
+  createUpdateBusinessInfo,
+  deleteAccount,
+  saveNotificationPreferences,
+  getNotificationPreferences,
+  VerificationDocument,
+  allReviews,
+  getTransactions,
+  NewPassword,
+  GoogleLogin,
+  exportTransactionsCsv,
+  exportTransactionsPdf,
 } from "../controller/vendor/AuthController.js";
 import {
   getDashboardStats,
@@ -38,6 +40,8 @@ import {
   getCreditBalance,
   purchaseCredits,
   getTransactionsList,
+  exportTransactionsListCsv,
+  exportTransactionsListPdf,
 } from "../controller/vendor/DashboardController.js";
 import { serviceDocumentUpload, userProfileUpload, quoteDocumentUpload, chatMediaUpload } from "../../utils/multer.js";
 import {
@@ -144,6 +148,16 @@ router.post("/credits/purchase", userAuthenticateToken, checkRoleAuth(["Vendor"]
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);
 
+router.get(
+  "/transactions/export/csv",
+  exportTransactionsListCsv,
+);
+
+router.get(
+  "/transactions/export/pdf",
+  exportTransactionsListPdf,
+);
+
 
 router.get("/business-information", userAuthenticateToken , checkRoleAuth(["Vendor"]) , getBusinessInfo);
 router.put("/business-information", userAuthenticateToken , checkRoleAuth(["Vendor"]) , createUpdateBusinessInfo);
@@ -154,6 +168,20 @@ router.get("/verification-documents", userAuthenticateToken , checkRoleAuth(["Ve
 
 router.get("/all-review", userAuthenticateToken , checkRoleAuth(["Vendor"]) , allReviews);
 router.get("/all-transaction", userAuthenticateToken , checkRoleAuth(["Vendor"]) , getTransactions);
+
+router.get(
+  "/all-transaction/export/csv",
+  userAuthenticateToken,
+  checkRoleAuth(["Vendor"]),
+  exportTransactionsCsv,
+);
+
+router.get(
+  "/all-transaction/export/pdf",
+  userAuthenticateToken,
+  checkRoleAuth(["Vendor"]),
+  exportTransactionsPdf,
+);
 
 
 router.get("/fetch-chats", userAuthenticateToken , checkRoleAuth(["Vendor"])  ,ChatController.fetchChats)

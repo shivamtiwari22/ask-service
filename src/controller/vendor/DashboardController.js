@@ -8,6 +8,9 @@ import VendorQuote from "../../models/VendorQuoteModel.js";
 import CreditPackage from "../../models/CreditPackageModel.js";
 import Transaction from "../../models/TransactionModel.js";
 import normalizePath from "../../../utils/imageNormalizer.js";
+import { Parser as Json2CsvParser } from "json2csv";
+import PDFDocument from "pdfkit";
+import { drawPdfTable } from "../../../utils/pdfTable.js";
 
 function generateTransactionNumber(id, date) {
   const year = new Date(date || Date.now()).getFullYear();
@@ -481,6 +484,127 @@ export const getTransactionsList = async (req, res) => {
       limit: limitNum,
       transactions: list,
     }, res);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, res);
+  }
+};
+
+export const exportTransactionsListCsv = async (req, res) => {
+  try {
+    const vendorId = req.user._id;
+    const { period, from_date, to_date, type } = req.query;
+
+    const filter = { user_id: vendorId };
+
+    if (type === "purchase" || type === "credit") filter.type = "credit";
+    else if (type === "deduction" || type === "debit") filter.type = "debit";
+
+    let startDate;
+    let endDate;
+    if (period === "last_30_days" || period === "Last 30 days") {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+    } else if (period === "last_3_months") {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 3);
+    } else if (period === "last_6_months") {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 6);
+    }
+    if (from_date && to_date) {
+      startDate = new Date(from_date);
+      endDate = new Date(to_date);
+    }
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+
+    const rows = transactions.map((t) => ({
+      id: t._id?.toString(),
+      type: t.type === "credit" ? "Purchase" : "Deduction",
+      description: t.description || "",
+      credits: t.type === "credit" ? `+${t.amount}` : `-${t.amount}`,
+      balanceAfter: t.balance_after ?? "",
+      date: t.createdAt ? new Date(t.createdAt).toISOString() : "",
+    }));
+
+    const parser = new Json2CsvParser({
+      fields: ["id", "type", "description", "credits", "balanceAfter", "date"],
+    });
+    const csv = parser.parse(rows);
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions-list.csv"');
+    return res.status(200).send(csv);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, res);
+  }
+};
+
+export const exportTransactionsListPdf = async (req, res) => {
+  try {
+    const vendorId = "6992b5256e13a6e65469ca5a";
+    const { period, from_date, to_date, type } = req.query;
+
+    const filter = { user_id: vendorId };
+
+    if (type === "purchase" || type === "credit") filter.type = "credit";
+    else if (type === "deduction" || type === "debit") filter.type = "debit";
+
+    let startDate;
+    let endDate;
+    if (period === "last_30_days" || period === "Last 30 days") {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+    } else if (period === "last_3_months") {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 3);
+    } else if (period === "last_6_months") {
+      endDate = new Date();
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 6);
+    }
+    if (from_date && to_date) {
+      startDate = new Date(from_date);
+      endDate = new Date(to_date);
+    }
+    if (startDate && endDate) {
+      filter.createdAt = { $gte: startDate, $lte: endDate };
+    }
+
+    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", 'attachment; filename="transactions-list.pdf"');
+
+    const doc = new PDFDocument({ margin: 40 });
+    doc.pipe(res);
+
+    doc.fontSize(18).font("Helvetica-Bold").text("Transactions List", { align: "center" });
+    doc.moveDown(1.2);
+    doc.font("Helvetica").fontSize(10);
+
+    const headers = ["Date", "Type", "Description", "Credits", "Balance After"];
+    const columnWidths = [95, 72, 220, 68, 77];
+    const rows = transactions.map((t) => {
+      const date = t.createdAt ? new Date(t.createdAt).toISOString().slice(0, 19).replace("T", " ") : "";
+      const typeLabel = t.type === "credit" ? "Purchase" : "Deduction";
+      const credits = t.type === "credit" ? `+${t.amount}` : `-${t.amount}`;
+      const description = (t.description || "").replace(/\s+/g, " ").trim();
+      const balanceAfter = t.balance_after != null ? String(t.balance_after) : "";
+      return [date, typeLabel, description, credits, balanceAfter];
+    });
+
+    drawPdfTable(doc, { headers, rows, columnWidths });
+
+    doc.end();
   } catch (err) {
     return handleResponse(500, err.message, {}, res);
   }
