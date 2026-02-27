@@ -51,6 +51,7 @@ import {
 } from "../../middleware/auth.js";
 import ChatController from "../controller/user/ChatController.js";
 import firebaseAuthenticateToken from "../../middleware/google-verification-middleware.js";
+import notificationController from "../controller/user/NotificationController.js";
 
 const router = express.Router();
 
@@ -189,6 +190,16 @@ router.post("/access-chat", userAuthenticateToken , checkRoleAuth(["Vendor"])  ,
 router.get("/all-messages/:chatId", userAuthenticateToken , checkRoleAuth(["Vendor"])  ,ChatController.allMessages)
 router.post("/send-msg", userAuthenticateToken , checkRoleAuth(["Vendor"]) , chatMediaUpload , ChatController.sendMessage)
 
+
+router.get("/notification/all",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.mine)
+router.get("/notification/count",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.count)
+router.get("/notification/unread",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.unread)
+router.put("/notification/markAsRead/:id",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.markAsRead)
+router.get("/notification/older",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.older) 
+
+
+router.get("/message-test", notificationController.testPush)
+router.get("/message-notify/:user_id",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.ChatMessages)
 
 
 

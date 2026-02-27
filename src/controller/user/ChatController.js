@@ -168,7 +168,45 @@ class ChatController {
           FullChat.users = await User.find(
             { _id: { $in: FullChat.users }, deletedAt: null },
             "id first_name last_name username profile_pic kyc_status",
-          );
+          ).populate("role").lean();
+
+
+
+           for (const user of FullChat.users) {
+            let totalReviews = 0;
+            let averageRating = 0;
+
+            // ✅ Only for vendor role
+            if (user.role?.name === "Vendor") {
+              const reviews = await VendorReview.find({
+                vendor: user._id,
+              }).lean();
+
+              user.totalReviews = reviews.length;
+
+             user.averageRating =
+                totalReviews > 0
+                  ? (
+                      reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
+                      totalReviews
+                    ).toFixed(1)
+                  : 0;
+
+
+                 user.profile_pic = user.profile_pic
+              ? `${base_url}/${user.profile_pic}`
+              : null,
+
+            user.itsMe = user._id.toString() === req.user._id.toString()
+            }
+
+
+          }
+
+
+
+
+
 
           return handleResponse(200, "chat access", FullChat, res);
         } catch (error) {

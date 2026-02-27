@@ -279,6 +279,7 @@ if (email) {
       emailVerified,
       phoneVerified,
       userData: user.toObject(),
+      token : generateToken(user.toObject())
     };
 
     return handleResponse(200, "OTP verified successfully", fialResponse, resp);
