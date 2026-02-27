@@ -209,9 +209,13 @@ export const verifyRegistrationOTP = async (req, resp) => {
     const { email, phone, otp_phone, otp_email, type } = req.body;
     console.log(email);
 
-    const user = await User.findOne({
-      $or: [{ email: email }, { phone: phone }],
-    });
+   let user;
+
+if (email) {
+  user = await User.findOne({ email });
+} else if (phone) {
+  user = await User.findOne({ phone });
+}
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
@@ -224,12 +228,14 @@ export const verifyRegistrationOTP = async (req, resp) => {
     let phoneVerified = user.is_phone_verified;
 
     if (otp_email) {
+       console.log(user);
+       
       if (user.otp != otp_email) {
         return handleResponse(401, "Invalid Email OTP", {}, resp);
       }
-      if (moment(user.otp_expires_at).isBefore(moment())) {
-        return handleResponse(401, "Email Verification OTP expired", {}, resp);
-      }
+      // if (moment(user.otp_expires_at).isBefore(moment())) {
+      //   return handleResponse(401, "Email Verification OTP expired", {}, resp);
+      // }
 
       user.otp = null;
       user.otp_expires_at = null;
@@ -242,9 +248,9 @@ export const verifyRegistrationOTP = async (req, resp) => {
       if (user.otp_phone != otp_phone) {
         return handleResponse(401, "Invalid Phone OTP", {}, resp);
       }
-      if (moment(user.otp_phone_expiry_at).isBefore(moment())) {
-        return handleResponse(401, "Phone Verification OTP expired", {}, resp);
-      }
+      // if (moment(user.otp_phone_expiry_at).isBefore(moment())) {
+      //   return handleResponse(401, "Phone Verification OTP expired", {}, resp);
+      // }
       user.otp_phone = null;
       user.otp_phone_expiry_at = null;
       user.is_phone_verified = true;
@@ -1120,6 +1126,22 @@ export const saveNotificationPreferences = async (req, res) => {
       }
 
 
+      if(!user.is_phone_verified){
+
+          const otp = generateOTP();
+      user.otp_phone = otp;
+      user.otp_phone_expiry_at = moment().add(20, "minutes").toDate();
+      user.otp_for = "VERIFY_PHONE";
+      await user.save();
+
+      return handleResponse(
+        403,
+        "Phone verification required",
+        { flow: "PHONE_VERIFICATION_REQUIRED"   },
+        res,
+      );
+
+      }
 
       const token = jwt.sign(
         {
