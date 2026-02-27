@@ -26,7 +26,8 @@ import {
   VerificationDocument ,
   allReviews ,
   getTransactions ,
-  NewPassword
+  NewPassword ,
+  GoogleLogin
 } from "../controller/vendor/AuthController.js";
 import {
   getDashboardStats,
@@ -45,11 +46,15 @@ import {
   userAuthenticateToken,
 } from "../../middleware/auth.js";
 import ChatController from "../controller/user/ChatController.js";
+import firebaseAuthenticateToken from "../../middleware/google-verification-middleware.js";
 
 const router = express.Router();
 
 // register vendor
 router.post("/register", registerVendor);
+
+router.post("/google-login", firebaseAuthenticateToken, GoogleLogin )
+
 
 // resend otp
 router.post("/resend-otp", resendOTP);

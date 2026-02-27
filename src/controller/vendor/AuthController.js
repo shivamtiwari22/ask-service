@@ -427,7 +427,18 @@ export const updateVendorProfile = async (req, resp) => {
       return handleResponse(401, "Unauthorized", {}, resp);
     }
 
-    const { first_name, last_name, email, phone, profile_pic, service } =
+    const { first_name, last_name, email, phone, profile_pic, service  ,
+          business_name,
+      postal_code,
+      address,
+      city,
+      vat_number,
+      company_registration_number,
+      years_of_activity,
+      company_size,
+      about_company,
+      website_link 
+     } =
       req.body;
 
     const user = await User.findById(userId);
@@ -450,17 +461,16 @@ export const updateVendorProfile = async (req, resp) => {
       user.email = email;
       user.is_email_verified = false;
 
-      const newToken = crypto.randomBytes(32).toString("hex");
-      user.email_verification_token = newToken;
+ user.otp = generateOTP();
+           user.otp_for = "VERIFY_EMAIL";
 
-      const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
+      await sendEmail({
+        to: email,
+        subject: "Verification OTP",
+        html: `<p>One time password:${user.otp}</p>
+                `,
+      });
 
-      // await sendEmail({
-      //   to: email,
-      //   subject: "Verify your email",
-      //   html: `<p>Click below to verify your email:</p>
-      //          <a href="${link}">${link}</a>`,
-      // });
     }
 
     if (phone !== undefined && phone !== user.phone) {
@@ -481,16 +491,32 @@ export const updateVendorProfile = async (req, resp) => {
       user.otp_for = "VERIFY_PHONE";
     }
 
-    if (service !== undefined) {
-      const service = await ServiceRequest.findById(service);
-      if (!service) {
+    if (service !== undefined  && service) {
+      const vendor_service = await ServiceCategory.findById(service);
+      if (!vendor_service) {
         return handleResponse(404, "Service not found", {}, resp);
       }
-      user.service = service._id;
+      user.service = vendor_service._id;
     }
 
     user.profile_pic =
       req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+
+
+
+       if (business_name !== undefined) user.business_name = business_name;
+    if (address !== undefined) user.address = address;
+    if (postal_code !== undefined) user.postal_code = postal_code;
+    if (city !== undefined) user.city = city;
+    if (vat_number !== undefined) user.vat_number = vat_number;
+    if (company_registration_number !== undefined)
+      user.company_registration_number = company_registration_number;
+    if (years_of_activity !== undefined)
+      user.years_of_activity = years_of_activity;
+    if (company_size !== undefined) user.company_size = company_size;
+    if (about_company !== undefined) user.about_company = about_company;
+    if (website_link !== undefined) user.website_link = website_link;
+
 
     await user.save();
 
@@ -549,13 +575,17 @@ export const deleteAccount = async (req, resp) => {
   }
 };
 
+
 // get profile
 export const getProfile = async (req, resp) => {
   try {
+
     const user = await User.findById(req.user._id).select(
       "-password -otp -otp_phone",
-    );
+    ).populate("service","id title description");
+
     if (!user) return handleResponse(404, "User not found", {}, resp);
+
     return handleResponse(200, "Profile fetched successfully", user, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
@@ -1026,6 +1056,91 @@ export const saveNotificationPreferences = async (req, res) => {
     return handleResponse(500, error.message, {}, res);
   }
 };
+
+
+  export const GoogleLogin = async (req, res) => {
+    try {
+      const users = req.user;
+
+      if (!users) {
+        return handleResponse(401, "Unauthorized user", {}, res);
+      }
+
+      console.log(users);
+
+      let firstName = "First";
+      let lastName = "Last";
+
+      if (users.name) {
+        const name = users.name.split(" ");
+        firstName = name[0];
+        lastName = name[1] || "Last";
+      }
+
+      const requiredFields = [
+        { field: "first_name", value: firstName },
+        { field: "last_name", value: lastName },
+        { field: "email", value: users.email },
+        { field: "device_id", value: users.uid },
+      ];
+
+      // const validationErrors = validateFields(requiredFields);
+      // if (validationErrors.length > 0) {
+      //   return handleResponse(
+      //     400,
+      //     "Validation error",
+      //     { errors: validationErrors },
+      //     res
+      //   );
+      // }
+
+      let user = await User.findOne({
+         email: users.email,
+      });
+
+      console.log(user);
+      //   const role = await Role.findOne({ user_id: user.id });
+
+      const password = Math.floor(
+        1000000000 * Math.random() * 9000000000
+      ).toString();
+
+      const salt = await bcrypt.genSalt(10);
+      const hasPassword = await bcrypt.hash(password, salt);
+      if (!user) {
+        user = new User({
+          first_name: firstName,
+          last_name: lastName,
+          email: users.email,
+          device_id: users.uid,
+          password: hasPassword,
+          is_email_verified : true
+        });
+        await user.save();
+      }
+
+
+
+      const token = jwt.sign(
+        {
+          userID: user._id,
+        },
+        process.env.JWT_SECRET_KEY,
+        { expiresIn: "30d" }
+      );
+
+      return handleResponse(200, "Login successful", token, res);
+    } catch (e) {
+      console.log("e", e);
+
+      return handleResponse(500, e.message, {}, res);
+    }
+  };
+
+
+
+
+
 
 export const getNotificationPreferences = async (req, res) => {
   try {

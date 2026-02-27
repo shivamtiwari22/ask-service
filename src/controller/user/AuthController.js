@@ -361,7 +361,9 @@ export const login = async (req, resp) => {
 
     // Phone must be verified
 
-    if (!user.is_phone_verified) {
+      const isPhoneLogin = user.phone === identifier;
+
+    if (!user.is_phone_verified && isPhoneLogin) {
       const otp = generateOTP();
       user.otp_phone = otp;
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
@@ -768,6 +770,90 @@ export const verifyOTP = async (req, resp) => {
 
   }
 };
+
+
+  export const GoogleLogin = async (req, res) => {
+    try {
+      const users = req.user;
+
+      if (!users) {
+        return handleResponse(401, "Unauthorized user", {}, res);
+      }
+
+      console.log(users);
+
+      let firstName = "First";
+      let lastName = "Last";
+
+      if (users.name) {
+        const name = users.name.split(" ");
+        firstName = name[0];
+        lastName = name[1] || "Last";
+      }
+
+      const requiredFields = [
+        { field: "first_name", value: firstName },
+        { field: "last_name", value: lastName },
+        { field: "email", value: users.email },
+        { field: "device_id", value: users.uid },
+      ];
+
+      // const validationErrors = validateFields(requiredFields);
+      // if (validationErrors.length > 0) {
+      //   return handleResponse(
+      //     400,
+      //     "Validation error",
+      //     { errors: validationErrors },
+      //     res
+      //   );
+      // }
+
+      let user = await User.findOne({
+         email: users.email,
+      });
+
+      console.log(user);
+      //   const role = await Role.findOne({ user_id: user.id });
+
+      const password = Math.floor(
+        1000000000 * Math.random() * 9000000000
+      ).toString();
+
+      const salt = await bcrypt.genSalt(10);
+      const hasPassword = await bcrypt.hash(password, salt);
+      if (!user) {
+
+        const role = await Role.findOne({ name: "User" });
+    
+        user = new User({
+          first_name: firstName,
+          last_name: lastName,
+          email: users.email,
+          device_id: users.uid,
+          password: hasPassword,
+          is_email_verified : true ,
+          role : role?._id 
+        });
+        await user.save();
+
+      }
+      const token = jwt.sign(
+        {
+          userID: user._id,
+        },
+        process.env.JWT_SECRET_KEY,
+        { expiresIn: "30d" }
+      );
+
+      return handleResponse(200, "Login successful", {token }, res);
+    } catch (e) {
+      console.log("e", e);
+
+      return handleResponse(500, e.message, {}, res);
+    }
+  };
+
+
 
 
 // resend phone email OTP

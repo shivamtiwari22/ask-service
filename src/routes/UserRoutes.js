@@ -17,6 +17,7 @@ import {
 } from "../controller/user/ServiceController.js";
 import {
   authenticateForgotPasswordToken,
+  authenticateToken,
   checkRoleAuth,
   optionalAuthenticateToken,
   userAuthenticateToken,
@@ -43,11 +44,13 @@ import {
   PostContactUs ,
   loginPhoneEmail ,
   NewPassword ,
-  deleteAccount
+  deleteAccount ,
+  GoogleLogin
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
 import { getFaqsForUser } from "../controller/admin/FaqsController.js";
+import firebaseAuthenticateToken from "../../middleware/google-verification-middleware.js";
 
 const router = express.Router();
 
@@ -115,6 +118,7 @@ router.post(
 
 // ==============================AUTH=================================
 
+router.post("/google-login", firebaseAuthenticateToken, GoogleLogin )
 
 // signup
 router.post("/signup", signup);

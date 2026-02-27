@@ -93,6 +93,9 @@ const UserSchema = mongoose.Schema(
     password_updateAt: {
       type: Date,
     },
+    verified_at : {
+      type: Date,
+    } ,
     address: {
       type: String,
     },
@@ -103,6 +106,38 @@ const UserSchema = mongoose.Schema(
     city: {
       type: String,
     },
+
+    business_address: {
+      type: String,
+    },
+
+    vat_number: {
+      type: String,
+    },
+
+    company_registration_number: {
+      type: String,
+    },
+
+    years_of_activity: {
+      type: String,
+    },
+
+    company_size: {
+      type: String,
+    },
+
+    about_company: {
+      type: String,
+    },
+
+    website_link: {
+      type: String,
+    },
+
+    device_id : {
+      type: String,
+    }
   },
   {
     timestamps: {},
