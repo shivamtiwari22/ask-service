@@ -215,9 +215,9 @@ export const verifyRegistrationOTP = async (req, resp) => {
    let user;
 
 if (email) {
-  user = await User.findOne({ email });
+  user = await User.findOne({ email }).populate("role");
 } else if (phone) {
-  user = await User.findOne({ phone });
+  user = await User.findOne({ phone }).populate("role");
 }
 
     if (!user) {

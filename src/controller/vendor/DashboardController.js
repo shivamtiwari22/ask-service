@@ -35,7 +35,8 @@ export const getDashboardStats = async (req, res) => {
         purchasedLeadsCount: 0,
         creditBalance: 0,
         quotesSentCount: 0,
-        kyc_status: user.kyc_status || "PENDING",
+        // kyc_status: user.kyc_status || "PENDING",
+        kyc_status : "Service not updated" ,
         canPurchaseLeads: false,
       }, res);
     }

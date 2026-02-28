@@ -107,7 +107,7 @@ const UserSchema = mongoose.Schema(
       type: String,
     },
 
-    business_address: {
+    business_name: {
       type: String,
     },
 
