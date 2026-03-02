@@ -70,16 +70,19 @@ const UserSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    
     status: {
       type: String,
       enum: ["ACTIVE", "INACTIVE", "PENDING", "BLOCKED"],
-      default: "PENDING",
+      default: "ACTIVE",
     },
+
     kyc_status: {
       type: String,
       enum: ["ACTIVE", "PENDING", "REJECTED"],
-      default: "ACTIVE",
+      default: "PENDING",
     },
+
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
