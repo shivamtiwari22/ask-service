@@ -547,9 +547,10 @@ export const closeServiceRequest = async (req, resp) => {
       return handleResponse(400, "Service request is not active", {}, resp);
 
     const reasonText = reason || null;
-    if (reasonText && !CLOSE_REASONS.includes(reasonText) && reasonText !== "Other reason") {
-      return handleResponse(400, "Invalid reason. Use one of: " + CLOSE_REASONS.join(", "), {}, resp);
-    }
+    
+    // if (reasonText && !CLOSE_REASONS.includes(reasonText) && reasonText !== "Other reason") {
+    //   return handleResponse(400, "Invalid reason. Use one of: " + CLOSE_REASONS.join(", "), {}, resp);
+    // }
 
     serviceRequest.status = "CANCELLED";
     serviceRequest.reason = reasonText === "Other reason" && reason_comment ? reason_comment : reasonText;
