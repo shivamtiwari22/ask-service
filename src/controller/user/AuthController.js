@@ -17,6 +17,8 @@ import UserNotification from "../../models/userNotificationModel.js";
 import { log } from "console";
 import bcrypt from "bcryptjs";
 import normalizePath from "../../../utils/imageNormalizer.js";
+import TestimonialMaster from "../../models/TestimonialMasterModel.js";
+import ContactUs from "../../models/ContactUsModel.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -44,9 +46,6 @@ export const signup = async (req, resp) => {
     // });
     // }
 
-
-
-
     if (existingUser) {
       return handleResponse(409, "User already exists", {}, resp);
     }
@@ -54,10 +53,10 @@ export const signup = async (req, resp) => {
     const role = await Role.findOne({ name: "User" });
 
     const phoneOtp = generateOTP();
-    const emailOtp = generateOTP() ;
+    const emailOtp = generateOTP();
     const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
 
- const user =   await User.create({
+    const user = await User.create({
       first_name,
       last_name,
       phone,
@@ -69,7 +68,7 @@ export const signup = async (req, resp) => {
       is_email_verified: false,
       phone_otp: phoneOtp,
       phone_otp_expiry: moment().add(5, "minutes").toDate(),
-      otp : emailOtp ,
+      otp: emailOtp,
       email_verification_token: emailToken,
     });
 
@@ -91,7 +90,11 @@ export const signup = async (req, resp) => {
     return handleResponse(
       201,
       "Signup successful. Verify to continue.",
-      { flow: phone ?"PHONE_VERIFICATION_REQUIRED" : "EMAIL_VERIFICATION_REQUIRED" },
+      {
+        flow: phone
+          ? "PHONE_VERIFICATION_REQUIRED"
+          : "EMAIL_VERIFICATION_REQUIRED",
+      },
       resp,
     );
   } catch (err) {
@@ -110,7 +113,7 @@ export const verifyPhone = async (req, resp) => {
 
     const user = await User.findOne({ phone });
     if (!user) return handleResponse(404, "User not found", {}, resp);
-         const role = await Role.findById(user.role).select("id name");
+    const role = await Role.findById(user.role).select("id name");
 
     // if (
     //   !user.phone_otp ||
@@ -130,12 +133,9 @@ export const verifyPhone = async (req, resp) => {
 
     await user.save();
 
+    const token = generateToken(user.toObject());
 
-       const token = generateToken(user.toObject());
-
-
-
-    return handleResponse(200, "verified successfully", {token,role}, resp);
+    return handleResponse(200, "verified successfully", { token, role }, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -144,14 +144,11 @@ export const verifyPhone = async (req, resp) => {
 //  VERIFY EMAIL (LINK BASED)
 export const verifyEmail = async (req, resp) => {
   try {
-    const { email , otp} = req.body;
+    const { email, otp } = req.body;
 
-  
-     const user = await User.findOne({ email });
+    const user = await User.findOne({ email });
     if (!user) return handleResponse(404, "User not found", {}, resp);
-         const role = await Role.findById(user.role).select("id name");
-
-
+    const role = await Role.findById(user.role).select("id name");
 
     if (user.otp !== otp) {
       return handleResponse(401, "Invalid OTP", {}, resp);
@@ -162,16 +159,18 @@ export const verifyEmail = async (req, resp) => {
 
     await user.save();
 
-       const token = generateToken(user.toObject());
+    const token = generateToken(user.toObject());
 
-
-    return handleResponse(200, "OTP Verified successfully", {token,role}, resp);
+    return handleResponse(
+      200,
+      "OTP Verified successfully",
+      { token, role },
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
 };
-
-
 
 export const loginPhoneEmail = async (req, resp) => {
   try {
@@ -181,51 +180,45 @@ export const loginPhoneEmail = async (req, resp) => {
 
     const user = await User.findOne({ $or: [{ email }, { phone }] });
     if (!user) return handleResponse(404, "User not found", {}, resp);
-         const role = await Role.findById(user.role).select("id name");
-
-        
-
+    const role = await Role.findById(user.role).select("id name");
 
     user.otp = generateOTP();
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
-    user.otp_phone = generateOTP() ;
+    user.otp_phone = generateOTP();
 
-
-    if(email){
-
-       await sendEmail({
+    if (email) {
+      await sendEmail({
         to: email,
         subject: "Verification OTP",
         html: `<p>One time password:${user.otp}</p>
                 `,
       });
-
     }
 
-
-    if(role.name == "Vendor"  && (!user.is_email_verified || !user.is_phone_verified)){
-        return handleResponse(
-      400,
-      "Please Verify Your account",
-      {  role:role },
-      resp,
-    );
-         
+    if (
+      role.name == "Vendor" &&
+      (!user.is_email_verified || !user.is_phone_verified)
+    ) {
+      return handleResponse(
+        400,
+        "Please Verify Your account",
+        { role: role },
+        resp,
+      );
     }
 
     await user.save();
     return handleResponse(
       200,
       "OTP sent successfully",
-      { otp: user.otp , role:role },
+      { otp: user.otp, role: role },
       resp,
     );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
 };
-
 
 export const deleteAccount = async (req, resp) => {
   try {
@@ -242,41 +235,32 @@ export const deleteAccount = async (req, resp) => {
   }
 };
 
+export const NewPassword = async (req, res) => {
+  const { password, confirm_password } = req.body;
+  try {
+    if (password == confirm_password) {
+      const salt = await bcrypt.genSalt(10);
+      const hasPassword = await bcrypt.hash(password, salt);
 
-  export const NewPassword = async (req, res) => {
-    const { password, confirm_password } = req.body;
-    try {
-   
-      if (password == confirm_password) {
-        const salt = await bcrypt.genSalt(10);
-        const hasPassword = await bcrypt.hash(password, salt);
+      await User.findByIdAndUpdate(req.user._id, {
+        $set: {
+          password: hasPassword,
+        },
+      });
 
-        await User.findByIdAndUpdate(req.user._id, {
-          $set: {
-            password: hasPassword,
-          },
-        });
-
-
-
-       return handleResponse(200, "Password Changed Successfully", {}, res);
-      } else {
-      return  handleResponse(
-          400,
-          "New password & confirm password does not match",
-          {},
-          res
-        );
-      }
-    } catch (e) {
-      return handleResponse(500, e.message, {}, res);
+      return handleResponse(200, "Password Changed Successfully", {}, res);
+    } else {
+      return handleResponse(
+        400,
+        "New password & confirm password does not match",
+        {},
+        res,
+      );
     }
-  };
-
-
-
-
-
+  } catch (e) {
+    return handleResponse(500, e.message, {}, res);
+  }
+};
 
 // REQUEST EMAIL LOGIN OTP
 export const requestEmailLoginOTP = async (req, resp) => {
@@ -334,7 +318,7 @@ export const login = async (req, resp) => {
       return handleResponse(
         400,
         "Identifier and password are required",
-        {} ,
+        {},
         resp,
       );
     }
@@ -362,7 +346,7 @@ export const login = async (req, resp) => {
 
     // Phone must be verified
 
-      const isPhoneLogin = user.phone === identifier;
+    const isPhoneLogin = user.phone === identifier;
 
     if (!user.is_phone_verified && isPhoneLogin) {
       const otp = generateOTP();
@@ -374,7 +358,7 @@ export const login = async (req, resp) => {
       return handleResponse(
         403,
         "Phone verification required",
-        { flow: "PHONE_VERIFICATION_REQUIRED"  , role : role  },
+        { flow: "PHONE_VERIFICATION_REQUIRED", role: role },
         resp,
       );
     }
@@ -383,13 +367,13 @@ export const login = async (req, resp) => {
 
     if (isEmailLogin && !user.is_email_verified) {
       const newToken = crypto.randomBytes(32).toString("hex");
-   const otp = generateOTP();
+      const otp = generateOTP();
       user.otp = otp;
       // user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_EMAIL";
       await user.save();
 
-   await sendEmail({
+      await sendEmail({
         to: user.email,
         subject: "Verification OTP",
         html: `<p>One time password:${otp}</p>
@@ -399,7 +383,7 @@ export const login = async (req, resp) => {
       return handleResponse(
         403,
         "Email verification required",
-        { flow: "EMAIL_VERIFICATION_REQUIRED" , role : role },
+        { flow: "EMAIL_VERIFICATION_REQUIRED", role: role },
         resp,
       );
     }
@@ -411,11 +395,10 @@ export const login = async (req, resp) => {
 
     const token = generateToken(user.toObject());
 
-
     return handleResponse(
       200,
       "Login successful",
-      { flow: "LOGIN_SUCCESS", token, user  , role},
+      { flow: "LOGIN_SUCCESS", token, user, role },
       resp,
     );
   } catch (err) {
@@ -423,22 +406,15 @@ export const login = async (req, resp) => {
   }
 };
 
-
-
 export const phoneSignUp = async (req, resp) => {
   try {
-    const { phone , email } = req.body;
+    const { phone, email } = req.body;
 
     if (!phone) {
-      return handleResponse(
-        400,
-        "phone",
-        {} ,
-        resp,
-      );
+      return handleResponse(400, "phone", {}, resp);
     }
 
-    const user = await User.findOne({email:email});
+    const user = await User.findOne({ email: email });
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
@@ -446,29 +422,29 @@ export const phoneSignUp = async (req, resp) => {
 
     const role = await Role.findById(user.role).select("id name");
 
-    user.phone = phone ;
-    if (!user.is_phone_verified ) {
+    const phoneExists = await User.findOne({
+      phone: phone,
+      _id: { $ne: user._id }, // exclude current user
+    });
+
+    if (phoneExists) {
+      return handleResponse(409, "Phone number already in use", {}, resp);
+    }
+
+    user.phone = phone;
+    if (!user.is_phone_verified) {
       const otp = generateOTP();
       user.otp_phone = otp;
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_PHONE";
-      await user.save(); 
+      await user.save();
     }
 
-    return handleResponse(
-      200,
-      "OTP send successfully",
-      {role} ,
-      resp,
-    );
-
+    return handleResponse(200, "OTP send successfully", { role }, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
 };
-
-
-
 
 // RESEND PHONE OTP
 export const resendPhoneOTP = async (req, resp) => {
@@ -510,7 +486,7 @@ export const resendPhoneOTP = async (req, resp) => {
 // RESEND EMAIL VERIFICATION LINK
 export const resendEmailVerification = async (req, resp) => {
   try {
-    const { email , type } = req.body;
+    const { email, type } = req.body;
 
     if (!email) {
       return handleResponse(400, "Email is required", {}, resp);
@@ -534,18 +510,17 @@ export const resendEmailVerification = async (req, resp) => {
     // user.email_verification_token = newToken;
     // const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
 
-       const otp = generateOTP();
+    const otp = generateOTP();
 
     user.otp = otp;
     await user.save();
 
-
-   await sendEmail({
-        to: email,
-        subject: "Verification OTP",
-        html: `<p>One time password:${otp}</p>
+    await sendEmail({
+      to: email,
+      subject: "Verification OTP",
+      html: `<p>One time password:${otp}</p>
                 `,
-      });
+    });
 
     return handleResponse(
       200,
@@ -634,7 +609,16 @@ export const updateUserProfile = async (req, resp) => {
       return handleResponse(401, "Unauthorized", {}, resp);
     }
 
-    const { first_name, last_name, email, phone, profile_pic , address , postal_code , city} = req.body;
+    const {
+      first_name,
+      last_name,
+      email,
+      phone,
+      profile_pic,
+      address,
+      postal_code,
+      city,
+    } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -643,10 +627,9 @@ export const updateUserProfile = async (req, resp) => {
 
     if (first_name !== undefined) user.first_name = first_name;
     if (last_name !== undefined) user.last_name = last_name;
-    if(address !== undefined) user.address = address ;
-    if(address !== undefined) user.postal_code = postal_code ;
-    if(address !== undefined) user.city = city ;
-
+    if (address !== undefined) user.address = address;
+    if (address !== undefined) user.postal_code = postal_code;
+    if (address !== undefined) user.city = city;
 
     if (email !== undefined && email !== user.email) {
       const existingEmail = await User.findOne({
@@ -659,8 +642,8 @@ export const updateUserProfile = async (req, resp) => {
 
       user.email = email;
       user.is_email_verified = false;
-           user.otp = generateOTP();
-           user.otp_for = "VERIFY_EMAIL";
+      user.otp = generateOTP();
+      user.otp_for = "VERIFY_EMAIL";
 
       await sendEmail({
         to: email,
@@ -668,7 +651,6 @@ export const updateUserProfile = async (req, resp) => {
         html: `<p>One time password:${user.otp}</p>
                 `,
       });
-
     }
 
     if (phone !== undefined && phone !== user.phone) {
@@ -755,18 +737,16 @@ export const forgotPassword = async (req, resp) => {
     user.otp = generateOTP();
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
-    user.otp_phone = generateOTP() ;
+    user.otp_phone = generateOTP();
 
-       if(email){
-       await sendEmail({
+    if (email) {
+      await sendEmail({
         to: email,
         subject: "Verification OTP",
         html: `<p>One time password:${user.otp}</p>
                 `,
       });
-
     }
-
 
     await user.save();
     return handleResponse(
@@ -807,101 +787,92 @@ export const verifyOTP = async (req, resp) => {
     await user.save();
 
     const token = generateOneMinToken(user.toObject());
-    
+
     await resp.cookie("forgot-password", token, cookieOptions);
 
     return handleResponse(200, "OTP verified successfully", { token }, resp);
-
   } catch (err) {
-
     return handleResponse(500, err.message, {}, resp);
-
   }
 };
 
+export const GoogleLogin = async (req, res) => {
+  try {
+    const users = req.user;
+    const { role_type } = req.body;
 
-  export const GoogleLogin = async (req, res) => {
-    try {
-      const users = req.user;
-      const {role_type} = req.body ;
+    if (!users) {
+      return handleResponse(401, "Unauthorized user", {}, res);
+    }
 
+    console.log(users);
 
-      if (!users) {
-        return handleResponse(401, "Unauthorized user", {}, res);
-      }
+    let firstName = "First";
+    let lastName = "Last";
 
-      console.log(users);
+    if (users.name) {
+      const name = users.name.split(" ");
+      firstName = name[0];
+      lastName = name[1] || "Last";
+    }
 
-      let firstName = "First";
-      let lastName = "Last";
+    // const requiredFields = [
+    //   { field: "first_name", value: firstName },
+    //   { field: "last_name", value: lastName },
+    //   { field: "email", value: users.email },
+    //   { field: "device_id", value: users.uid },
+    // ];
 
-      if (users.name) {
-        const name = users.name.split(" ");
-        firstName = name[0];
-        lastName = name[1] || "Last";
-      }
+    // const validationErrors = validateFields(requiredFields);
+    // if (validationErrors.length > 0) {
+    //   return handleResponse(
+    //     400,
+    //     "Validation error",
+    //     { errors: validationErrors },
+    //     res
+    //   );
+    // }
 
-      // const requiredFields = [
-      //   { field: "first_name", value: firstName },
-      //   { field: "last_name", value: lastName },
-      //   { field: "email", value: users.email },
-      //   { field: "device_id", value: users.uid },
-      // ];
+    let user = await User.findOne({
+      email: users.email,
+    }).populate("role");
 
-      // const validationErrors = validateFields(requiredFields);
-      // if (validationErrors.length > 0) {
-      //   return handleResponse(
-      //     400,
-      //     "Validation error",
-      //     { errors: validationErrors },
-      //     res
-      //   );
-      // }
+    console.log(user);
+    //   const role = await Role.findOne({ user_id: user.id });
 
-      let user = await User.findOne({
-         email: users.email,
-      }).populate("role");
+    const password = Math.floor(
+      1000000000 * Math.random() * 9000000000,
+    ).toString();
 
-      console.log(user);
-      //   const role = await Role.findOne({ user_id: user.id });
+    const salt = await bcrypt.genSalt(10);
+    const hasPassword = await bcrypt.hash(password, salt);
+    if (!user) {
+      const role = await Role.findOne({ name: role_type });
 
-      const password = Math.floor(
-        1000000000 * Math.random() * 9000000000
-      ).toString();
-
-      const salt = await bcrypt.genSalt(10);
-      const hasPassword = await bcrypt.hash(password, salt);
-      if (!user) {
-        const role = await Role.findOne({ name: role_type});
-
-          if (!role) {
+      if (!role) {
         return handleResponse(400, "Invalid role type", {}, res);
       }
 
-    
-        user = new User({
-          first_name: firstName,
-          last_name: lastName,
-          email: users.email,
-          device_id: users.uid,
-          password: hasPassword,
-          is_email_verified : true ,
-          role : role?._id 
-        });
-        await user.save();
+      user = new User({
+        first_name: firstName,
+        last_name: lastName,
+        email: users.email,
+        device_id: users.uid,
+        password: hasPassword,
+        is_email_verified: true,
+        role: role?._id,
+      });
+      await user.save();
 
-       user = await User.findById(user._id).populate("role");
+      user = await User.findById(user._id).populate("role");
+    }
 
-      }
-
-      if (user.role?.name == "Vendor") {
+    if (user.role?.name == "Vendor") {
       if (!user.phone || !user.is_phone_verified) {
         const otp = generateOTP();
 
         user.otp_phone = otp;
-        user.otp_phone_expiry_at = moment()
-          .add(20, "minutes")
-          .toDate();
+        user.otp_phone_expiry_at = moment().add(20, "minutes").toDate();
         user.otp_for = "VERIFY_PHONE";
 
         await user.save();
@@ -913,23 +884,25 @@ export const verifyOTP = async (req, resp) => {
             flow: "PHONE_VERIFICATION_REQUIRED",
             phone_verified: false,
           },
-          res
+          res,
         );
       }
     }
 
-       const token = generateOneMinToken(user.toObject());
+    const token = generateOneMinToken(user.toObject());
 
-      return handleResponse(200, "Login successful", {token , role: user.role}, res);
-    } catch (e) {
-      console.log("e", e);
+    return handleResponse(
+      200,
+      "Login successful",
+      { token, role: user.role },
+      res,
+    );
+  } catch (e) {
+    console.log("e", e);
 
-      return handleResponse(500, e.message, {}, res);
-    }
-  };
-
-
-
+    return handleResponse(500, e.message, {}, res);
+  }
+};
 
 // resend phone email OTP
 export const resendPhoneEmailOTP = async (req, resp) => {
@@ -966,7 +939,6 @@ export const resetPassword = async (req, resp) => {
   }
 };
 
-
 export const saveNotificationPreferences = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -994,7 +966,6 @@ export const getNotificationPreferences = async (req, res) => {
       user_id: userId,
     }).lean();
 
-
     if (!preferences) {
       preferences = await UserNotification.create({
         user_id: userId,
@@ -1010,87 +981,100 @@ export const getNotificationPreferences = async (req, res) => {
   } catch (error) {
     return handleResponse(500, error.message, {}, res);
   }
-
-
 };
 
+export const PostContactUs = async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
 
-    export const PostContactUs = async (req, res) => {
-    try {
-      const { name, email, message } = req.body;
+    const post = new ContactUs({
+      name,
+      email,
+      message,
+    });
+    await post.save();
 
-      const post = new ContactUs({
-         name ,
-        email,
-        message,
-      });
-      await post.save();
+    //       try {
+    //         transporter.sendMail({
+    //           from: process.env.EMAIL_FROM,
+    //           to: "st4272333@gmail.com",
+    //           subject: `New Contact Us Inquiry from ${first_name}`,
+    //           html: `<!DOCTYPE html>
+    // <html>
+    // <head>
+    //   <style>
+    //     body {
+    //       font-family: Arial, sans-serif;
+    //       background-color: #f4f4f4;
+    //       margin: 0;
+    //       padding: 0;
+    //     }
+    //     .container {
+    //       max-width: 600px;
+    //       margin: 50px auto;
+    //       background: #ffffff;
+    //       padding: 20px;
+    //       border-radius: 10px;
+    //       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    //     }
+    //     h2 {
+    //       color: #333333;
+    //     }
+    //     .info {
+    //       margin-bottom: 20px;
+    //     }
+    //     .info p {
+    //       margin: 5px 0;
+    //       line-height: 1.5;
+    //     }
+    //     .footer {
+    //       text-align: center;
+    //       color: #777777;
+    //       font-size: 12px;
+    //       margin-top: 20px;
+    //     }
+    //   </style>
+    // </head>
+    // <body>
+    //   <div class="container">
+    //     <h2>New Contact Us Message</h2>
+    //     <div class="info">
+    //       <p><strong>Name:</strong> ${first_name}</p>
+    //       <p><strong>Email:</strong> ${email}</p>
+    //       <p><strong>Message:</strong></p>
+    //       <p>${message}</p>
+    //     </div>
+    //     <div class="footer">
+    //       <p>&copy; 2025 Fill My SKip. All rights reserved.</p>
+    //     </div>
+    //   </div>
+    // </body>
+    // </html>
+    // `,
+    //         });
+    //       } catch (e) {
+    //         console.log(e);
+    //       }
 
-//       try {
-//         transporter.sendMail({
-//           from: process.env.EMAIL_FROM,
-//           to: "st4272333@gmail.com",
-//           subject: `New Contact Us Inquiry from ${first_name}`,
-//           html: `<!DOCTYPE html>
-// <html>
-// <head>
-//   <style>
-//     body {
-//       font-family: Arial, sans-serif;
-//       background-color: #f4f4f4;
-//       margin: 0;
-//       padding: 0;
-//     }
-//     .container {
-//       max-width: 600px;
-//       margin: 50px auto;
-//       background: #ffffff;
-//       padding: 20px;
-//       border-radius: 10px;
-//       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-//     }
-//     h2 {
-//       color: #333333;
-//     }
-//     .info {
-//       margin-bottom: 20px;
-//     }
-//     .info p {
-//       margin: 5px 0;
-//       line-height: 1.5;
-//     }
-//     .footer {
-//       text-align: center;
-//       color: #777777;
-//       font-size: 12px;
-//       margin-top: 20px;
-//     }
-//   </style>
-// </head>
-// <body>
-//   <div class="container">
-//     <h2>New Contact Us Message</h2>
-//     <div class="info">
-//       <p><strong>Name:</strong> ${first_name}</p>
-//       <p><strong>Email:</strong> ${email}</p>
-//       <p><strong>Message:</strong></p>
-//       <p>${message}</p>
-//     </div>
-//     <div class="footer">
-//       <p>&copy; 2025 Fill My SKip. All rights reserved.</p>
-//     </div>
-//   </div>
-// </body>
-// </html>
-// `,
-//         });
-//       } catch (e) {
-//         console.log(e);
-//       }
+    return handleResponse(200, "Form Submit Successfully", post, res);
+  } catch (e) {
+    console.log(e);
 
-      return handleResponse(200, "Form Submit Successfully", post, res);
-    } catch (e) {
-      return handleResponse(500, error.message, {}, res);
-    }
-  };
+    return handleResponse(500, error.message, {}, res);
+  }
+};
 
+export const getAllTestimonialMasters = async (req, resp) => {
+  try {
+    let findQuery = await TestimonialMaster.find().sort({ createdAt: -1 });
+
+    return handleResponse(  200,"Testimonial masters fetched successfully",
+      findQuery,
+      resp,
+    );
+  } catch (err) {
+    console.log(err);
+
+    return handleResponse(500, err.message, {}, resp);
+  }
+};

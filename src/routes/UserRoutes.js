@@ -46,7 +46,8 @@ import {
   NewPassword ,
   deleteAccount ,
   GoogleLogin ,
-  phoneSignUp
+  phoneSignUp ,
+  getAllTestimonialMasters
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
@@ -148,6 +149,8 @@ router.post("/verify-phone-login", verifyPhoneAndLogin);
 // resend phone otp
 
 router.post("/post-contact-us", PostContactUs);
+
+router.get( "/testimonials", getAllTestimonialMasters);
 
 // resend email verification link
 
