@@ -45,7 +45,8 @@ import {
   loginPhoneEmail ,
   NewPassword ,
   deleteAccount ,
-  GoogleLogin
+  GoogleLogin ,
+  phoneSignUp
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
@@ -124,6 +125,11 @@ router.post("/google-login", firebaseAuthenticateToken, GoogleLogin )
 // signup
 router.post("/signup", signup);
 router.post("/login", login);
+
+
+router.post("/google-login-send-phone-otp", phoneSignUp);
+
+
 
 // verify phone
 router.post("/verify-phone", verifyPhone);

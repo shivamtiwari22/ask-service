@@ -423,6 +423,53 @@ export const login = async (req, resp) => {
   }
 };
 
+
+
+export const phoneSignUp = async (req, resp) => {
+  try {
+    const { phone , email } = req.body;
+
+    if (!phone) {
+      return handleResponse(
+        400,
+        "phone",
+        {} ,
+        resp,
+      );
+    }
+
+    const user = await User.findOne({email:email});
+
+    if (!user) {
+      return handleResponse(404, "User not found", {}, resp);
+    }
+
+    const role = await Role.findById(user.role).select("id name");
+
+    user.phone = phone ;
+    if (!user.is_phone_verified ) {
+      const otp = generateOTP();
+      user.otp_phone = otp;
+      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      user.otp_for = "VERIFY_PHONE";
+      await user.save(); 
+    }
+
+    return handleResponse(
+      200,
+      "OTP send successfully",
+      {role} ,
+      resp,
+    );
+
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+
+
+
 // RESEND PHONE OTP
 export const resendPhoneOTP = async (req, resp) => {
   try {
