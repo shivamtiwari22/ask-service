@@ -16,6 +16,7 @@ import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
 import UserNotification from "../../models/userNotificationModel.js";
 import { log } from "console";
 import bcrypt from "bcryptjs";
+import normalizePath from "../../../utils/imageNormalizer.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
