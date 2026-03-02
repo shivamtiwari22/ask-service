@@ -87,13 +87,13 @@ router.get(
 );
 
 // change password
+
 router.put(
   "/change-password",
   userAuthenticateToken,
   checkRoleAuth(["Vendor"]),
   changePassword,
 );
-
 
 router.put(
   "/delete-account",

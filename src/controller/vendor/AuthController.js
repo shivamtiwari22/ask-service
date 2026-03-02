@@ -245,6 +245,7 @@ if (email) {
       user.is_email_verified = true;
       user.is_email_verified = true;
       emailVerified = true;
+      
     }
 
     if (otp_phone) {
@@ -830,11 +831,14 @@ export const updateDocumentRequiredForService = async (req, resp) => {
       resp,
     );
   } catch (err) {
+
     return handleResponse(500, err.message, {}, resp);
+
   }
 };
 
 function maskContactDetails(contact) {
+
   if (!contact) return contact;
   return {
     ...contact,
@@ -843,6 +847,7 @@ function maskContactDetails(contact) {
     phone: (contact.phone || "").slice(0, 3) + " *******",
     email: (contact.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
   };
+
 }
 
 export const availableLeads = async (req, resp) => {
@@ -906,21 +911,25 @@ export const availableLeads = async (req, resp) => {
     const unlocked = unlockedIds.has(lead._id.toString());
     const creditsToUnlock = lead.service_category?.credit ?? 3;
 
+
     const quotesCount = await VendorQuote.countDocuments({
       service_request_id: lead._id,
       status: "SENT",
     });
 
     if (unlocked) {
+
       return {
         ...lead,
         unlocked: true,
         creditsToUnlock,
         quotes_count: quotesCount,
       };
+
     }
 
     return {
+
       ...lead,
       contact_details: maskContactDetails(lead.contact_details),
       unlocked: false,

@@ -389,7 +389,7 @@ export const login = async (req, resp) => {
       await user.save();
 
    await sendEmail({
-        to: email,
+        to: user.email,
         subject: "Verification OTP",
         html: `<p>One time password:${otp}</p>
                 `,
