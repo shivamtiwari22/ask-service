@@ -622,6 +622,8 @@ export const getQuotesForServiceRequest = async (req, resp) => {
         currency: q.currency || "EUR",
         price_display: `${q.currency || "EUR"}${q.quote_price} per visit`,
         available_start_date: q.available_start_date,
+        status : q.status ,
+        preferred_time_of_day : serviceRequest?.preferred_time_of_day
       };
     });
 

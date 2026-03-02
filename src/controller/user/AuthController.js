@@ -920,7 +920,6 @@ export const resetPassword = async (req, resp) => {
 };
 
 
-
 export const saveNotificationPreferences = async (req, res) => {
   try {
     const userId = req.user._id;
