@@ -198,7 +198,7 @@ export const loginPhoneEmail = async (req, resp) => {
 
     if (
       role.name == "Vendor" &&
-      (!user.is_email_verified || !user.is_phone_verified)
+      (!user.is_email_verified )
     ) {
       return handleResponse(
         400,
@@ -215,6 +215,7 @@ export const loginPhoneEmail = async (req, resp) => {
       { otp: user.otp, role: role },
       resp,
     );
+
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -348,20 +349,20 @@ export const login = async (req, resp) => {
 
     const isPhoneLogin = user.phone === identifier;
 
-    if (!user.is_phone_verified && isPhoneLogin) {
-      const otp = generateOTP();
-      user.otp_phone = otp;
-      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
-      user.otp_for = "VERIFY_PHONE";
-      await user.save();
+    // if (!user.is_phone_verified && isPhoneLogin) {
+    //   const otp = generateOTP();
+    //   user.otp_phone = otp;
+    //   user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+    //   user.otp_for = "VERIFY_PHONE";
+    //   await user.save();
 
-      return handleResponse(
-        403,
-        "Phone verification required",
-        { flow: "PHONE_VERIFICATION_REQUIRED", role: role },
-        resp,
-      );
-    }
+    //   return handleResponse(
+    //     403,
+    //     "Phone verification required",
+    //     { flow: "PHONE_VERIFICATION_REQUIRED", role: role },
+    //     resp,
+    //   );
+    // }
 
     const isEmailLogin = user.email === identifier;
 
@@ -424,7 +425,7 @@ export const phoneSignUp = async (req, resp) => {
 
     const phoneExists = await User.findOne({
       phone: phone,
-      _id: { $ne: user._id }, // exclude current user
+      _id: { $ne: user._id }, 
     });
 
     if (phoneExists) {
@@ -432,15 +433,16 @@ export const phoneSignUp = async (req, resp) => {
     }
 
     user.phone = phone;
+
     if (!user.is_phone_verified) {
       const otp = generateOTP();
-      user.otp_phone = otp;
+      user.otp_phone = otp ;
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
-      user.otp_for = "VERIFY_PHONE";
+      user.otp_for =  "VERIFY_PHONE";
       await user.save();
     }
 
-    return handleResponse(200, "OTP send successfully", { role }, resp);
+    return handleResponse(200, "OTP send successfully", { role } , resp ) ;
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -518,8 +520,7 @@ export const resendEmailVerification = async (req, resp) => {
     await sendEmail({
       to: email,
       subject: "Verification OTP",
-      html: `<p>One time password:${otp}</p>
-                `,
+      html: `<p>One time password:${otp}</p> `,
     });
 
     return handleResponse(
@@ -528,6 +529,7 @@ export const resendEmailVerification = async (req, resp) => {
       { flow: "EMAIL_VERIFICATION_REQUIRED" },
       resp,
     );
+
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -551,16 +553,12 @@ export const verifyPhoneAndLogin = async (req, resp) => {
       return handleResponse(400, "Invalid type", {}, resp);
     }
 
-    if (
-      !user.otp_phone ||
-      !user.otp_phone_expiry_at ||
-      moment().isAfter(user.otp_phone_expiry_at)
-    ) {
+    if ( !user.otp_phone || !user.otp_phone_expiry_at ||  moment().isAfter(user.otp_phone_expiry_at) ) {
       return handleResponse(400, "OTP expired", {}, resp);
     }
 
     if (user.otp_phone !== otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp);
+      return handleResponse(401, "Invalid OTP", {}, resp );
     }
 
     user.is_phone_verified = true;
@@ -647,9 +645,8 @@ export const updateUserProfile = async (req, resp) => {
 
       await sendEmail({
         to: email,
-        subject: "Verification OTP",
-        html: `<p>One time password:${user.otp}</p>
-                `,
+        subject: "Verification OTP" ,
+        html: `  <p>One time password:${user.otp}</p> ` ,
       });
     }
 
@@ -796,8 +793,11 @@ export const verifyOTP = async (req, resp) => {
   }
 };
 
+
+
 export const GoogleLogin = async (req, res) => {
   try {
+
     const users = req.user;
     const { role_type } = req.body;
 
@@ -864,29 +864,36 @@ export const GoogleLogin = async (req, res) => {
       });
       await user.save();
 
+
+       await VendorCreditWallet.create({
+            user_id: user._id,
+            amount: 0,
+          });
+
+
       user = await User.findById(user._id).populate("role");
     }
 
     if (user.role?.name == "Vendor") {
-      if (!user.phone || !user.is_phone_verified) {
-        const otp = generateOTP();
+      // if (!user.phone || !user.is_phone_verified) {
+      //   const otp = generateOTP();
 
-        user.otp_phone = otp;
-        user.otp_phone_expiry_at = moment().add(20, "minutes").toDate();
-        user.otp_for = "VERIFY_PHONE";
+      //   user.otp_phone = otp;
+      //   user.otp_phone_expiry_at = moment().add(20, "minutes").toDate();
+      //   user.otp_for = "VERIFY_PHONE";
 
-        await user.save();
+      //   await user.save();
 
-        return handleResponse(
-          403,
-          "Phone verification required",
-          {
-            flow: "PHONE_VERIFICATION_REQUIRED",
-            phone_verified: false,
-          },
-          res,
-        );
-      }
+      //   return handleResponse(
+      //     403,
+      //     "Phone verification required",
+      //     {
+      //       flow: "PHONE_VERIFICATION_REQUIRED",
+      //       phone_verified: false,
+      //     },
+      //     res,
+      //   );
+      // }
     }
 
     const token = generateOneMinToken(user.toObject());

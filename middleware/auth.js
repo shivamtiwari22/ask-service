@@ -51,7 +51,9 @@ export const userAuthenticateToken = async (req, res, next) => {
     const user = await User.findById(decoded._id).populate("role");
 
     if (!user) {
+      
       return handleResponse(404, "User not found", {}, res);
+
     }
 
     if (user.status != "ACTIVE") {

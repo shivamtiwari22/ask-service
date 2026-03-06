@@ -72,9 +72,11 @@ router.post(
 );
 
 // verify signup login
+
 router.post("/verify-signup-login", verifySignupLogin);
 
 // get created services
+
 router.get(
   "/get-created-services",
   userAuthenticateToken,
@@ -83,6 +85,7 @@ router.get(
 );
 
 // close service request (body: reason, optional reason_comment for "Other reason")
+
 router.put(
   "/close-service-request/:id",
   userAuthenticateToken,
@@ -121,7 +124,8 @@ router.post(
 
 // ==============================AUTH=================================
 
-router.post("/google-login", firebaseAuthenticateToken, GoogleLogin )
+router.post("/google-login", firebaseAuthenticateToken, GoogleLogin)
+
 
 // signup
 router.post("/signup", signup);

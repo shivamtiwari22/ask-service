@@ -58,8 +58,7 @@ const router = express.Router();
 // register vendor
 router.post("/register", registerVendor);
 
-router.post("/google-login", firebaseAuthenticateToken, GoogleLogin )
-
+router.post("/google-login", firebaseAuthenticateToken, GoogleLogin)
 
 // resend otp
 router.post("/resend-otp", resendOTP);
@@ -149,15 +148,9 @@ router.post("/credits/purchase", userAuthenticateToken, checkRoleAuth(["Vendor"]
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);
 
-router.get(
-  "/transactions/export/csv",
-  exportTransactionsListCsv,
-);
+router.get("/transactions/export/csv",exportTransactionsListCsv);
 
-router.get(
-  "/transactions/export/pdf",
-  exportTransactionsListPdf,
-);
+router.get("/transactions/export/pdf",exportTransactionsListPdf);
 
 
 router.get("/business-information", userAuthenticateToken , checkRoleAuth(["Vendor"]) , getBusinessInfo);
