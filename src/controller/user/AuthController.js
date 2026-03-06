@@ -29,22 +29,22 @@ export const signup = async (req, resp) => {
       return handleResponse(400, "Phone or email are required", {}, resp);
     }
 
-    const existingUser = await User.findOne({
-      $or: [{ phone }, ...(email ? [{ email }] : [])],
+    // const existingUser = await User.findOne({
+    //   $or: [{ phone }, ...(email ? [{ email }] : [])],
+    // });
+
+    let existingUser ;
+    if(email){
+     existingUser = await User.findOne({
+         email:email,
     });
+    }
 
-    // let existingUser ;
-    // if(email){
-    // let existingUser = await User.findOne({
-    //      email:email,
-    // });
-    // }
-
-    // if(phone){
-    //      let existingUser = await User.findOne({
-    //    phone:phone,
-    // });
-    // }
+    if(phone){
+      existingUser = await User.findOne({
+       phone:phone,
+    });
+    }
 
     if (existingUser) {
       return handleResponse(409, "User already exists", {}, resp);

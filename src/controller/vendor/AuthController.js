@@ -51,14 +51,16 @@ export const registerVendor = async (req, resp) => {
         resp,
       );
 
-    const existingPhone = await User.findOne({ phone });
-    if (existingPhone)
-      return handleResponse(
-        400,
-        "User already exists with this phone",
-        {},
-        resp,
-      );
+      if(phone){
+        const existingPhone = await User.findOne({ phone });
+        if (existingPhone)
+          return handleResponse(
+            400,
+            "User already exists with this phone",
+            {},
+            resp,
+          );
+      }
 
     const hashedPassword = await hashPassword(password);
     const role = await Role.findOne({ name: "Vendor" });
