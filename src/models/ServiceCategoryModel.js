@@ -86,7 +86,10 @@ const ServiceCategorySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-
+    is_tasks_required_visible : {
+      type: Boolean,
+      default: false,
+    },
     is_end_date_visible: {
       type: Boolean,
       default: false,

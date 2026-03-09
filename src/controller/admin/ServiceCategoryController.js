@@ -37,6 +37,7 @@ export const createServiceCategory = async (req, resp) => {
       is_end_time_visible,
       is_preferred_time_visible,
       is_preferred_date_visible,
+      is_tasks_required_visible
     } = parseNestedBody(req.body);
 
     const file = req.files;
@@ -87,6 +88,7 @@ export const createServiceCategory = async (req, resp) => {
       is_end_time_visible,
       is_preferred_time_visible,
       is_preferred_date_visible,
+      is_tasks_required_visible
     });
 
     return handleResponse(
@@ -128,6 +130,7 @@ export const updateServiceCategory = async (req, resp) => {
       is_end_time_visible,
       is_preferred_time_visible,
       is_preferred_date_visible,
+      is_tasks_required_visible
     } = req.body;
     const files = req.files;
 
@@ -194,6 +197,7 @@ export const updateServiceCategory = async (req, resp) => {
       ...(is_start_time_visible !== undefined ? { is_start_time_visible } : {}),
       ...(is_end_date_visible !== undefined ? { is_end_date_visible } : {}),
       ...(is_end_time_visible !== undefined ? { is_end_time_visible } : {}),
+      ...(is_tasks_required_visible !== undefined ? { is_tasks_required_visible } : {}),
       ...(is_preferred_time_visible !== undefined
         ? { is_preferred_time_visible }
         : {}),
