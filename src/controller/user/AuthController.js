@@ -20,7 +20,6 @@ import normalizePath from "../../../utils/imageNormalizer.js";
 import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import ContactUs from "../../models/ContactUsModel.js";
 
-
 // SIGNUP
 export const signup = async (req, resp) => {
   try {
@@ -34,20 +33,18 @@ export const signup = async (req, resp) => {
     //   $or: [{ phone }, ...(email ? [{ email }] : [])],
     // });
 
-    let existingUser ;
+    let existingUser;
 
-    if(email){
-
-     existingUser = await User.findOne({
-         email:email,
-    });
-
+    if (email) {
+      existingUser = await User.findOne({
+        email: email,
+      });
     }
 
-    if(phone){
+    if (phone) {
       existingUser = await User.findOne({
-       phone:phone,
-    });
+        phone: phone,
+      });
     }
 
     if (existingUser) {
@@ -200,10 +197,7 @@ export const loginPhoneEmail = async (req, resp) => {
       });
     }
 
-    if (
-      role.name == "Vendor" &&
-      (!user.is_email_verified )
-    ) {
+    if (role.name == "Vendor" && !user.is_email_verified) {
       return handleResponse(
         400,
         "Please Verify Your account",
@@ -219,7 +213,6 @@ export const loginPhoneEmail = async (req, resp) => {
       { otp: user.otp, role: role },
       resp,
     );
-
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -429,7 +422,7 @@ export const phoneSignUp = async (req, resp) => {
 
     const phoneExists = await User.findOne({
       phone: phone,
-      _id: { $ne: user._id }, 
+      _id: { $ne: user._id },
     });
 
     if (phoneExists) {
@@ -440,13 +433,13 @@ export const phoneSignUp = async (req, resp) => {
 
     if (!user.is_phone_verified) {
       const otp = generateOTP();
-      user.otp_phone = otp ;
+      user.otp_phone = otp;
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
-      user.otp_for =  "VERIFY_PHONE";
+      user.otp_for = "VERIFY_PHONE";
       await user.save();
     }
 
-    return handleResponse(200, "OTP send successfully", { role } , resp ) ;
+    return handleResponse(200, "OTP send successfully", { role }, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -533,7 +526,6 @@ export const resendEmailVerification = async (req, resp) => {
       { flow: "EMAIL_VERIFICATION_REQUIRED" },
       resp,
     );
-
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -557,12 +549,16 @@ export const verifyPhoneAndLogin = async (req, resp) => {
       return handleResponse(400, "Invalid type", {}, resp);
     }
 
-    if ( !user.otp_phone || !user.otp_phone_expiry_at ||  moment().isAfter(user.otp_phone_expiry_at) ) {
+    if (
+      !user.otp_phone ||
+      !user.otp_phone_expiry_at ||
+      moment().isAfter(user.otp_phone_expiry_at)
+    ) {
       return handleResponse(400, "OTP expired", {}, resp);
     }
 
     if (user.otp_phone !== otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp );
+      return handleResponse(401, "Invalid OTP", {}, resp);
     }
 
     user.is_phone_verified = true;
@@ -649,8 +645,8 @@ export const updateUserProfile = async (req, resp) => {
 
       await sendEmail({
         to: email,
-        subject: "Verification OTP" ,
-        html: `  <p>One time password:${user.otp}</p> ` ,
+        subject: "Verification OTP",
+        html: `  <p>One time password:${user.otp}</p> `,
       });
     }
 
@@ -732,13 +728,26 @@ export const forgotPassword = async (req, resp) => {
     if (!email && !phone)
       return handleResponse(400, "Email or phone is required", {}, resp);
 
-    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    let user;
+
+    if (email) {
+      user = await User.findOne({
+        email: email,
+      });
+    }
+
+    if (phone) {
+      user = await User.findOne({
+        phone: phone,
+      });
+    }
+
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
     user.otp = generateOTP();
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
-    user.otp_phone = generateOTP();
+    // user.otp_phone = generateOTP();
 
     if (email) {
       await sendEmail({
@@ -750,6 +759,9 @@ export const forgotPassword = async (req, resp) => {
     }
 
     await user.save();
+
+    console.log(user);
+
     return handleResponse(
       200,
       "OTP sent successfully",
@@ -797,11 +809,8 @@ export const verifyOTP = async (req, resp) => {
   }
 };
 
-
-
 export const GoogleLogin = async (req, res) => {
   try {
-
     const users = req.user;
     const { role_type } = req.body;
 
@@ -868,12 +877,10 @@ export const GoogleLogin = async (req, res) => {
       });
       await user.save();
 
-
-       await VendorCreditWallet.create({
-            user_id: user._id,
-            amount: 0,
-          });
-
+      await VendorCreditWallet.create({
+        user_id: user._id,
+        amount: 0,
+      });
 
       user = await User.findById(user._id).populate("role");
     }
@@ -881,13 +888,10 @@ export const GoogleLogin = async (req, res) => {
     if (user.role?.name == "Vendor") {
       // if (!user.phone || !user.is_phone_verified) {
       //   const otp = generateOTP();
-
       //   user.otp_phone = otp;
       //   user.otp_phone_expiry_at = moment().add(20, "minutes").toDate();
       //   user.otp_for = "VERIFY_PHONE";
-
       //   await user.save();
-
       //   return handleResponse(
       //     403,
       //     "Phone verification required",
@@ -1079,7 +1083,9 @@ export const getAllTestimonialMasters = async (req, resp) => {
   try {
     let findQuery = await TestimonialMaster.find().sort({ createdAt: -1 });
 
-    return handleResponse(  200,"Testimonial masters fetched successfully",
+    return handleResponse(
+      200,
+      "Testimonial masters fetched successfully",
       findQuery,
       resp,
     );
