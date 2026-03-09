@@ -110,13 +110,11 @@ export const getUserServiceCategories = async (req, resp) => {
   }
 };
 
-
-
 export const getSingleServiceCategories = async (req, resp) => {
   try {
     const data = await ServiceCategory.findById(req.params.id);
 
-    if(!data) return handleResponse(404,"category not found",{},res);
+    if (!data) return handleResponse(404, "category not found", {}, res);
 
     return handleResponse(
       200,
@@ -128,8 +126,6 @@ export const getSingleServiceCategories = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
-
-
 
 // service created by user (without login)
 export const initiateServiceRequest = async (req, resp) => {
@@ -155,9 +151,9 @@ export const initiateServiceRequest = async (req, resp) => {
       pincode,
       contact_details,
       start_date,
-      start_time ,
+      start_time,
       end_date,
-      end_time
+      end_time,
     } = req.body;
 
     if (!contact_details) {
@@ -178,16 +174,9 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
-    if (
-      !service_category ||
-      !frequency ||
-      !address_1 ||
-      !city ||
-      !state ||
-      !country
-    ) {
+    if (!service_category) {
       await session.abortTransaction();
-      return handleResponse(400, "Missing required service fields", {}, resp);
+      return handleResponse(400, "Service Category is required", {}, resp);
     }
 
     // ================= CATEGORY VALIDATION =================
@@ -242,10 +231,10 @@ export const initiateServiceRequest = async (req, resp) => {
             contact_details,
             user: req.user._id,
             status: "ACTIVE",
-              start_date,
-              start_time ,
-              end_date,
-              end_time
+            start_date,
+            start_time,
+            end_date,
+            end_time,
           },
         ],
         { session },
@@ -380,10 +369,10 @@ export const initiateServiceRequest = async (req, resp) => {
           contact_details,
           user: newUser._id,
           status: "ACTIVE",
-             start_date,
-              start_time ,
-              end_date,
-              end_time
+          start_date,
+          start_time,
+          end_date,
+          end_time,
         },
       ],
       { session },
@@ -417,7 +406,6 @@ export const initiateServiceRequest = async (req, resp) => {
     session.endSession();
   }
 };
-
 
 // verify signup login
 
