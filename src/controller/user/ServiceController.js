@@ -264,7 +264,7 @@ export const initiateServiceRequest = async (req, resp) => {
       ) {
         await session.abortTransaction();
 
-        if (!existingUser.is_email_verified) {
+        if (emailOwner && !emailOwner?.is_email_verified) {
           existingUser.otp = generateOTP();
           await existingUser.save({ session });
 
@@ -319,7 +319,7 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
-    // ================= NEW USER =================
+
     const role = await Role.findOne({ name: "User" });
 
     const phoneOtp = generateOTP();

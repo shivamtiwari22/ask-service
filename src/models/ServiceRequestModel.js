@@ -37,7 +37,7 @@ const ServiceRequestSchema = new mongoose.Schema(
     frequency: {
       type: String,
       // enum: ["One-time service", "Daily", "Weekly", "Bi-weekly", "Monthly"],
-      required: true,
+      // required: true,
     },
     selected_options: [
       {
