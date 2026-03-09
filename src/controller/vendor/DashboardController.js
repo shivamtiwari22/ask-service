@@ -619,7 +619,7 @@ export const AllQuotes = async (req,res) => {
    try {
     const userId = req.user._id;
 
-    const quote = await VendorQuote.findOne({
+    const quote = await VendorQuote.find({
          vendor_id: userId
     });
 
