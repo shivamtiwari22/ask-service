@@ -74,6 +74,11 @@ import {
   updateTestimonialMaster,
   updateTokenMaster,
 } from "../controller/admin/MasterController.js";
+import {
+  getAllVendorsWithDocuments,
+  updateVendorDocumentStatus,
+  updateVendorKycStatus,
+} from "../controller/admin/VendorController.js";
 
 const router = express.Router();
 
@@ -114,6 +119,24 @@ router.get(
   authenticateToken,
   checkRoleAuth(["Admin"]),
   getAllUsers,
+);
+router.get(
+  "/vendors-with-documents",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getAllVendorsWithDocuments,
+);
+router.put(
+  "/vendors/:vendorId/documents/:documentId/status",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  updateVendorDocumentStatus,
+);
+router.put(
+  "/vendors/:vendorId/kyc-status",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  updateVendorKycStatus,
 );
 
 // service category master

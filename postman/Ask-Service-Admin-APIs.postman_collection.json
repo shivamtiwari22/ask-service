@@ -5,7 +5,7 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "baseUrl", "value": "http://localhost:8000" },
     { "key": "token", "value": "" },
     { "key": "categoryId", "value": "" },
     { "key": "faqId", "value": "" },
@@ -35,7 +35,22 @@
               "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
             },
             "url": "{{baseUrl}}/api/admin/login",
-            "description": "Login with admin credentials. Copy the token from response to collection variable `token` for other requests."
+            "description": "Login with admin credentials. Token is auto-saved to collection variable for authenticated requests.",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "const json = pm.response.json();",
+                    "if (json.success && json.data && json.data.accessToken) {",
+                    "  pm.collectionVariables.set('token', json.data.accessToken);",
+                    "  console.log('Token saved to collection variable');",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
           }
         },
         {

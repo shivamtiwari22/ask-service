@@ -22,9 +22,31 @@ const normalizeOptions = (options = []) => {
 // create service category
 export const createServiceCategory = async (req, resp) => {
   try {
-    const { title, description, image, status, parent_category, options } = parseNestedBody(req.body);
+    const {
+      title,
+      description,
+      image,
+      status,
+      parent_category,
+      options,
+      frequency,
+      is_frequency_visible,
+      is_start_date_visible,
+      is_start_time_visible,
+      is_end_date_visible,
+      is_end_time_visible,
+      is_preferred_time_visible,
+      is_preferred_date_visible,
+    } = parseNestedBody(req.body);
 
     const file = req.files;
+    let frequencyArray = [];
+
+    if (frequency) {
+      frequencyArray = Array.isArray(frequency)
+        ? frequency
+        : frequency.split(",").map((f) => f.trim());
+    }
 
     if (parent_category) {
       const parentCategory = await ServiceCategory.findOne({
@@ -41,7 +63,7 @@ export const createServiceCategory = async (req, resp) => {
           400,
           "Only one level child category is allowed",
           {},
-          resp
+          resp,
         );
       }
     }
@@ -49,17 +71,38 @@ export const createServiceCategory = async (req, resp) => {
     const category = await ServiceCategory.create({
       title,
       description,
-      image: Array.isArray(file?.image) && file?.image?.length > 0 ? file.image[0].path : null,
+      image:
+        Array.isArray(file?.image) && file?.image?.length > 0
+          ? file.image[0].path
+          : null,
       status,
       parent_category: parent_category || null,
       options: normalizeOptions(options),
+      frequency: frequencyArray,
       createdBy: req.user._id,
+      is_frequency_visible,
+      is_start_date_visible,
+      is_start_time_visible,
+      is_end_date_visible,
+      is_end_time_visible,
+      is_preferred_time_visible,
+      is_preferred_date_visible,
     });
 
-    return handleResponse(201, "Service category created successfully", category, resp);
+    return handleResponse(
+      201,
+      "Service category created successfully",
+      category,
+      resp,
+    );
   } catch (err) {
     if (err?.code === 11000) {
-      return handleResponse(409, "Category with same title already exists", {}, resp);
+      return handleResponse(
+        409,
+        "Category with same title already exists",
+        {},
+        resp,
+      );
     }
 
     return handleResponse(500, err.message, {}, resp);
@@ -70,25 +113,57 @@ export const createServiceCategory = async (req, resp) => {
 export const updateServiceCategory = async (req, resp) => {
   try {
     const { id } = req.params;
-    const { title, description, image, status, parent_category, options } = req.body;
+    const {
+      title,
+      description,
+      image,
+      status,
+      parent_category,
+      options,
+      frequency,
+      is_frequency_visible,
+      is_start_date_visible,
+      is_start_time_visible,
+      is_end_date_visible,
+      is_end_time_visible,
+      is_preferred_time_visible,
+      is_preferred_date_visible,
+    } = req.body;
     const files = req.files;
 
-    const category = await ServiceCategory.findOne({ _id: id, deletedAt: null });
+    let frequencyArray;
+
+    if (frequency !== undefined) {
+      frequencyArray = Array.isArray(frequency)
+        ? frequency
+        : frequency.split(",").map((f) => f.trim());
+    }
+
+    const category = await ServiceCategory.findOne({
+      _id: id,
+      deletedAt: null,
+    });
     if (!category) {
       return handleResponse(404, "Service category not found", {}, resp);
     }
 
-    if (parent_category && parent_category !== String(category.parent_category || "")) {
+    if (
+      parent_category &&
+      parent_category !== String(category.parent_category || "")
+    ) {
       if (parent_category === id) {
-        return handleResponse(400, "Category cannot be parent of itself", {}, resp);
+        return handleResponse(
+          400,
+          "Category cannot be parent of itself",
+          {},
+          resp,
+        );
       }
-
 
       const parentCategory = await ServiceCategory.findOne({
         _id: parent_category,
         deletedAt: null,
       });
-      
 
       if (!parentCategory) {
         return handleResponse(404, "Parent category not found", {}, resp);
@@ -99,27 +174,49 @@ export const updateServiceCategory = async (req, resp) => {
           400,
           "Only one level child category is allowed",
           {},
-          resp
+          resp,
         );
       }
     }
+
 
     const payload = {
       ...(title !== undefined ? { title } : {}),
       ...(description !== undefined ? { description } : {}),
       ...(status !== undefined ? { status } : {}),
-      ...(parent_category !== undefined ? { parent_category: parent_category || null } : {}),
+      ...(parent_category !== undefined
+        ? { parent_category: parent_category || null }
+        : {}),
       ...(options !== undefined ? { options: normalizeOptions(options) } : {}),
-      image: Array.isArray(files?.image) && files?.image?.length > 0 ? files.image[0].path : image ? normalizePath(image) : category.image
+      ...(frequency !== undefined ? { frequency: frequencyArray } : {}),
+      ...(is_frequency_visible !== undefined ? { is_frequency_visible } : {}),
+      ...(is_start_date_visible !== undefined ? { is_start_date_visible } : {}),
+      ...(is_start_time_visible !== undefined ? { is_start_time_visible } : {}),
+      ...(is_end_date_visible !== undefined ? { is_end_date_visible } : {}),
+      ...(is_end_time_visible !== undefined ? { is_end_time_visible } : {}),
+      ...(is_preferred_time_visible !== undefined
+        ? { is_preferred_time_visible }
+        : {}),
+      ...(is_preferred_date_visible !== undefined
+        ? { is_preferred_date_visible }
+        : {}),
+      image:
+        Array.isArray(files?.image) && files?.image?.length > 0
+          ? files.image[0].path  : image   ? normalizePath(image) : category.image,
     };
 
     const updatedCategory = await ServiceCategory.findByIdAndUpdate(
       id,
       { $set: payload },
-      { new: true }
+      { new: true },
     );
 
-    return handleResponse(200, "Service category updated successfully", updatedCategory, resp);
+    return handleResponse(
+      200,
+      "Service category updated successfully",
+      updatedCategory,
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -128,12 +225,18 @@ export const updateServiceCategory = async (req, resp) => {
 // get all service categories (deleted / non-deleted) with pagination & search
 export const getAllServiceCategories = async (req, resp) => {
   try {
-    const { search, status, parent_category, isDeleted, isParentOnly = false } = req.query;
+    const {
+      search,
+      status,
+      parent_category,
+      isDeleted,
+      isParentOnly = false,
+    } = req.query;
 
     const page = parseInt(req.query.page ?? "1");
     const limit = parseInt(req.query.limit ?? "10");
 
-    const isPaginationDisabled = page == '0' && limit == '0';
+    const isPaginationDisabled = page == "0" && limit == "0";
     const skip = isPaginationDisabled ? 0 : (page - 1) * limit;
 
     const filter = {};
@@ -186,13 +289,13 @@ export const getAllServiceCategories = async (req, resp) => {
         pagination: isPaginationDisabled
           ? null
           : {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-          },
+              total,
+              page,
+              limit,
+              totalPages: Math.ceil(total / limit),
+            },
       },
-      resp
+      resp,
     );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
@@ -212,7 +315,12 @@ export const getServiceCategoryById = async (req, resp) => {
       return handleResponse(404, "Service category not found", {}, resp);
     }
 
-    return handleResponse(200, "Service category fetched successfully", category, resp);
+    return handleResponse(
+      200,
+      "Service category fetched successfully",
+      category,
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -223,7 +331,10 @@ export const deleteServiceCategory = async (req, resp) => {
   try {
     const { id } = req.params;
 
-    const category = await ServiceCategory.findOne({ _id: id, deletedAt: null });
+    const category = await ServiceCategory.findOne({
+      _id: id,
+      deletedAt: null,
+    });
     if (!category) {
       return handleResponse(404, "Service category not found", {}, resp);
     }
@@ -238,14 +349,19 @@ export const deleteServiceCategory = async (req, resp) => {
         400,
         "Delete child categories before deleting this category",
         {},
-        resp
+        resp,
       );
     }
 
     category.deletedAt = new Date();
     await category.save();
 
-    return handleResponse(200, "Service category deleted successfully", {}, resp);
+    return handleResponse(
+      200,
+      "Service category deleted successfully",
+      {},
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -255,9 +371,17 @@ export const deleteServiceCategory = async (req, resp) => {
 export const restoreServiceCategory = async (req, resp) => {
   try {
     const { id } = req.params;
-    const category = await ServiceCategory.findOne({ _id: id, deletedAt: { $ne: null } });
+    const category = await ServiceCategory.findOne({
+      _id: id,
+      deletedAt: { $ne: null },
+    });
     if (!category) {
-      return handleResponse(404, "Deleted service category not found", {}, resp);
+      return handleResponse(
+        404,
+        "Deleted service category not found",
+        {},
+        resp,
+      );
     }
 
     if (category.parent_category) {
@@ -266,16 +390,25 @@ export const restoreServiceCategory = async (req, resp) => {
         deletedAt: null,
       });
       if (!parentCategory) {
-        return handleResponse(400, "Cannot restore category without restoring its parent category", {}, resp);
+        return handleResponse(
+          400,
+          "Cannot restore category without restoring its parent category",
+          {},
+          resp,
+        );
       }
     }
 
     category.deletedAt = null;
     await category.save();
 
-    return handleResponse(200, "Service category restored successfully", {}, resp);
-
+    return handleResponse(
+      200,
+      "Service category restored successfully",
+      {},
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
-}
+};

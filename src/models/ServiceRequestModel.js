@@ -23,7 +23,6 @@ const ServiceRequestSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
-    
     service_category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ServiceCategory",
@@ -37,7 +36,7 @@ const ServiceRequestSchema = new mongoose.Schema(
     manual_child_category: { type: String, default: null, trim: true },
     frequency: {
       type: String,
-      enum: ["One-time service", "Daily", "Weekly", "Bi-weekly", "Monthly"],
+      // enum: ["One-time service", "Daily", "Weekly", "Bi-weekly", "Monthly"],
       required: true,
     },
     selected_options: [
@@ -55,6 +54,22 @@ const ServiceRequestSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    start_date: {
+      type: Date,
+      default: null,
+    },
+    start_time: {
+      type: String,
+      default: null,
+    },
+    end_date: {
+      type: Date,
+      default: null,
+    },
+    end_time: {
+      type: String,
+      default: null,
+    },
     note: {
       type: String,
       default: null,
@@ -62,7 +77,7 @@ const ServiceRequestSchema = new mongoose.Schema(
     },
     address_1: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
     address_2: {
@@ -71,17 +86,17 @@ const ServiceRequestSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
     state: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
     country: {
       type: String,
-      required: true,
+      // required: true,
       trim: true,
     },
     pincode: {
@@ -89,12 +104,12 @@ const ServiceRequestSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    contact_details: { type: contactSchema, required: true },
     status: {
       type: String,
       enum: ["ACTIVE", "CANCELLED", "EXPIRED"],
       default: "ACTIVE",
     },
-    contact_details: { type: contactSchema, required: true },
     deletedAt: { type: Date, default: null },
     reason: {
       type: String,

@@ -13,7 +13,7 @@ const categoryOptionSchema = new mongoose.Schema(
       default: "ACTIVE",
     },
   },
-  { _id: true }
+  { _id: true },
 );
 
 const ServiceCategorySchema = new mongoose.Schema(
@@ -57,14 +57,54 @@ const ServiceCategorySchema = new mongoose.Schema(
       required: true,
     },
 
-    credit:{
-       type : Number ,
-       default : 3
+    credit: {
+      type: Number,
+      default: 3,
     },
 
     deletedAt: {
       type: Date,
       default: null,
+    },
+
+    frequency: {
+      type: [],
+      default: [],
+    },
+
+    is_frequency_visible: {
+      type: Boolean,
+      default: false,
+    },
+
+    is_start_date_visible: {
+      type: Boolean,
+      default: false,
+    },
+
+    is_start_time_visible: {
+      type: Boolean,
+      default: false,
+    },
+
+    is_end_date_visible: {
+      type: Boolean,
+      default: false,
+    },
+
+    is_end_time_visible: {
+      type: Boolean,
+      default: false,
+    },
+
+    is_preferred_time_visible: {
+      type: Boolean,
+      default: false,
+    },
+
+    is_preferred_date_visible: {
+      type: Boolean,
+      default: false,
     },
   },
   {
@@ -72,7 +112,7 @@ const ServiceCategorySchema = new mongoose.Schema(
     toObject: { getters: true },
     toJSON: { getters: true },
     retainNullValues: true,
-  }
+  },
 );
 
 ServiceCategorySchema.index(
@@ -80,11 +120,14 @@ ServiceCategorySchema.index(
   {
     unique: true,
     partialFilterExpression: { deletedAt: null },
-  }
+  },
 );
 ServiceCategorySchema.index({ parent_category: 1 });
 ServiceCategorySchema.index({ status: 1 });
 
-const ServiceCategory = mongoose.model("ServiceCategory", ServiceCategorySchema);
+const ServiceCategory = mongoose.model(
+  "ServiceCategory",
+  ServiceCategorySchema,
+);
 
 export default ServiceCategory;

@@ -60,8 +60,7 @@ export const updateAdminProfile = async (req, resp) => {
 
     const payload = {
       ...body,
-      profile_pic:
-        Array.isArray(profile_pic) && profile_pic?.length > 0
+      profile_pic:Array.isArray(profile_pic) && profile_pic?.length > 0
           ? profile_pic[0].path
           : body.profile_pic
           ? normalizePath(body.profile_pic)

@@ -20,6 +20,7 @@ import normalizePath from "../../../utils/imageNormalizer.js";
 import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import ContactUs from "../../models/ContactUsModel.js";
 
+
 // SIGNUP
 export const signup = async (req, resp) => {
   try {
@@ -34,10 +35,13 @@ export const signup = async (req, resp) => {
     // });
 
     let existingUser ;
+
     if(email){
+
      existingUser = await User.findOne({
          email:email,
     });
+
     }
 
     if(phone){

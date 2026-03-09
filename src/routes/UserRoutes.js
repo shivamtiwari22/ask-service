@@ -10,10 +10,11 @@ import {
   ignoreQuote,
   initiateServiceRequest,
   verifySignupLogin,
-  submitReview ,
-  vendorDetails ,
-  toggleReviewLike ,
-  reportUser
+  submitReview,
+  vendorDetails,
+  toggleReviewLike,
+  reportUser,
+  getSingleServiceCategories
 } from "../controller/user/ServiceController.js";
 import {
   authenticateForgotPasswordToken,
@@ -39,15 +40,15 @@ import {
   verifyOTP,
   verifyPhone,
   verifyPhoneAndLogin,
-    saveNotificationPreferences ,
-  getNotificationPreferences ,
-  PostContactUs ,
-  loginPhoneEmail ,
-  NewPassword ,
-  deleteAccount ,
-  GoogleLogin ,
-  phoneSignUp ,
-  getAllTestimonialMasters
+  saveNotificationPreferences,
+  getNotificationPreferences,
+  PostContactUs,
+  loginPhoneEmail,
+  NewPassword,
+  deleteAccount,
+  GoogleLogin,
+  phoneSignUp,
+  getAllTestimonialMasters,
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
@@ -60,6 +61,7 @@ const router = express.Router();
 // ==============================SERVICE==============================
 // get service category list for users
 router.get("/service-categories", getUserServiceCategories);
+router.get("/service-category/:id", getSingleServiceCategories);
 
 // get FAQs for users (active only, optional type filter)
 router.get("/faqs", getFaqsForUser);
@@ -124,17 +126,13 @@ router.post(
 
 // ==============================AUTH=================================
 
-router.post("/google-login", firebaseAuthenticateToken, GoogleLogin)
-
+router.post("/google-login", firebaseAuthenticateToken, GoogleLogin);
 
 // signup
 router.post("/signup", signup);
 router.post("/login", login);
 
-
 router.post("/google-login-send-phone-otp", phoneSignUp);
-
-
 
 // verify phone
 router.post("/verify-phone", verifyPhone);
@@ -142,10 +140,8 @@ router.post("/verify-email", verifyEmail);
 
 router.post("/login-phone-email", loginPhoneEmail);
 
-
 router.post("/resend-phone-otp", resendPhoneOTP);
 router.post("/resend-email-verification", resendEmailVerification);
-
 
 // verify phone and login
 router.post("/verify-phone-login", verifyPhoneAndLogin);
@@ -154,7 +150,7 @@ router.post("/verify-phone-login", verifyPhoneAndLogin);
 
 router.post("/post-contact-us", PostContactUs);
 
-router.get( "/testimonials", getAllTestimonialMasters);
+router.get("/testimonials", getAllTestimonialMasters);
 
 // resend email verification link
 
@@ -182,7 +178,6 @@ router.put(
   changePassword,
 );
 
-
 router.put(
   "/delete-account",
   userAuthenticateToken,
@@ -197,7 +192,6 @@ router.put(
   NewPassword,
 );
 
-
 // get profile
 router.get(
   "/get-profile",
@@ -206,15 +200,44 @@ router.get(
   getProfile,
 );
 
-router.get("/notification", userAuthenticateToken , checkRoleAuth(["User"]) , getNotificationPreferences);
-router.put("/notification", userAuthenticateToken , checkRoleAuth(["User"]) , saveNotificationPreferences);
+router.get(
+  "/notification",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  getNotificationPreferences,
+);
+router.put(
+  "/notification",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  saveNotificationPreferences,
+);
 
-router.post("/submit-review", userAuthenticateToken , checkRoleAuth(["User"]) , submitReview);
-router.put("/like-review/:id", userAuthenticateToken , checkRoleAuth(["User"]) ,toggleReviewLike );
+router.post(
+  "/submit-review",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  submitReview,
+);
+router.put(
+  "/like-review/:id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  toggleReviewLike,
+);
 
-router.get("/vendor-details/:id", userAuthenticateToken , checkRoleAuth(["User"]) , vendorDetails);
-router.post("/report-vendor", userAuthenticateToken , checkRoleAuth(["User"]) , reportUser);
-
+router.get(
+  "/vendor-details/:id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  vendorDetails,
+);
+router.post(
+  "/report-vendor",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  reportUser,
+);
 
 // forgot password
 router.post("/forgot-password", forgotPassword);
@@ -226,37 +249,106 @@ router.post("/resend-phone-email-otp", resendPhoneEmailOTP);
 router.post("/verify-forgot-password-otp", verifyOTP);
 
 // reset password
-router.post("/reset-password", authenticateForgotPasswordToken("forgot-password"), resetPassword);
+router.post(
+  "/reset-password",
+  authenticateForgotPasswordToken("forgot-password"),
+  resetPassword,
+);
 
-router.get("/test", (req, res) => { return handleResponse(200, "User route is working fine", {}, res); }) ;
+router.get("/test", (req, res) => {
+  return handleResponse(200, "User route is working fine", {}, res);
+});
 
+// chat
 
+router.get(
+  "/fetch-chats",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.fetchChats,
+);
+router.post(
+  "/access-chat",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.accessChat,
+);
+router.get(
+  "/all-messages/:chatId",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.allMessages,
+);
+router.post(
+  "/send-msg",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  chatMediaUpload,
+  ChatController.sendMessage,
+);
 
-// chat 
+router.post(
+  "/react-message",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.reactToMessage,
+);
+router.put(
+  "/read-all-message/:chatId",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.MarkAllMessagesSeen,
+);
+router.put(
+  "/read-message/:id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.MarkMessagesSeen,
+);
+router.get(
+  "/single-chat/:id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  ChatController.singleChat,
+);
 
-router.get("/fetch-chats", userAuthenticateToken , checkRoleAuth(["User"])  ,ChatController.fetchChats)
-router.post("/access-chat", userAuthenticateToken , checkRoleAuth(["User"])  ,ChatController.accessChat)
-router.get("/all-messages/:chatId", userAuthenticateToken , checkRoleAuth(["User"])  ,ChatController.allMessages)
-router.post("/send-msg", userAuthenticateToken , checkRoleAuth(["User"]) , chatMediaUpload , ChatController.sendMessage)
+router.get(
+  "/notification/all",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  notificationController.mine,
+);
+router.get(
+  "/notification/count",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  notificationController.count,
+);
+router.get(
+  "/notification/unread",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  notificationController.unread,
+);
+router.put(
+  "/notification/markAsRead/:id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  notificationController.markAsRead,
+);
+router.get(
+  "/notification/older",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  notificationController.older,
+);
 
-
-
-router.post("/react-message", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.reactToMessage)
-router.put("/read-all-message/:chatId", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.MarkAllMessagesSeen)
-router.put("/read-message/:id", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.MarkMessagesSeen)
-router.get("/single-chat/:id", userAuthenticateToken , checkRoleAuth(["User"])  , ChatController.singleChat)
-
-
-router.get("/notification/all",  userAuthenticateToken , checkRoleAuth(["User"]) , notificationController.mine)
-router.get("/notification/count",  userAuthenticateToken , checkRoleAuth(["User"]) , notificationController.count)
-router.get("/notification/unread",  userAuthenticateToken , checkRoleAuth(["User"]) , notificationController.unread)
-router.put("/notification/markAsRead/:id",  userAuthenticateToken , checkRoleAuth(["User"]) , notificationController.markAsRead)
-router.get("/notification/older",  userAuthenticateToken , checkRoleAuth(["User"]) , notificationController.older) 
-
-
-router.get("/message-test", notificationController.testPush)
-router.get("/message-notify/:user_id",  userAuthenticateToken , checkRoleAuth(["User"]) , notificationController.ChatMessages)
-
-
+router.get("/message-test", notificationController.testPush);
+router.get(
+  "/message-notify/:user_id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  notificationController.ChatMessages,
+);
 
 export default router;
