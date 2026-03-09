@@ -609,4 +609,32 @@ export const exportTransactionsListPdf = async (req, res) => {
   } catch (err) {
     return handleResponse(500, err.message, {}, res);
   }
+
 };
+
+
+
+
+export const AllQuotes = async (req,res) => {
+   try {
+    const userId = req.user._id;
+
+    const quote = await VendorQuote.findOne({
+         vendor_id: userId
+    });
+
+
+    return handleResponse(
+      200,
+      "Quotes",
+      quote,
+      res,
+    );
+
+  } catch (err) {
+
+    return handleResponse(500, err.message, {}, res);
+
+  }
+
+}

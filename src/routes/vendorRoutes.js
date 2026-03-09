@@ -42,6 +42,7 @@ import {
   getTransactionsList,
   exportTransactionsListCsv,
   exportTransactionsListPdf,
+  AllQuotes
 } from "../controller/vendor/DashboardController.js";
 import { serviceDocumentUpload, userProfileUpload, quoteDocumentUpload, chatMediaUpload } from "../../utils/multer.js";
 import {
@@ -133,6 +134,9 @@ router.put("/update-service-data", userAuthenticateToken , checkRoleAuth(["Vendo
 
 // upload verification documents (fieldname = document_id per file)
 router.post("/upload-service-selection-document", userAuthenticateToken, checkRoleAuth(["Vendor"]), serviceDocumentUpload, updateDocumentRequiredForService);
+
+router.get("/all-quotes", userAuthenticateToken, checkRoleAuth(["Vendor"]), AllQuotes);
+
 
 router.get("/dashboard", userAuthenticateToken, checkRoleAuth(["Vendor"]), getDashboardStats);
 
