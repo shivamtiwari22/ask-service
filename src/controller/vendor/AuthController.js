@@ -170,8 +170,6 @@ export const resendOTP = async (req, resp) => {
       $or: [{ email: identifier }, { phone: identifier }],
     });
 
-
-
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
@@ -247,6 +245,7 @@ if (email) {
       user.otp = null;
       user.otp_expires_at = null;
       user.is_email_verified = true;
+      user.is_email_verified = true;
       emailVerified = true;
       
     }
@@ -255,30 +254,35 @@ if (email) {
       if (user.otp_phone != otp_phone) {
         return handleResponse(401, "Invalid Phone OTP", {}, resp);
       }
-
+      // if (moment(user.otp_phone_expiry_at).isBefore(moment())) {
+      //   return handleResponse(401, "Phone Verification OTP expired", {}, resp);
+      // }
       user.otp_phone = null;
       user.otp_phone_expiry_at = null;
       user.is_phone_verified = true;
       phoneVerified = true;
     }
 
-
+    if (emailVerified && phoneVerified) {
+      user.otp_for = null;
+    }
 
     await user.save();
 
-    // if (emailVerified && phoneVerified) {
-    //   const token = generate15minToken(user.toObject());
-    //   await resp.cookie(
-    //     "service-selection-document-upload",
-    //     token,
-    //     documentUploadCookieOptions,
-    //   );
-    // }
+    if (emailVerified && phoneVerified) {
+      const token = generate15minToken(user.toObject());
+      await resp.cookie(
+        "service-selection-document-upload",
+        token,
+        documentUploadCookieOptions,
+      );
+    }
 
     const fialResponse = {
       emailVerified,
       phoneVerified,
       userData: user.toObject(),
+      token : generateToken(user.toObject())
     };
 
     return handleResponse(200, "OTP verified successfully", fialResponse, resp);

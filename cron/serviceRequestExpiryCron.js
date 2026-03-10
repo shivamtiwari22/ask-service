@@ -8,7 +8,7 @@ cron.schedule("0 0 * * *", async () => {
 
     const today = moment().startOf("day");
 
-    const expiryDate = moment(today).subtract(10, "days").toDate();
+    const expiryDate = moment(today).subtract(7, "days").toDate();
 
     const result = await ServiceRequest.updateMany(
       {

@@ -20,6 +20,7 @@ import moment from "moment";
 import mongoose from "mongoose";
 import crypto from "crypto";
 import Report from "../../models/ReportModel.js";
+import accountCredentialsMail from "../../../config/email/accountcredentialsMail.js";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -206,6 +207,8 @@ export const initiateServiceRequest = async (req, resp) => {
     }
 
     // ================= LOGGED-IN USER =================
+
+    
     if (req.user) {
       const [request] = await ServiceRequest.create(
         [
@@ -264,7 +267,7 @@ export const initiateServiceRequest = async (req, resp) => {
       ) {
         await session.abortTransaction();
 
-        if (emailOwner && !emailOwner?.is_email_verified) {
+  
           existingUser.otp = generateOTP();
           await existingUser.save({ session });
 
@@ -275,13 +278,14 @@ export const initiateServiceRequest = async (req, resp) => {
                 `,
           });
 
+
           return handleResponse(
             403,
             "Email verification required",
             { flow: "EMAIL_VERIFICATION_REQUIRED" },
             resp,
           );
-        }
+
 
         return handleResponse(
           400,
@@ -294,7 +298,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
     // ================= EXISTING USER =================
     if (existingUser) {
-      if (!existingUser.is_phone_verified) {
+      // if (!existingUser.is_phone_verified) {
         existingUser.phone_otp = generateOTP();
         existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
         await existingUser.save({ session });
@@ -307,7 +311,7 @@ export const initiateServiceRequest = async (req, resp) => {
           { flow: "PHONE_VERIFICATION_REQUIRED" },
           resp,
         );
-      }
+      // }
 
       await session.abortTransaction();
 
@@ -324,6 +328,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
     const phoneOtp = generateOTP();
     const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
+    const password = generatePassword(8) ;
 
     const [newUser] = await User.create(
       [
@@ -332,7 +337,7 @@ export const initiateServiceRequest = async (req, resp) => {
           last_name,
           phone,
           email: email || null,
-          password: await hashPassword(generatePassword(8)),
+          password: await hashPassword(password),
           role: role._id,
           is_phone_verified: false,
           is_email_verified: false,
@@ -345,6 +350,23 @@ export const initiateServiceRequest = async (req, resp) => {
       ],
       { session },
     );
+
+
+    //  account cred mail 
+
+    try {
+
+      await sendEmail({
+              to: email,
+              subject: "Account Credentials",
+              html: await accountCredentialsMail(first_name,email,password)
+            });
+    }
+    catch(e){
+         console.log(e ,"mail error");
+         
+    }
+
 
     const [request] = await ServiceRequest.create(
       [
