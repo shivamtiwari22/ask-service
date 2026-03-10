@@ -208,7 +208,6 @@ export const initiateServiceRequest = async (req, resp) => {
 
     // ================= LOGGED-IN USER =================
 
-    
     if (req.user) {
       const [request] = await ServiceRequest.create(
         [
@@ -253,10 +252,15 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
+
+
     // ================= FIND USER BY PHONE =================
+    
     const existingUser = await User.findOne({ phone });
 
     // ================= EMAIL COLLISION CHECK =================
+
+
     if (email) {
       const emailOwner = await User.findOne({ email });
 
@@ -268,13 +272,14 @@ export const initiateServiceRequest = async (req, resp) => {
         await session.abortTransaction();
 
   
-          existingUser.otp = generateOTP();
-          await existingUser.save({ session });
+          emailOwner.otp = generateOTP();
+          await emailOwner.save({ session });
+
 
           await sendEmail({
             to: email,
             subject: "Verification OTP",
-            html: `<p>One time password:${existingUser.otp}</p>
+            html: `<p>One time password:${emailOwner.otp}</p>
                 `,
           });
 
@@ -285,7 +290,6 @@ export const initiateServiceRequest = async (req, resp) => {
             { flow: "EMAIL_VERIFICATION_REQUIRED" },
             resp,
           );
-
 
         return handleResponse(
           400,
@@ -309,7 +313,7 @@ export const initiateServiceRequest = async (req, resp) => {
           403,
           "Phone verification required",
           { flow: "PHONE_VERIFICATION_REQUIRED" },
-          resp,
+          resp ,
         );
       // }
 
