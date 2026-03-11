@@ -124,7 +124,8 @@ router.post("/verify-forgot-password-otp", verifyOTP);
 router.post("/reset-password", authenticateForgotPasswordToken("forgot-password"), resetPassword);
 
 // get all services
-router.get("/get-all-services",   getAllServices);
+router.get("/get-all-services", getAllServices );
+
 
 // get all services document required
 router.get("/get-all-services-document-required", userAuthenticateToken, checkRoleAuth(["Vendor"]), getDocumentRequiredForService);

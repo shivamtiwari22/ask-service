@@ -12,6 +12,7 @@ import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 
+
 function generateTransactionNumber(id, date) {
   const year = new Date(date || Date.now()).getFullYear();
   const num = parseInt(id.toString().slice(-5), 16) % 100000;
@@ -156,10 +157,12 @@ export const unlockLead = async (req, res) => {
   }
 };
 
+
 /**
  * GET /leads/:leadId
  * Get single lead. Full details if unlocked by this vendor, otherwise masked.
  */
+
 export const getLeadById = async (req, res) => {
   try {
     const vendorId = req.user._id;
@@ -173,6 +176,11 @@ export const getLeadById = async (req, res) => {
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
+
+
+     const quote = VendorQuote.findOne({vendor_id:vendorId ,service_request_id :leadId }) ;
+
+     lead.canQuote = !!quote;
 
     const unlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,

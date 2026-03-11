@@ -1,14 +1,7 @@
 import { sendEmail } from "../../../config/emailConfig.js";
 import handleResponse from "../../../utils/http-response.js";
-import {
-  generateOTP,
-  generateToken,
-  hashPassword,
-} from "../../../utils/auth.js";
-import {
-  createReference,
-  generatePassword,
-} from "../../../utils/helperFunction.js";
+import { generateOTP , generateToken , hashPassword , } from "../../../utils/auth.js";
+import { createReference , generatePassword } from "../../../utils/helperFunction.js";
 import Role from "../../models/RoleModel.js";
 import ServiceCategory from "../../models/ServiceCategoryModel.js";
 import ServiceRequest from "../../models/ServiceRequestModel.js";
@@ -255,11 +248,10 @@ export const initiateServiceRequest = async (req, resp) => {
 
 
     // ================= FIND USER BY PHONE =================
-    
+
     const existingUser = await User.findOne({ phone });
 
     // ================= EMAIL COLLISION CHECK =================
-
 
     if (email) {
       const emailOwner = await User.findOne({ email });
@@ -301,6 +293,7 @@ export const initiateServiceRequest = async (req, resp) => {
     }
 
     // ================= EXISTING USER =================
+
     if (existingUser) {
       // if (!existingUser.is_phone_verified) {
         existingUser.phone_otp = generateOTP();
@@ -327,11 +320,10 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
-
     const role = await Role.findOne({ name: "User" });
 
-    const phoneOtp = generateOTP();
-    const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
+    const phoneOtp = generateOTP() ;
+    const emailToken = email ? crypto.randomBytes(32).toString("hex") : null ;
     const password = generatePassword(8) ;
 
     const [newUser] = await User.create(
@@ -341,15 +333,16 @@ export const initiateServiceRequest = async (req, resp) => {
           last_name,
           phone,
           email: email || null,
-          password: await hashPassword(password),
-          role: role._id,
-          is_phone_verified: false,
-          is_email_verified: false,
+          password: await hashPassword(password) ,
+          role: role._id ,
+          is_phone_verified: false ,
+          is_email_verified: false ,
           otp_phone: phoneOtp,
           otp_phone_expiry_at: moment().add(5, "minutes").toDate(),
           otp_for: "VERIFY_PHONE",
           email_verification_token: emailToken,
           status: "ACTIVE",
+
         },
       ],
       { session },
@@ -368,21 +361,18 @@ export const initiateServiceRequest = async (req, resp) => {
     }
     catch(e){
          console.log(e ,"mail error");
-         
     }
 
 
     const [request] = await ServiceRequest.create(
       [
         {
-          reference_no: createReference(),
-          service_category,
-          child_category: child_category || null,
-          manual_child_category: manual_child_category || null,
-          frequency,
-          selected_options: Array.isArray(selected_options)
-            ? selected_options
-            : [],
+          reference_no: createReference() ,
+          service_category ,
+          child_category: child_category || null ,
+          manual_child_category: manual_child_category || null ,
+          frequency ,
+          selected_options: Array.isArray(selected_options) ? selected_options : [] ,
           preferred_start_date: preferred_start_date || null,
           preferred_time_of_day: preferred_time_of_day || null,
           note: note || null,
