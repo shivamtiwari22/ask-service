@@ -179,3 +179,34 @@ export const updateVendorKycStatus = async (req, res) => {
     return handleResponse(500, error.message, {}, res);
   }
 };
+
+/**
+ * Admin dashboard: Get total pending KYC and inactive vendors count
+ */
+export const getVendorDashboardCounts = async (req, res) => {
+  try {
+    const vendorRole = await Role.findOne({ name: RegExp("^Vendor$", "i") });
+    if (!vendorRole) {
+      return handleResponse(404, "Vendor role not found", {}, res);
+    }
+
+    const baseMatch = { role: vendorRole._id };
+
+    const [totalPendingKyc, inactiveVendors] = await Promise.all([
+      User.countDocuments({ ...baseMatch, kyc_status: "PENDING" }),
+      User.countDocuments({ ...baseMatch, status: "INACTIVE" }),
+    ]);
+
+    return handleResponse(
+      200,
+      "Vendor dashboard counts fetched successfully",
+      {
+        total_pending_kyc: totalPendingKyc,
+        inactive_vendors: inactiveVendors,
+      },
+      res
+    );
+  } catch (error) {
+    return handleResponse(500, error.message, {}, res);
+  }
+};

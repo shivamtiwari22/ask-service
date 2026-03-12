@@ -62,6 +62,11 @@ const ServiceCategorySchema = new mongoose.Schema(
       default: 3,
     },
 
+    company_credit : {
+  type: Number,
+      default: 3,
+    }
+,
     deletedAt: {
       type: Date,
       default: null,

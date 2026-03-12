@@ -14,7 +14,8 @@ import {
   vendorDetails,
   toggleReviewLike,
   reportUser,
-  getSingleServiceCategories
+  getSingleServiceCategories ,
+  updateServiceRequest
 } from "../controller/user/ServiceController.js";
 import {
   authenticateForgotPasswordToken,
@@ -65,6 +66,11 @@ router.get("/service-category/:id", getSingleServiceCategories);
 
 // get FAQs for users (active only, optional type filter)
 router.get("/faqs", getFaqsForUser);
+
+
+router.put("/service-request/:id",  userAuthenticateToken,
+  checkRoleAuth(["User"]) , updateServiceRequest);
+
 
 // service created by user (without login)
 router.post(

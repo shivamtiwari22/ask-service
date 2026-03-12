@@ -32,6 +32,7 @@ import bcrypt from "bcryptjs";
 import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
+import verificationMail from "../../../config/email/verificationMail.js";
 
 
 // register vendor
@@ -95,7 +96,7 @@ export const registerVendor = async (req, resp) => {
         await sendEmail({
                to: user.email,
                subject: "Verify your email",
-               html: `<p>Your OTP :${user.otp } </p>`,
+               html:await verificationMail(user.first_name,user.otp),
              });
       }
       catch(e){
@@ -185,7 +186,7 @@ export const resendOTP = async (req, resp) => {
         await sendEmail({
                to: user.email,
                subject: "Verify your email",
-               html: `<p>Your OTP :${user.otp } </p>`,
+               html:   await verificationMail(user.first_name,user.otp)      ,
              });
       }
       catch(e){
@@ -202,7 +203,7 @@ export const resendOTP = async (req, resp) => {
 
     user.otp_for = type;
     await user.save();
-    return handleResponse(200, "OTP sent successfully", {}, resp);
+    return handleResponse(200, "Code sent successfully", {}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -285,7 +286,7 @@ if (email) {
       token : generateToken(user.toObject())
     };
 
-    return handleResponse(200, "OTP verified successfully", fialResponse, resp);
+    return handleResponse(200, "Code verified successfully", fialResponse, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -330,7 +331,7 @@ export const loginVendor = async (req, resp) => {
         };
         return handleResponse(
           200,
-          "OTP Send Successfully for login",
+          "Code Send Successfully for login",
           fialResponse,
           resp,
         );
@@ -361,7 +362,7 @@ export const loginVendor = async (req, resp) => {
 
       return handleResponse(
         200,
-        "OTP Send Successfully for verification",
+        "Code Send Successfully for verification",
         fialResponse,
         resp,
       );
@@ -421,7 +422,7 @@ export const loginVendor = async (req, resp) => {
 
       return handleResponse(
         200,
-        "OTP Send Successfully for verification",
+        "Code Send Successfully for verification",
         fialResponse,
         resp,
       );
@@ -480,8 +481,7 @@ export const updateVendorProfile = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: `<p>One time password:${user.otp}</p>
-                `,
+        html:  await verificationMail(user.first_name,user.otp),
       });
 
     }
@@ -621,7 +621,7 @@ export const forgotPassword = async (req, resp) => {
     await user.save();
     return handleResponse(
       200,
-      "OTP sent successfully",
+      "Code sent successfully",
       { otp: user.otp },
       resp,
     );
@@ -645,7 +645,7 @@ export const resendPhoneEmailOTP = async (req, resp) => {
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
     await user.save();
-    return handleResponse(200, "OTP sent successfully", {}, resp);
+    return handleResponse(200, "Code sent successfully", {}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -670,7 +670,7 @@ export const verifyOTP = async (req, resp) => {
     }
 
     if (user.otp != otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp);
+      return handleResponse(401, "Invalid Code", {}, resp);
     }
     user.otp = null;
     user.otp_expires_at = null;
@@ -679,7 +679,7 @@ export const verifyOTP = async (req, resp) => {
 
     const token = generateOneMinToken(user.toObject());
     await resp.cookie("forgot-password", token, cookieOptions);
-    return handleResponse(200, "OTP verified successfully", { token }, resp);
+    return handleResponse(200, "Code verified successfully", { token }, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

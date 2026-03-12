@@ -44,7 +44,7 @@ import {
   getAllServiceCategories,
   getServiceCategoryById,
   restoreServiceCategory,
-  updateServiceCategory,
+  updateServiceCategory, 
 } from "../controller/admin/ServiceCategoryController.js";
 import {
   createFaq,
@@ -60,9 +60,11 @@ import {
   createTestimonialMaster,
   createTokenMaster,
   deleteServiceDocumentRequirement,
+  permanentDeleteServiceDocumentRequirement,
   deleteTestimonialMaster,
   deleteTokenMaster,
   getAllServiceDocumentRequirements,
+  getAllSoftDeletedServiceDocumentRequirements,
   getAllTestimonialMasters,
   getAllTokenMasters,
   getTestimonialMasterById,
@@ -73,9 +75,11 @@ import {
   updateServiceDocumentRequirement,
   updateTestimonialMaster,
   updateTokenMaster,
+  getServiceDocumentRequirementById
 } from "../controller/admin/MasterController.js";
 import {
   getAllVendorsWithDocuments,
+  getVendorDashboardCounts,
   updateVendorDocumentStatus,
   updateVendorKycStatus,
 } from "../controller/admin/VendorController.js";
@@ -125,6 +129,12 @@ router.get(
   authenticateToken,
   checkRoleAuth(["Admin"]),
   getAllVendorsWithDocuments,
+);
+router.get(
+  "/vendor-dashboard-counts",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getVendorDashboardCounts,
 );
 router.put(
   "/vendors/:vendorId/documents/:documentId/status",
@@ -324,10 +334,16 @@ router.get(
   getAllServiceDocumentRequirements,
 );
 router.get(
+  "/service-document-requirements/deleted",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getAllSoftDeletedServiceDocumentRequirements,
+);
+router.get(
   "/service-document-requirements/:id",
   authenticateToken,
   checkRoleAuth(["Admin"]),
-  getAllServiceDocumentRequirements,
+  getServiceDocumentRequirementById,
 );
 router.put(
   "/service-document-requirements/:id",
@@ -341,6 +357,13 @@ router.delete(
   authenticateToken,
   checkRoleAuth(["Admin"]),
   deleteServiceDocumentRequirement,
+);
+// permanent delete (only if already soft deleted)
+router.delete(
+  "/service-document-requirements/:id/permanent",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  permanentDeleteServiceDocumentRequirement,
 );
 
 router.put(

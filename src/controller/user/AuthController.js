@@ -19,6 +19,7 @@ import bcrypt from "bcryptjs";
 import normalizePath from "../../../utils/imageNormalizer.js";
 import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import ContactUs from "../../models/ContactUsModel.js";
+import verificationMail from "../../../config/email/verificationMail.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -82,9 +83,8 @@ export const signup = async (req, resp) => {
 
       await sendEmail({
         to: email,
-        subject: "Verification OTP",
-        html: `<p>One time password:${emailOtp}</p>
-                `,
+        subject: "Verification Code",
+        html:  await verificationMail(user?.first_name,emailOtp)
       });
     }
 
@@ -192,8 +192,7 @@ export const loginPhoneEmail = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: `<p>One time password:${user.otp}</p>
-                `,
+        html:  await verificationMail(user.first_name,user.otp),
       });
     }
 
@@ -293,7 +292,7 @@ export const requestEmailLoginOTP = async (req, resp) => {
     await sendEmail({
       to: email,
       subject: "Login OTP",
-      html: `<p>Your login OTP is <b>${otp}</b></p>`,
+      html:await verificationMail(user.first_name, otp),
     });
 
     return handleResponse(
@@ -374,8 +373,7 @@ export const login = async (req, resp) => {
       await sendEmail({
         to: user.email,
         subject: "Verification OTP",
-        html: `<p>One time password:${otp}</p>
-                `,
+        html:await verificationMail(user.first_name, otp),
       });
 
       return handleResponse(
@@ -517,7 +515,7 @@ export const resendEmailVerification = async (req, resp) => {
     await sendEmail({
       to: email,
       subject: "Verification OTP",
-      html: `<p>One time password:${otp}</p> `,
+      html:await verificationMail(user.first_name, otp),
     });
 
     return handleResponse(
@@ -646,7 +644,7 @@ export const updateUserProfile = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: `  <p>One time password:${user.otp}</p> `,
+        html:    await verificationMail(user.first_name,user.otp),
       });
     }
 
@@ -753,8 +751,7 @@ export const forgotPassword = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: `<p>One time password:${user.otp}</p>
-                `,
+        html: await verificationMail(user.first_name,user.otp),
       });
     }
 
@@ -764,7 +761,7 @@ export const forgotPassword = async (req, resp) => {
 
     return handleResponse(
       200,
-      "OTP sent successfully",
+      "Code sent successfully",
       { otp: user.otp },
       resp,
     );
@@ -792,7 +789,7 @@ export const verifyOTP = async (req, resp) => {
     }
 
     if (user.otp != otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp);
+      return handleResponse(401, "Invalid Code", {}, resp);
     }
     user.otp = null;
     user.otp_expires_at = null;
@@ -803,7 +800,7 @@ export const verifyOTP = async (req, resp) => {
 
     await resp.cookie("forgot-password", token, cookieOptions);
 
-    return handleResponse(200, "OTP verified successfully", { token }, resp);
+    return handleResponse(200, "Code verified successfully", { token }, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

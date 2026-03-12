@@ -321,7 +321,7 @@ export const createServiceDocumentRequirement = async (req, resp) => {
   }
 };
 
-// get all service document requirements (deleted and non deleted) with pagination and search
+// get all (non-deleted) service document requirements with pagination and search
 export const getAllServiceDocumentRequirements = async (req, resp) => {
   try {
     const { skip, page, limit, isPaginationDisabled } = getPagination(req);
@@ -331,11 +331,16 @@ export const getAllServiceDocumentRequirements = async (req, resp) => {
       service_category,
       is_required,
       type,
-      isDeleted,
     } = req.query;
 
+    const baseQuery = buildListQuery({
+      search,
+      status,
+      deletedAt: null
+    });
+
     const query = {
-      ...buildListQuery({ search, status, isDeleted }),
+      ...baseQuery,
       ...(service_category ? { service_category } : {}),
       ...(type ? { type } : {}),
       ...(is_required !== undefined
@@ -359,6 +364,66 @@ export const getAllServiceDocumentRequirements = async (req, resp) => {
     return handleResponse(
       200,
       "Service document requirements fetched successfully",
+      {
+        list: requirements,
+        pagination: isPaginationDisabled
+          ? null
+          : { total, page, limit, totalPages: Math.ceil(total / limit) },
+      },
+      resp
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// get all soft-deleted service document requirements with pagination and search
+export const getAllSoftDeletedServiceDocumentRequirements = async (req, resp) => {
+  try {
+    const { skip, page, limit, isPaginationDisabled } = getPagination(req);
+    const {
+      search,
+      status,
+      service_category,
+      is_required,
+      type,
+    } = req.query;
+
+    const baseQuery = buildListQuery({
+      search,
+      status,
+      // deletedAt : {$ne:null} 
+    });
+
+    const query = {
+      ...baseQuery,
+      // ...(service_category ? { service_category } : {}),
+      // ...(type ? { type } : {}),
+      // ...(is_required !== undefined
+      //   ? { is_required: is_required === "true" }
+      //   : {}),
+        deletedAt: { $ne: null }
+    };
+
+    console.log(query);
+    
+
+    let findQuery = ServiceDocumentRequirement.find(query)
+      .populate("service_category", "title")
+      .sort({ createdAt: -1 });
+
+    if (!isPaginationDisabled) {
+      findQuery = findQuery.skip(skip).limit(limit);
+    }
+
+    const [requirements, total] = await Promise.all([
+      findQuery,
+      ServiceDocumentRequirement.countDocuments(query),
+    ]);
+
+    return handleResponse(
+      200,
+      "Soft deleted service document requirements fetched successfully",
       {
         list: requirements,
         pagination: isPaginationDisabled
@@ -446,7 +511,33 @@ export const deleteServiceDocumentRequirement = async (req, resp) => {
   }
 };
 
+// permanently delete a soft-deleted service document / license requirement master
+export const permanentDeleteServiceDocumentRequirement = async (req, resp) => {
+  try {
+    const requirement = await ServiceDocumentRequirement.findOneAndDelete({
+      _id: req.params.id,
+      deletedAt: { $ne: null },
+    });
 
+    if (!requirement) {
+      return handleResponse(
+        404,
+        "Service document requirement not found or not soft deleted",
+        {},
+        resp
+      );
+    }
+
+    return handleResponse(
+      200,
+      "Service document requirement permanently deleted successfully",
+      {},
+      resp
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
 
 // restore deleted service document / license requirement master
 export const restoreDeletedServiceDocumentRequirement = async (req, resp) => {

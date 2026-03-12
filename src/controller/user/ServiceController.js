@@ -1113,3 +1113,137 @@ export const reportUser = async (req, res) => {
     return handleResponse(500, error.message, {}, res);
   }
 };
+
+
+
+
+export const updateServiceRequest = async (req, resp) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { id } = req.params;
+
+    const {
+      service_category,
+      child_category,
+      manual_child_category,
+      frequency,
+      selected_options,
+      preferred_start_date,
+      preferred_time_of_day,
+      note,
+      address_1,
+      address_2,
+      city,
+      state,
+      country,
+      pincode,
+      contact_details,
+      start_date,
+      start_time,
+      end_date,
+      end_time,
+    } = req.body;
+
+    const request = await ServiceRequest.findOne({
+      _id: id,
+      deletedAt: null,
+    });
+
+    if (!request) {
+      await session.abortTransaction();
+      return handleResponse(404, "Service request not found", {}, resp);
+    }
+
+    // if (req.user && request.user.toString() !== req.user._id.toString()) {
+    //   await session.abortTransaction();
+    //   return handleResponse(403, "Unauthorized access", {}, resp);
+    // }
+
+    // category validation
+    if (service_category) {
+      const parentCategory = await ServiceCategory.findOne({
+        _id: service_category,
+        deletedAt: null,
+        status: "ACTIVE",
+      });
+
+      if (!parentCategory) {
+        await session.abortTransaction();
+        return handleResponse(400, "Invalid service category", {}, resp);
+      }
+    }
+
+    if (child_category) {
+      const child = await ServiceCategory.findOne({
+        _id: child_category,
+        parent_category: service_category,
+        deletedAt: null,
+        status: "ACTIVE",
+      });
+
+      if (!child) {
+        await session.abortTransaction();
+        return handleResponse(400, "Invalid child category", {}, resp);
+      }
+    }
+
+    const updateData = {};
+
+    if (service_category) updateData.service_category = service_category;
+    if (child_category !== undefined)
+      updateData.child_category = child_category || null;
+    if (manual_child_category !== undefined)
+      updateData.manual_child_category = manual_child_category || null;
+
+    if (frequency !== undefined) updateData.frequency = frequency;
+
+    if (selected_options !== undefined)
+      updateData.selected_options = Array.isArray(selected_options)
+        ? selected_options
+        : [];
+
+    if (preferred_start_date !== undefined)
+      updateData.preferred_start_date = preferred_start_date;
+
+    if (preferred_time_of_day !== undefined)
+      updateData.preferred_time_of_day = preferred_time_of_day;
+
+    if (note !== undefined) updateData.note = note;
+
+    if (address_1 !== undefined) updateData.address_1 = address_1;
+    if (address_2 !== undefined) updateData.address_2 = address_2;
+    if (city !== undefined) updateData.city = city;
+    if (state !== undefined) updateData.state = state;
+    if (country !== undefined) updateData.country = country;
+    if (pincode !== undefined) updateData.pincode = pincode;
+    if (start_date !== undefined) updateData.start_date = start_date;
+    if (start_time !== undefined) updateData.start_time = start_time;
+    if (end_date !== undefined) updateData.end_date = end_date;
+    if (end_time !== undefined) updateData.end_time = end_time;
+
+    const updatedRequest = await ServiceRequest.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true, session }
+    );
+
+    await session.commitTransaction();
+
+    return handleResponse(
+      200,
+      "Service request updated successfully",
+      { request: updatedRequest },
+      resp
+    );
+  } catch (error) {
+    await session.abortTransaction();
+    console.log("Update service request error:", error);
+
+    return handleResponse(500, error.message, {}, resp);
+  } finally {
+    session.endSession();
+  }
+};

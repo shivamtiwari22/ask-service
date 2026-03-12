@@ -178,9 +178,9 @@ export const getLeadById = async (req, res) => {
     }
 
 
-     const quote = VendorQuote.findOne({vendor_id:vendorId ,service_request_id :leadId }) ;
+     const quote = VendorQuote.findOne({vendor_id:vendorId , service_request_id :leadId }) ;
 
-     lead.canQuote = !!quote;
+     lead.canQuote =  quote ? true : false ;
 
     const unlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,

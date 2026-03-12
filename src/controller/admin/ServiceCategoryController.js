@@ -37,7 +37,9 @@ export const createServiceCategory = async (req, resp) => {
       is_end_time_visible,
       is_preferred_time_visible,
       is_preferred_date_visible,
-      is_tasks_required_visible
+      is_tasks_required_visible ,
+      company_credit ,
+      individual_credit ,
     } = parseNestedBody(req.body);
 
     const file = req.files;
@@ -88,7 +90,9 @@ export const createServiceCategory = async (req, resp) => {
       is_end_time_visible,
       is_preferred_time_visible,
       is_preferred_date_visible,
-      is_tasks_required_visible
+      is_tasks_required_visible ,
+      credit : individual_credit ,
+      company_credit
     });
 
     return handleResponse(
@@ -130,7 +134,9 @@ export const updateServiceCategory = async (req, resp) => {
       is_end_time_visible,
       is_preferred_time_visible,
       is_preferred_date_visible,
-      is_tasks_required_visible
+      is_tasks_required_visible ,
+      individual_credit ,
+      company_credit
     } = req.body;
     const files = req.files;
 
@@ -184,6 +190,9 @@ export const updateServiceCategory = async (req, resp) => {
 
 
     const payload = {
+      ...(title !== undefined ? { title } : {}),
+      ...(individual_credit !== undefined ? { credit:individual_credit } : {}),
+      ...(company_credit !== undefined ? { company_credit:company_credit } : {}),
       ...(title !== undefined ? { title } : {}),
       ...(description !== undefined ? { description } : {}),
       ...(status !== undefined ? { status } : {}),
