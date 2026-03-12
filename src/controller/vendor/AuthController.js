@@ -38,7 +38,7 @@ import verificationMail from "../../../config/email/verificationMail.js";
 // register vendor
 export const registerVendor = async (req, resp) => {
   try {
-    const { first_name, last_name, email, phone, password } = req.body;
+    const { first_name, last_name, email, phone, password , business_name } = req.body;
 
     const existingEmail = await User.findOne({ email });
 
@@ -82,6 +82,7 @@ export const registerVendor = async (req, resp) => {
       otp_for: "SIGNUP",
       is_phone_verified: false,
       is_email_verified: false,
+      business_name
     };
     const user = await User.create(payload);
 
