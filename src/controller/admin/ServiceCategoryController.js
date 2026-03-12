@@ -254,25 +254,25 @@ export const getAllServiceCategories = async (req, resp) => {
 
     const filter = {};
 
-    if (isDeleted === "true") {
-      filter.deletedAt = { $ne: null };
-    } else {
+    // if (isDeleted === "true") {
+    //   filter.deletedAt = { $ne: null };
+    // } else {
       filter.deletedAt = null;
-    }
+    // }
 
-    if (status) {
-      filter.status = status;
-    }
+    // if (status) {
+    //   filter.status = status;
+    // }
 
-    if (isParentOnly == "true") {
-      filter.parent_category = null;
-    }
+    // if (isParentOnly == "true") {
+    //   filter.parent_category = null;
+    // }
 
-    if (parent_category === "null") {
-      filter.parent_category = null;
-    } else if (parent_category) {
-      filter.parent_category = parent_category;
-    }
+    // if (parent_category === "null") {
+    //   filter.parent_category = null;
+    // } else if (parent_category) {
+    //   filter.parent_category = parent_category;
+    // }
 
     if (search) {
       filter.$or = [

@@ -870,14 +870,25 @@ export const availableLeads = async (req, resp) => {
 
     let sortOption = {};
 
-    // Default sort
-    sortOption.createdAt = -1;
+if (sort === "newest") {
+  sortOption.createdAt = -1;
+}
+
+if (sort === "oldest") {
+  sortOption.createdAt = 1;
+}
+
+// default sort
+if (!sort) {
+  sortOption.createdAt = -1;
+}
 
     const leads = await ServiceRequest.find(filter)
       .populate({
         path: "service_category",
         select: "title credit",
       })
+        .sort(sortOption)
       .lean();
 
     if (sort === "high_to_low") {
