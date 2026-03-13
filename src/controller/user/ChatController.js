@@ -267,8 +267,35 @@ class ChatController {
 
         item.users = await User.find(
           { _id: { $in: item.users }, deletedAt: null },
-          "_id first_name last_name username profile_pic",
-        ).lean();
+          "_id first_name last_name username profile_pic kyc_status",
+        ).populate("role").lean();
+
+
+         for ( const user of item.users ) {
+            let totalReviews = 0;
+            let averageRating = 0;
+
+            // ✅ Only for vendor role
+            if (user.role?.name === "Vendor") {
+              const reviews = await VendorReview.find({
+                vendor: user._id,
+              }).lean();
+
+              user.totalReviews = reviews.length;
+
+             user.averageRating =
+                totalReviews > 0
+                  ? (
+                      reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
+                      totalReviews
+                    ).toFixed(1)
+                  : 0;
+            }
+          }
+
+
+
+
 
         item.users = item.users.map((user) => ({
           ...user,

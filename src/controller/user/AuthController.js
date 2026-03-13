@@ -666,8 +666,10 @@ export const updateUserProfile = async (req, resp) => {
       user.otp_for = "VERIFY_PHONE";
     }
 
+     if(  req.files && req.files.profile_pic > 0){
     user.profile_pic =
       req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+     }
 
     await user.save();
 
