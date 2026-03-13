@@ -258,10 +258,11 @@ class ChatController {
             "_id first_name last_name username profile_pic",
           );
 
-          item.latestMessage.sender.profile_pic = item.latestMessage.sender
-            .profile_pic
-            ? `${base_url}/${item.latestMessage.sender.profile_pic}`
-            : null;
+         if (item.latestMessage.sender) {
+    item.latestMessage.sender.profile_pic = item.latestMessage.sender.profile_pic
+      ? `${base_url}/${item.latestMessage.sender.profile_pic}`
+      : null;
+  }
         }
 
         item.users = await User.find(
@@ -271,7 +272,7 @@ class ChatController {
 
         item.users = item.users.map((user) => ({
           ...user,
-          profile_pic: user.profile_pic
+          profile_pic: user?.profile_pic
             ? `${base_url}/${user.profile_pic}`
             : null,
         }));
@@ -290,6 +291,8 @@ class ChatController {
 
       return handleResponse(200, "chat fetched", chats, res);
     } catch (err) {
+      console.log(err);
+      
       return handleResponse(500, err.message, {}, res);
     }
   };
