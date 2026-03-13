@@ -244,7 +244,12 @@ class ChatController {
         users: { $in: userIds },
         isGroupChat: false,
       })
-        .populate("quote_id")
+        .populate({
+    path: "quote_id",
+    populate: {
+      path: "service_request_id",
+    },
+  })
         .sort({ createdAt: -1 })
         .lean();
 
