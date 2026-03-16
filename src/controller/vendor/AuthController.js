@@ -584,7 +584,7 @@ export const deleteAccount = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    User.findByIdAndDelete(user._id);
+  await  User.findByIdAndDelete(user._id);
 
     return handleResponse(200, "Account deleted successfully", {}, resp);
   } catch (err) {
