@@ -33,12 +33,13 @@ import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import verificationMail from "../../../config/email/verificationMail.js";
-
+import axios from "axios";
 
 // register vendor
 export const registerVendor = async (req, resp) => {
   try {
-    const { first_name, last_name, email, phone, password , business_name } = req.body;
+    const { first_name, last_name, email, phone, password, business_name } =
+      req.body;
 
     const existingEmail = await User.findOne({ email });
 
@@ -52,16 +53,16 @@ export const registerVendor = async (req, resp) => {
         resp,
       );
 
-      if(phone){
-        const existingPhone = await User.findOne({ phone });
-        if (existingPhone)
-          return handleResponse(
-            400,
-            "User already exists with this phone",
-            {},
-            resp,
-          );
-      }
+    if (phone) {
+      const existingPhone = await User.findOne({ phone });
+      if (existingPhone)
+        return handleResponse(
+          400,
+          "User already exists with this phone",
+          {},
+          resp,
+        );
+    }
 
     const hashedPassword = await hashPassword(password);
     const role = await Role.findOne({ name: "Vendor" });
@@ -82,7 +83,7 @@ export const registerVendor = async (req, resp) => {
       otp_for: "SIGNUP",
       is_phone_verified: false,
       is_email_verified: false,
-      business_name
+      business_name,
     };
     const user = await User.create(payload);
 
@@ -91,21 +92,15 @@ export const registerVendor = async (req, resp) => {
       amount: 0,
     });
 
-
-      try {
-
-        await sendEmail({
-               to: user.email,
-               subject: "Verify your email",
-               html:await verificationMail(user.first_name,user.otp),
-             });
-      }
-      catch(e){
-         console.log(e);
-         
-      }
-
-
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Verify your email",
+        html: await verificationMail(user.first_name, user.otp),
+      });
+    } catch (e) {
+      console.log(e);
+    }
 
     if (!user) return handleResponse(400, "Failed to create user", {}, resp);
 
@@ -115,44 +110,40 @@ export const registerVendor = async (req, resp) => {
   }
 };
 
-
 export const NewPassword = async (req, res) => {
-    const { password, confirm_password } = req.body;
-    try {
-      const requiredFields = [
-        { field: "password", value: password },
-        { field: "confirm_password", value: confirm_password },
-      ];
-      
-      if (password == confirm_password) {
-        const salt = await bcrypt.genSalt(10);
-        const hasPassword = await bcrypt.hash(password, salt);
+  const { password, confirm_password } = req.body;
+  try {
+    const requiredFields = [
+      { field: "password", value: password },
+      { field: "confirm_password", value: confirm_password },
+    ];
 
-        await User.findByIdAndUpdate(req.user._id, {
-          $set: {
-            password: hasPassword,
-          },
-        });
+    if (password == confirm_password) {
+      const salt = await bcrypt.genSalt(10);
+      const hasPassword = await bcrypt.hash(password, salt);
 
-    return     handleResponse(200, "Password Changed Successfully", {}, res);
-      } else {
-    return    handleResponse(
-          400,
-          "New password & confirm password does not match",
-          {},
-          res
-        );
-      }
-    } catch (e) {
-      console.log('====================================');
-      console.log(e);
-      console.log('====================================');
-      return handleResponse(500, e.message, {}, res);
+      await User.findByIdAndUpdate(req.user._id, {
+        $set: {
+          password: hasPassword,
+        },
+      });
+
+      return handleResponse(200, "Password Changed Successfully", {}, res);
+    } else {
+      return handleResponse(
+        400,
+        "New password & confirm password does not match",
+        {},
+        res,
+      );
     }
-  };
-
-
-
+  } catch (e) {
+    console.log("====================================");
+    console.log(e);
+    console.log("====================================");
+    return handleResponse(500, e.message, {}, res);
+  }
+};
 
 // resend otp
 export const resendOTP = async (req, resp) => {
@@ -181,25 +172,50 @@ export const resendOTP = async (req, resp) => {
       user.otp_expires_at = moment().add(2, "minutes").toDate();
 
       console.log("us");
-      
+
       try {
-
         await sendEmail({
-               to: user.email,
-               subject: "Verify your email",
-               html:   await verificationMail(user.first_name,user.otp)      ,
-             });
+          to: user.email,
+          subject: "Verify your email",
+          html: await verificationMail(user.first_name, user.otp),
+        });
+      } catch (e) {
+        console.log(e);
       }
-      catch(e){
-         console.log(e);
-         
-      }
-
-
-
     } else {
       user.otp_phone = generateOTP();
       user.otp_phone_expiry_at = moment().add(2, "minutes").toDate();
+
+      try {
+        let msg = `Your verification code is ${user.otp_phone}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+
+        const response = await axios.post(
+          "https://rest.clicksend.com/v3/sms/send",
+          {
+            messages: [
+              {
+                source: "nodejs",
+                from: "MyApp",
+                body: msg,
+                to: `+${user.phone}`,
+              },
+            ],
+          },
+          {
+            auth: {
+              username: process.env.SMS_USERNAME,
+              password: process.env.SMS_API,
+            },
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        console.log("SMS Response:", response.data);
+      } catch (e) {
+        console.log(e);
+      }
     }
 
     user.otp_for = type;
@@ -216,13 +232,13 @@ export const verifyRegistrationOTP = async (req, resp) => {
     const { email, phone, otp_phone, otp_email, type } = req.body;
     console.log(email);
 
-   let user;
+    let user;
 
-if (email) {
-  user = await User.findOne({ email }).populate("role");
-} else if (phone) {
-  user = await User.findOne({ phone }).populate("role");
-}
+    if (email) {
+      user = await User.findOne({ email }).populate("role");
+    } else if (phone) {
+      user = await User.findOne({ phone }).populate("role");
+    }
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
@@ -235,8 +251,8 @@ if (email) {
     let phoneVerified = user.is_phone_verified;
 
     if (otp_email) {
-       console.log(user);
-       
+      console.log(user);
+
       if (user.otp != otp_email) {
         return handleResponse(401, "Invalid Email OTP", {}, resp);
       }
@@ -249,7 +265,6 @@ if (email) {
       user.is_email_verified = true;
       user.is_email_verified = true;
       emailVerified = true;
-      
     }
 
     if (otp_phone) {
@@ -284,10 +299,15 @@ if (email) {
       emailVerified,
       phoneVerified,
       userData: user.toObject(),
-      token : generateToken(user.toObject())
+      token: generateToken(user.toObject()),
     };
 
-    return handleResponse(200, "Code verified successfully", fialResponse, resp);
+    return handleResponse(
+      200,
+      "Code verified successfully",
+      fialResponse,
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -385,8 +405,6 @@ export const loginVendor = async (req, resp) => {
         return handleResponse(200, "Login Successful", fialResponse, resp);
       }
 
-
-
       if (!user.service) {
         const token = generate15minToken(user.toObject());
         await resp.cookie("forgot-password", token, cookieOptions);
@@ -409,8 +427,6 @@ export const loginVendor = async (req, resp) => {
         user.otp_phone = generateOTP();
         user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
       }
-
-
 
       user.otp_for = "SIGNUP";
       await user.save();
@@ -442,8 +458,14 @@ export const updateVendorProfile = async (req, resp) => {
       return handleResponse(401, "Unauthorized", {}, resp);
     }
 
-    const { first_name, last_name, email, phone, profile_pic, service  ,
-          business_name,
+    const {
+      first_name,
+      last_name,
+      email,
+      phone,
+      profile_pic,
+      service,
+      business_name,
       postal_code,
       address,
       city,
@@ -452,9 +474,8 @@ export const updateVendorProfile = async (req, resp) => {
       years_of_activity,
       company_size,
       about_company,
-      website_link 
-     } =
-      req.body;
+      website_link,
+    } = req.body;
 
     const user = await User.findById(userId);
     if (!user) {
@@ -476,15 +497,14 @@ export const updateVendorProfile = async (req, resp) => {
       user.email = email;
       user.is_email_verified = false;
 
- user.otp = generateOTP();
-           user.otp_for = "VERIFY_EMAIL";
+      user.otp = generateOTP();
+      user.otp_for = "VERIFY_EMAIL";
 
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html:  await verificationMail(user.first_name,user.otp),
+        html: await verificationMail(user.first_name, user.otp),
       });
-
     }
 
     if (phone !== undefined && phone !== user.phone) {
@@ -503,9 +523,40 @@ export const updateVendorProfile = async (req, resp) => {
       user.otp_phone = otp;
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_PHONE";
+
+      try {
+        let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+
+        const response = await axios.post(
+          "https://rest.clicksend.com/v3/sms/send",
+          {
+            messages: [
+              {
+                source: "nodejs",
+                from: "MyApp",
+                body: msg,
+                to: `+${phone}`,
+              },
+            ],
+          },
+          {
+            auth: {
+              username: process.env.SMS_USERNAME,
+              password: process.env.SMS_API,
+            },
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        console.log("SMS Response:", response.data);
+      } catch (e) {
+        console.log(e);
+      }
     }
 
-    if (service !== undefined  && service) {
+    if (service !== undefined && service) {
       const vendor_service = await ServiceCategory.findById(service);
       if (!vendor_service) {
         return handleResponse(404, "Service not found", {}, resp);
@@ -513,15 +564,12 @@ export const updateVendorProfile = async (req, resp) => {
       user.service = vendor_service._id;
     }
 
- if(  req.files && req.files.profile_pic > 0){
-   user.profile_pic =
-     req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+    if (req.files && req.files.profile_pic > 0) {
+      user.profile_pic =
+        req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+    }
 
- }
-
-
-
-       if (business_name !== undefined) user.business_name = business_name;
+    if (business_name !== undefined) user.business_name = business_name;
     if (address !== undefined) user.address = address;
     if (postal_code !== undefined) user.postal_code = postal_code;
     if (city !== undefined) user.city = city;
@@ -533,7 +581,6 @@ export const updateVendorProfile = async (req, resp) => {
     if (company_size !== undefined) user.company_size = company_size;
     if (about_company !== undefined) user.about_company = about_company;
     if (website_link !== undefined) user.website_link = website_link;
-
 
     await user.save();
 
@@ -584,7 +631,7 @@ export const deleteAccount = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-  await  User.findByIdAndDelete(user._id);
+    await User.findByIdAndDelete(user._id);
 
     return handleResponse(200, "Account deleted successfully", {}, resp);
   } catch (err) {
@@ -592,14 +639,12 @@ export const deleteAccount = async (req, resp) => {
   }
 };
 
-
 // get profile
 export const getProfile = async (req, resp) => {
   try {
-
-    const user = await User.findById(req.user._id).select(
-      "-password -otp -otp_phone",
-    ).populate("service","id title description");
+    const user = await User.findById(req.user._id)
+      .select("-password -otp -otp_phone")
+      .populate("service", "id title description");
 
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
@@ -837,14 +882,11 @@ export const updateDocumentRequiredForService = async (req, resp) => {
       resp,
     );
   } catch (err) {
-
     return handleResponse(500, err.message, {}, resp);
-
   }
 };
 
 function maskContactDetails(contact) {
-
   if (!contact) return contact;
   return {
     ...contact,
@@ -853,7 +895,6 @@ function maskContactDetails(contact) {
     phone: (contact.phone || "").slice(0, 3) + " *******",
     email: (contact.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
   };
-
 }
 
 export const availableLeads = async (req, resp) => {
@@ -873,25 +914,25 @@ export const availableLeads = async (req, resp) => {
 
     let sortOption = {};
 
-if (sort === "newest") {
-  sortOption.createdAt = -1;
-}
+    if (sort === "newest") {
+      sortOption.createdAt = -1;
+    }
 
-if (sort === "oldest") {
-  sortOption.createdAt = 1;
-}
+    if (sort === "oldest") {
+      sortOption.createdAt = 1;
+    }
 
-// default sort
-if (!sort) {
-  sortOption.createdAt = -1;
-}
+    // default sort
+    if (!sort) {
+      sortOption.createdAt = -1;
+    }
 
     const leads = await ServiceRequest.find(filter)
       .populate({
         path: "service_category",
         select: "title credit",
       })
-        .sort(sortOption)
+      .sort(sortOption)
       .lean();
 
     if (sort === "high_to_low") {
@@ -908,9 +949,6 @@ if (!sort) {
       );
     }
 
-
-
-
     const leadObjectIds = leads.map((l) => l._id);
     const unlockedIds = new Set(
       vendorId
@@ -923,38 +961,34 @@ if (!sort) {
         : [],
     );
 
-  const leadsWithMasking = await Promise.all(
-  leads.map(async (lead) => {
-    const unlocked = unlockedIds.has(lead._id.toString());
-    const creditsToUnlock = lead.service_category?.credit ?? 3;
+    const leadsWithMasking = await Promise.all(
+      leads.map(async (lead) => {
+        const unlocked = unlockedIds.has(lead._id.toString());
+        const creditsToUnlock = lead.service_category?.credit ?? 3;
 
+        const quotesCount = await VendorQuote.countDocuments({
+          service_request_id: lead._id,
+          status: "SENT",
+        });
 
-    const quotesCount = await VendorQuote.countDocuments({
-      service_request_id: lead._id,
-      status: "SENT",
-    });
+        if (unlocked) {
+          return {
+            ...lead,
+            unlocked: true,
+            creditsToUnlock,
+            quotes_count: quotesCount,
+          };
+        }
 
-    if (unlocked) {
-
-      return {
-        ...lead,
-        unlocked: true,
-        creditsToUnlock,
-        quotes_count: quotesCount,
-      };
-
-    }
-
-    return {
-
-      ...lead,
-      contact_details: maskContactDetails(lead.contact_details),
-      unlocked: false,
-      creditsToUnlock,
-      quotes_count: quotesCount,
-    };
-  })
-);
+        return {
+          ...lead,
+          contact_details: maskContactDetails(lead.contact_details),
+          unlocked: false,
+          creditsToUnlock,
+          quotes_count: quotesCount,
+        };
+      }),
+    );
 
     return handleResponse(200, "leads", leadsWithMasking, resp);
   } catch (err) {
@@ -999,7 +1033,7 @@ export const createUpdateBusinessInfo = async (req, res) => {
       years_of_activity,
       company_size,
       about_company,
-      website_link 
+      website_link,
     } = req.body;
 
     if (!business_name || !business_address || !postcode || !city) {
@@ -1022,7 +1056,7 @@ export const createUpdateBusinessInfo = async (req, res) => {
         years_of_activity,
         company_size,
         about_company,
-        website_link
+        website_link,
       },
       { new: true, upsert: true },
     );
@@ -1093,73 +1127,70 @@ export const saveNotificationPreferences = async (req, res) => {
   }
 };
 
+export const GoogleLogin = async (req, res) => {
+  try {
+    const users = req.user;
+    const { role } = req.body;
 
-  export const GoogleLogin = async (req, res) => {
-    try {
-      const users = req.user;
-      const {role} = req.body ;
+    if (!users) {
+      return handleResponse(401, "Unauthorized user", {}, res);
+    }
 
-      if (!users) {
-        return handleResponse(401, "Unauthorized user", {}, res);
-      }
+    console.log(users);
 
-      console.log(users);
+    let firstName = "First";
+    let lastName = "Last";
 
-      let firstName = "First";
-      let lastName = "Last";
+    if (users.name) {
+      const name = users.name.split(" ");
+      firstName = name[0];
+      lastName = name[1] || "Last";
+    }
 
-      if (users.name) {
-        const name = users.name.split(" ");
-        firstName = name[0];
-        lastName = name[1] || "Last";
-      }
+    const requiredFields = [
+      { field: "first_name", value: firstName },
+      { field: "last_name", value: lastName },
+      { field: "email", value: users.email },
+      { field: "device_id", value: users.uid },
+    ];
 
-      const requiredFields = [
-        { field: "first_name", value: firstName },
-        { field: "last_name", value: lastName },
-        { field: "email", value: users.email },
-        { field: "device_id", value: users.uid },
-      ];
+    // const validationErrors = validateFields(requiredFields);
+    // if (validationErrors.length > 0) {
+    //   return handleResponse(
+    //     400,
+    //     "Validation error",
+    //     { errors: validationErrors },
+    //     res
+    //   );
+    // }
 
-      // const validationErrors = validateFields(requiredFields);
-      // if (validationErrors.length > 0) {
-      //   return handleResponse(
-      //     400,
-      //     "Validation error",
-      //     { errors: validationErrors },
-      //     res
-      //   );
-      // }
+    let user = await User.findOne({
+      email: users.email,
+    });
 
-      let user = await User.findOne({
-         email: users.email,
+    console.log(user);
+    //   const role = await Role.findOne({ user_id: user.id });
+
+    const password = Math.floor(
+      1000000000 * Math.random() * 9000000000,
+    ).toString();
+
+    const salt = await bcrypt.genSalt(10);
+    const hasPassword = await bcrypt.hash(password, salt);
+    if (!user) {
+      user = new User({
+        first_name: firstName,
+        last_name: lastName,
+        email: users.email,
+        device_id: users.uid,
+        password: hasPassword,
+        is_email_verified: true,
       });
+      await user.save();
+    }
 
-      console.log(user);
-      //   const role = await Role.findOne({ user_id: user.id });
-
-      const password = Math.floor(
-        1000000000 * Math.random() * 9000000000
-      ).toString();
-
-      const salt = await bcrypt.genSalt(10);
-      const hasPassword = await bcrypt.hash(password, salt);
-      if (!user) {
-        user = new User({
-          first_name: firstName,
-          last_name: lastName,
-          email: users.email,
-          device_id: users.uid,
-          password: hasPassword,
-          is_email_verified : true
-        });
-        await user.save();
-      }
-
-
-      if(!user.is_phone_verified){
-
-          const otp = generateOTP();
+    if (!user.is_phone_verified) {
+      const otp = generateOTP();
       user.otp_phone = otp;
       user.otp_phone_expiry_at = moment().add(20, "minutes").toDate();
       user.otp_for = "VERIFY_PHONE";
@@ -1168,32 +1199,26 @@ export const saveNotificationPreferences = async (req, res) => {
       return handleResponse(
         403,
         "Phone verification required",
-        { flow: "PHONE_VERIFICATION_REQUIRED"   },
+        { flow: "PHONE_VERIFICATION_REQUIRED" },
         res,
       );
-
-      }
-
-      const token = jwt.sign(
-        {
-          userID: user._id,
-        },
-        process.env.JWT_SECRET_KEY,
-        { expiresIn: "30d" }
-      );
-
-      return handleResponse(200, "Login successful", token, res);
-    } catch (e) {
-      console.log("e", e);
-
-      return handleResponse(500, e.message, {}, res);
     }
-  };
 
+    const token = jwt.sign(
+      {
+        userID: user._id,
+      },
+      process.env.JWT_SECRET_KEY,
+      { expiresIn: "30d" },
+    );
 
+    return handleResponse(200, "Login successful", token, res);
+  } catch (e) {
+    console.log("e", e);
 
-
-
+    return handleResponse(500, e.message, {}, res);
+  }
+};
 
 export const getNotificationPreferences = async (req, res) => {
   try {
@@ -1336,7 +1361,20 @@ export const allReviews = async (req, res) => {
 function formatTransactionDateTime(date) {
   if (!date) return null;
   const d = new Date(date);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const day = String(d.getDate()).padStart(2, "0");
   const month = months[d.getMonth()];
   const year = d.getFullYear();
@@ -1410,7 +1448,11 @@ export const getTransactions = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const [transactions, total] = await Promise.all([
-      Transaction.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+      Transaction.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
       Transaction.countDocuments(filter),
     ]);
 
@@ -1419,12 +1461,19 @@ export const getTransactions = async (req, res) => {
       _id: t._id,
       transaction_id: toTransactionId(t.transaction_number, t._id, t.createdAt),
       date_time: formatTransactionDateTime(t.createdAt),
-      payment_method: maskPaymentMethod(t.payment_method) || (t.plat_form === "manual" ? null : t.plat_form),
+      payment_method:
+        maskPaymentMethod(t.payment_method) ||
+        (t.plat_form === "manual" ? null : t.plat_form),
       amount_paid: t.amount_paid != null ? t.amount_paid : null,
       currency: t.currency || "EUR",
-      credit_added: t.type === "credit" && t.amount != null ? `+${t.amount} credits` : null,
-      status: t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Pending",
-      receipt_url: baseUrl ? `${baseUrl}/api/vendor/transactions/${t._id}/receipt` : null,
+      credit_added:
+        t.type === "credit" && t.amount != null ? `+${t.amount} credits` : null,
+      status: t.status
+        ? t.status.charAt(0).toUpperCase() + t.status.slice(1)
+        : "Pending",
+      receipt_url: baseUrl
+        ? `${baseUrl}/api/vendor/transactions/${t._id}/receipt`
+        : null,
       description: t.description,
     }));
 
@@ -1479,17 +1528,24 @@ export const exportTransactionsCsv = async (req, res) => {
       filter.createdAt = { $gte: startDate, $lte: endDate };
     }
 
-    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+    const transactions = await Transaction.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
 
     const rows = transactions.map((t) => ({
       id: t._id?.toString(),
       transaction_id: toTransactionId(t.transaction_number, t._id, t.createdAt),
       date_time: formatTransactionDateTime(t.createdAt),
-      payment_method: maskPaymentMethod(t.payment_method) || (t.plat_form === "manual" ? null : t.plat_form),
+      payment_method:
+        maskPaymentMethod(t.payment_method) ||
+        (t.plat_form === "manual" ? null : t.plat_form),
       amount_paid: t.amount_paid != null ? t.amount_paid : "",
       currency: t.currency || "EUR",
-      credit_added: t.type === "credit" && t.amount != null ? `+${t.amount} credits` : "",
-      status: t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Pending",
+      credit_added:
+        t.type === "credit" && t.amount != null ? `+${t.amount} credits` : "",
+      status: t.status
+        ? t.status.charAt(0).toUpperCase() + t.status.slice(1)
+        : "Pending",
       description: t.description || "",
     }));
 
@@ -1509,7 +1565,10 @@ export const exportTransactionsCsv = async (req, res) => {
     const csv = parser.parse(rows);
 
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", 'attachment; filename="transactions.csv"');
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="transactions.csv"',
+    );
     return res.status(200).send(csv);
   } catch (error) {
     return handleResponse(500, error.message, {}, res);
@@ -1550,15 +1609,23 @@ export const exportTransactionsPdf = async (req, res) => {
       filter.createdAt = { $gte: startDate, $lte: endDate };
     }
 
-    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+    const transactions = await Transaction.find(filter)
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", 'attachment; filename="transactions.pdf"');
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="transactions.pdf"',
+    );
 
     const doc = new PDFDocument({ margin: 40 });
     doc.pipe(res);
 
-    doc.fontSize(18).font("Helvetica-Bold").text("Transactions", { align: "center" });
+    doc
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .text("Transactions", { align: "center" });
     doc.moveDown(1.2);
     doc.font("Helvetica").fontSize(10);
 
@@ -1575,11 +1642,15 @@ export const exportTransactionsPdf = async (req, res) => {
     const rows = transactions.map((t) => [
       toTransactionId(t.transaction_number, t._id, t.createdAt) || "",
       formatTransactionDateTime(t.createdAt) || "",
-      maskPaymentMethod(t.payment_method) || (t.plat_form === "manual" ? "" : t.plat_form) || "",
+      maskPaymentMethod(t.payment_method) ||
+        (t.plat_form === "manual" ? "" : t.plat_form) ||
+        "",
       t.amount_paid != null ? String(t.amount_paid) : "",
       t.currency || "EUR",
       t.type === "credit" && t.amount != null ? `+${t.amount} credits` : "",
-      t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Pending",
+      t.status
+        ? t.status.charAt(0).toUpperCase() + t.status.slice(1)
+        : "Pending",
     ]);
 
     drawPdfTable(doc, { headers, rows, columnWidths });

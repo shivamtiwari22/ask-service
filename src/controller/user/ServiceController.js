@@ -1,7 +1,14 @@
 import { sendEmail } from "../../../config/emailConfig.js";
 import handleResponse from "../../../utils/http-response.js";
-import { generateOTP , generateToken , hashPassword , } from "../../../utils/auth.js";
-import { createReference , generatePassword } from "../../../utils/helperFunction.js";
+import {
+  generateOTP,
+  generateToken,
+  hashPassword,
+} from "../../../utils/auth.js";
+import {
+  createReference,
+  generatePassword,
+} from "../../../utils/helperFunction.js";
 import Role from "../../models/RoleModel.js";
 import ServiceCategory from "../../models/ServiceCategoryModel.js";
 import ServiceRequest from "../../models/ServiceRequestModel.js";
@@ -14,6 +21,8 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 import Report from "../../models/ReportModel.js";
 import accountCredentialsMail from "../../../config/email/accountcredentialsMail.js";
+import axios from "axios";
+import { log } from "console";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -245,8 +254,6 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
-
-
     // ================= FIND USER BY PHONE =================
 
     const existingUser = await User.findOne({ phone });
@@ -263,25 +270,22 @@ export const initiateServiceRequest = async (req, resp) => {
       ) {
         await session.abortTransaction();
 
-  
-          emailOwner.otp = generateOTP();
-          await emailOwner.save({ session });
+        emailOwner.otp = generateOTP();
+        await emailOwner.save({ session });
 
-
-          await sendEmail({
-            to: email,
-            subject: "Verification OTP",
-            html: `<p>One time password:${emailOwner.otp}</p>
+        await sendEmail({
+          to: email,
+          subject: "Verification OTP",
+          html: `<p>One time password:${emailOwner.otp}</p>
                 `,
-          });
+        });
 
-
-          return handleResponse(
-            403,
-            "Email verification required",
-            { flow: "EMAIL_VERIFICATION_REQUIRED" },
-            resp,
-          );
+        return handleResponse(
+          403,
+          "Email verification required",
+          { flow: "EMAIL_VERIFICATION_REQUIRED" },
+          resp,
+        );
 
         return handleResponse(
           400,
@@ -296,18 +300,52 @@ export const initiateServiceRequest = async (req, resp) => {
 
     if (existingUser) {
       // if (!existingUser.is_phone_verified) {
-        existingUser.phone_otp = generateOTP();
-        existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
-        await existingUser.save({ session });
+      existingUser.phone_otp = generateOTP();
+      existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
+      await existingUser.save({ session });
 
-        await session.commitTransaction();
 
-        return handleResponse(
-          403,
-          "Phone verification required",
-          { flow: "PHONE_VERIFICATION_REQUIRED" },
-          resp ,
-        );
+         try {
+      let msg = `Your verification code is ${existingUser.phone_otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+
+      const response = await axios.post(
+        "https://rest.clicksend.com/v3/sms/send",
+        {
+          messages: [
+            {
+              source: "nodejs",
+              from: "MyApp",
+              body: msg,
+              to: `+${existingUser?.phone}`,
+            },
+          ],
+        },
+        {
+          auth: {
+            username: process.env.SMS_USERNAME,
+            password: process.env.SMS_API,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      console.log("SMS Response:", response.data);
+    } catch (e) {
+      console.log(e);
+    }
+
+
+
+      await session.commitTransaction();
+
+      return handleResponse(
+        403,
+        "Phone verification required",
+        { flow: "PHONE_VERIFICATION_REQUIRED" },
+        resp,
+      );
       // }
 
       await session.abortTransaction();
@@ -322,9 +360,9 @@ export const initiateServiceRequest = async (req, resp) => {
 
     const role = await Role.findOne({ name: "User" });
 
-    const phoneOtp = generateOTP() ;
-    const emailToken = email ? crypto.randomBytes(32).toString("hex") : null ;
-    const password = generatePassword(8) ;
+    const phoneOtp = generateOTP();
+    const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;
+    const password = generatePassword(8);
 
     const [newUser] = await User.create(
       [
@@ -333,46 +371,75 @@ export const initiateServiceRequest = async (req, resp) => {
           last_name,
           phone,
           email: email || null,
-          password: await hashPassword(password) ,
-          role: role._id ,
-          is_phone_verified: false ,
-          is_email_verified: false ,
+          password: await hashPassword(password),
+          role: role._id,
+          is_phone_verified: false,
+          is_email_verified: false,
           otp_phone: phoneOtp,
           otp_phone_expiry_at: moment().add(5, "minutes").toDate(),
           otp_for: "VERIFY_PHONE",
           email_verification_token: emailToken,
           status: "ACTIVE",
-
         },
       ],
       { session },
     );
 
-
-    //  account cred mail 
+    //  account cred mail
 
     try {
+      let msg = `Your verification code is ${phoneOtp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
 
+      const response = await axios.post(
+        "https://rest.clicksend.com/v3/sms/send",
+        {
+          messages: [
+            {
+              source: "nodejs",
+              from: "MyApp",
+              body: msg,
+                to: `+${phone}`,
+
+            },
+          ],
+        },
+        {
+          auth: {
+            username: process.env.SMS_USERNAME,
+            password: process.env.SMS_API,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      console.log("SMS Response:", response.data);
+    } catch (e) {
+      console.log(e);
+    }
+
+    try {
       await sendEmail({
-              to: email,
-              subject: "Account Credentials",
-              html: await accountCredentialsMail(first_name,email,password)
-            });
+        to: email,
+        subject: "Account Credentials",
+        html: await accountCredentialsMail(first_name, email, password),
+      });
+    } catch (e) {
+      console.log(e, "mail error");
     }
-    catch(e){
-         console.log(e ,"mail error");
-    }
-
 
     const [request] = await ServiceRequest.create(
       [
         {
-          reference_no: createReference() ,
-          service_category ,
-          child_category: child_category || null ,
-          manual_child_category: manual_child_category || null ,
-          frequency ,
-          selected_options: Array.isArray(selected_options) ? selected_options : [] ,
+          reference_no: createReference(),
+          service_category,
+          child_category: child_category || null,
+          manual_child_category: manual_child_category || null,
+          frequency,
+          selected_options: Array.isArray(selected_options)
+            ? selected_options
+            : [],
           preferred_start_date: preferred_start_date || null,
           preferred_time_of_day: preferred_time_of_day || null,
           note: note || null,
@@ -1114,9 +1181,6 @@ export const reportUser = async (req, res) => {
   }
 };
 
-
-
-
 export const updateServiceRequest = async (req, resp) => {
   const session = await mongoose.startSession();
 
@@ -1227,7 +1291,7 @@ export const updateServiceRequest = async (req, resp) => {
     const updatedRequest = await ServiceRequest.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true, session }
+      { new: true, session },
     );
 
     await session.commitTransaction();
@@ -1236,7 +1300,7 @@ export const updateServiceRequest = async (req, resp) => {
       200,
       "Service request updated successfully",
       { request: updatedRequest },
-      resp
+      resp,
     );
   } catch (error) {
     await session.abortTransaction();

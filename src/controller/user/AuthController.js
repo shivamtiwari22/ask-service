@@ -20,6 +20,7 @@ import normalizePath from "../../../utils/imageNormalizer.js";
 import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import ContactUs from "../../models/ContactUsModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
+import axios from "axios";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -467,6 +468,41 @@ export const resendPhoneOTP = async (req, resp) => {
     user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
 
+
+
+        try {
+      let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+
+      const response = await axios.post(
+        "https://rest.clicksend.com/v3/sms/send",
+        {
+          messages: [
+            {
+              source: "nodejs",
+              from: "MyApp",
+              body: msg,
+              to: `+${phone}`,
+            },
+          ],
+        },
+        {
+          auth: {
+            username: process.env.SMS_USERNAME,
+            password: process.env.SMS_API,
+          },
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      console.log("SMS Response:", response.data);
+    } catch (e) {
+      console.log(e);
+    }
+
+
+
     await user.save();
 
     return handleResponse(
@@ -664,6 +700,42 @@ export const updateUserProfile = async (req, resp) => {
       user.otp_phone = otp;
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_PHONE";
+
+
+          try {
+            let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+      
+            const response = await axios.post(
+              "https://rest.clicksend.com/v3/sms/send",
+              {
+                messages: [
+                  {
+                    source: "nodejs",
+                    from: "MyApp",
+                    body: msg,
+                      to: `+${phone}`,
+      
+                  },
+                ],
+              },
+              {
+                auth: {
+                  username: process.env.SMS_USERNAME,
+                  password: process.env.SMS_API,
+                },
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              },
+            );
+      
+            console.log("SMS Response:", response.data);
+          } catch (e) {
+            console.log(e);
+          }
+
+
+
     }
 
      if(  req.files && req.files.profile_pic > 0){
