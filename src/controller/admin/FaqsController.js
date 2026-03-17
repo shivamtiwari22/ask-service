@@ -215,7 +215,7 @@ export const restoreFaq = async (req, resp) => {
 
 export const contactUs = async (req, res) => {
     try {
-      const all = await ContactUs.find().sort({ id: -1 });
+      const all = await ContactUs.find().sort({ createdAt: -1 });
 
       handleResponse(200, "All", all, res);
 

@@ -106,20 +106,42 @@ export const changeAdminPassword = async (req, resp) => {
     const { old_password, new_password } = req.body;
     const user = await User.findById(req.user._id);
     if (!user) return handleResponse(404, "User not found", {}, resp);
-    const isPasswordCorrect = await comparePassword(
-      old_password,
-      user.password
-    );
-    if (!isPasswordCorrect)
-      return handleResponse(401, "Invalid password", {}, resp);
+
+    if(old_password){
+
+      const isPasswordCorrect = await comparePassword(
+        old_password,
+        user.password
+      );
+      if (!isPasswordCorrect)
+        return handleResponse(401, "Invalid password", {}, resp);
+      const hashedPassword = await hashPassword(new_password);
+      const updateUser = await User.findByIdAndUpdate(
+        user?._id,
+        { password: hashedPassword },
+        { new: true }
+      );
+
+    }
+    else {
+
+
+
     const hashedPassword = await hashPassword(new_password);
-    const updateUser = await User.findByIdAndUpdate(
-      user?._id,
-      { password: hashedPassword },
-      { new: true }
-    );
-    if (!updateUser)
-      return handleResponse(400, "Failed to change password", {}, resp);
+      const updateUser = await User.findByIdAndUpdate(
+        user?._id,
+        { password: hashedPassword },
+        { new: true }
+      );
+  
+            handleResponse(200, "Password Changed Successfully", {}, res);
+
+
+
+    }
+
+
+
     return handleResponse(200, "Password changed successfully", {}, resp);
   } catch (err) {
     return handleResponse(500, err?.message, {}, resp);

@@ -757,9 +757,11 @@ export const getAllServices = async (req, resp) => {
     const services = await ServiceCategory.find({
       status: "ACTIVE",
       parent_category: null,
+      deletedAt : null
     }).select("title image");
 
     return handleResponse(200, "Services fetched successfully", services, resp);
+    
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

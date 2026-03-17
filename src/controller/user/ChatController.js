@@ -354,9 +354,13 @@ class ChatController {
           item.sender,
           "id first_name last_name username profile_pic",
         );
-        item.sender.profile_pic = item.sender.profile_pic
-          ? `${base_url}/${item.sender.profile_pic}`
-          : null;
+
+        if(item.sender){
+          item.sender.profile_pic = item.sender.profile_pic
+            ? `${base_url}/${item.sender.profile_pic}`
+            : null;
+
+        }
 
         item.readBy = await User.find(
           { id: { $in: item.readBy }, deletedAt: null },
@@ -378,7 +382,7 @@ class ChatController {
       return handleResponse(200, "all messages", { messages, lastIndex }, res);
     } catch (e) {
       console.log(e);
-      return handleResponse(500, e, {}, res);
+      return handleResponse(500, e, e.message, res);
     }
   };
 
