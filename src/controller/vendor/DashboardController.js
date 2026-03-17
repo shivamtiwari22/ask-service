@@ -11,6 +11,7 @@ import normalizePath from "../../../utils/imageNormalizer.js";
 import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
+import pushNotification from "../../../config/pushNotification.js";
 
 
 function generateTransactionNumber(id, date) {
@@ -157,7 +158,6 @@ export const unlockLead = async (req, res) => {
   }
 };
 
-
 /**
  * GET /leads/:leadId
  * Get single lead. Full details if unlocked by this vendor, otherwise masked.
@@ -176,7 +176,6 @@ export const getLeadById = async (req, res) => {
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
-
 
      const quote = VendorQuote.findOne({vendor_id:vendorId , service_request_id :leadId }) ;
 
@@ -297,7 +296,15 @@ export const submitQuote = async (req, res) => {
       .populate({ path: "service_request_id", select: "reference_no status" })
       .lean();
 
+
+      const user = await User.findById(lead.user);
+
+      if(user){
+         pushNotification(user?.fcm_token,"Quote Received 💰" , "You have received a new quote from a vendor. Review it now");  
+      }
+
     return handleResponse(201, "Quote submitted successfully", populated, res);
+
   } catch (err) {
     return handleResponse(500, err.message, {}, res);
   }

@@ -70,7 +70,7 @@ const UserSchema = mongoose.Schema(
       type: String,
       required: true,
     },
-    
+
     status: {
       type: String,
       enum: ["ACTIVE", "INACTIVE", "PENDING", "BLOCKED"],
@@ -96,9 +96,9 @@ const UserSchema = mongoose.Schema(
     password_updateAt: {
       type: Date,
     },
-    verified_at : {
+    verified_at: {
       type: Date,
-    } ,
+    },
     address: {
       type: String,
     },
@@ -137,9 +137,17 @@ const UserSchema = mongoose.Schema(
     website_link: {
       type: String,
     },
-
-    device_id : {
+    device_id: {
       type: String,
+    },
+     fcm_token: {
+      type: Array,
+      default: [],
+    },
+
+    is_vendor : {
+       type : Boolean ,
+       default : false
     }
   },
   {

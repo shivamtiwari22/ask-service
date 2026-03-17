@@ -23,6 +23,7 @@ import Report from "../../models/ReportModel.js";
 import accountCredentialsMail from "../../../config/email/accountcredentialsMail.js";
 import axios from "axios";
 import { log } from "console";
+import pushNotification from "../../../config/pushNotification.js";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -246,6 +247,20 @@ export const initiateServiceRequest = async (req, resp) => {
 
       await session.commitTransaction();
 
+      const users = await User.find({ service: service_category }).select(
+        "fcm_token",
+      );
+
+      const tokens = users
+        .map((user) => user.fcm_token)
+        .filter((token) => token);
+
+      await pushNotification(
+        tokens,
+        "New Lead Received",
+        "You have received a new lead. Check the details and respond quickly.",
+      );
+
       return handleResponse(
         201,
         "Service request created",
@@ -304,39 +319,36 @@ export const initiateServiceRequest = async (req, resp) => {
       existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
       await existingUser.save({ session });
 
+      try {
+        let msg = `Your verification code is ${existingUser.phone_otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
 
-         try {
-      let msg = `Your verification code is ${existingUser.phone_otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
-
-      const response = await axios.post(
-        "https://rest.clicksend.com/v3/sms/send",
-        {
-          messages: [
-            {
-              source: "nodejs",
-              from: "MyApp",
-              body: msg,
-              to: `+${existingUser?.phone}`,
+        const response = await axios.post(
+          "https://rest.clicksend.com/v3/sms/send",
+          {
+            messages: [
+              {
+                source: "nodejs",
+                from: "MyApp",
+                body: msg,
+                to: `+${existingUser?.phone}`,
+              },
+            ],
+          },
+          {
+            auth: {
+              username: process.env.SMS_USERNAME,
+              password: process.env.SMS_API,
             },
-          ],
-        },
-        {
-          auth: {
-            username: process.env.SMS_USERNAME,
-            password: process.env.SMS_API,
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
+        );
 
-      console.log("SMS Response:", response.data);
-    } catch (e) {
-      console.log(e);
-    }
-
-
+        console.log("SMS Response:", response.data);
+      } catch (e) {
+        console.log(e);
+      }
 
       await session.commitTransaction();
 
@@ -398,8 +410,7 @@ export const initiateServiceRequest = async (req, resp) => {
               source: "nodejs",
               from: "MyApp",
               body: msg,
-                to: `+${phone}`,
-
+              to: `+${phone}`,
             },
           ],
         },
@@ -462,6 +473,23 @@ export const initiateServiceRequest = async (req, resp) => {
     );
 
     await session.commitTransaction();
+
+
+       const users = await User.find({ service: service_category }).select(
+        "fcm_token",
+      );
+
+      const tokens = users
+        .map((user) => user.fcm_token)
+        .filter((token) => token);
+
+      await pushNotification(
+        tokens,
+        "New Lead Received",
+        "You have received a new lead. Check the details and respond quickly.",
+      );
+
+
 
     // if (email && emailToken) {
     //   setImmediate(async () => {

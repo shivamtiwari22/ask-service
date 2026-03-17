@@ -85,7 +85,7 @@ export const signup = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification Code",
-        html:  await verificationMail(user?.first_name,emailOtp)
+        html: await verificationMail(user?.first_name, emailOtp),
       });
     }
 
@@ -193,7 +193,7 @@ export const loginPhoneEmail = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html:  await verificationMail(user.first_name,user.otp),
+        html: await verificationMail(user.first_name, user.otp),
       });
     }
 
@@ -225,7 +225,7 @@ export const deleteAccount = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-   await User.findByIdAndDelete(user._id);
+    await User.findByIdAndDelete(user._id);
 
     return handleResponse(200, "Account deleted successfully", {}, resp);
   } catch (err) {
@@ -293,7 +293,7 @@ export const requestEmailLoginOTP = async (req, resp) => {
     await sendEmail({
       to: email,
       subject: "Login OTP",
-      html:await verificationMail(user.first_name, otp),
+      html: await verificationMail(user.first_name, otp),
     });
 
     return handleResponse(
@@ -310,7 +310,7 @@ export const requestEmailLoginOTP = async (req, resp) => {
 // LOGIN API
 export const login = async (req, resp) => {
   try {
-    const { identifier, password } = req.body;
+    const { identifier, password, fcm_token } = req.body;
 
     if (!identifier || !password) {
       return handleResponse(
@@ -374,7 +374,7 @@ export const login = async (req, resp) => {
       await sendEmail({
         to: user.email,
         subject: "Verification OTP",
-        html:await verificationMail(user.first_name, otp),
+        html: await verificationMail(user.first_name, otp),
       });
 
       return handleResponse(
@@ -388,6 +388,15 @@ export const login = async (req, resp) => {
     const isMatch = await comparePassword(password, user.password);
     if (!isMatch) {
       return handleResponse(401, "Invalid credentials", {}, resp);
+    }
+
+    if (fcm_token) {
+      if (!Array.isArray(user.fcm_token)) user.fcm_token = [];
+
+      if (!user.fcm_token.includes(fcm_token)) {
+        user.fcm_token.push(fcm_token);
+      }
+      await user.save();
     }
 
     const token = generateToken(user.toObject());
@@ -468,9 +477,7 @@ export const resendPhoneOTP = async (req, resp) => {
     user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
 
-
-
-        try {
+    try {
       let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
 
       const response = await axios.post(
@@ -500,8 +507,6 @@ export const resendPhoneOTP = async (req, resp) => {
     } catch (e) {
       console.log(e);
     }
-
-
 
     await user.save();
 
@@ -551,7 +556,7 @@ export const resendEmailVerification = async (req, resp) => {
     await sendEmail({
       to: email,
       subject: "Verification OTP",
-      html:await verificationMail(user.first_name, otp),
+      html: await verificationMail(user.first_name, otp),
     });
 
     return handleResponse(
@@ -680,7 +685,7 @@ export const updateUserProfile = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html:    await verificationMail(user.first_name,user.otp),
+        html: await verificationMail(user.first_name, user.otp),
       });
     }
 
@@ -701,47 +706,42 @@ export const updateUserProfile = async (req, resp) => {
       user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_PHONE";
 
+      try {
+        let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
 
-          try {
-            let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
-      
-            const response = await axios.post(
-              "https://rest.clicksend.com/v3/sms/send",
+        const response = await axios.post(
+          "https://rest.clicksend.com/v3/sms/send",
+          {
+            messages: [
               {
-                messages: [
-                  {
-                    source: "nodejs",
-                    from: "MyApp",
-                    body: msg,
-                      to: `+${phone}`,
-      
-                  },
-                ],
+                source: "nodejs",
+                from: "MyApp",
+                body: msg,
+                to: `+${phone}`,
               },
-              {
-                auth: {
-                  username: process.env.SMS_USERNAME,
-                  password: process.env.SMS_API,
-                },
-                headers: {
-                  "Content-Type": "application/json",
-                },
-              },
-            );
-      
-            console.log("SMS Response:", response.data);
-          } catch (e) {
-            console.log(e);
-          }
+            ],
+          },
+          {
+            auth: {
+              username: process.env.SMS_USERNAME,
+              password: process.env.SMS_API,
+            },
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
 
-
-
+        console.log("SMS Response:", response.data);
+      } catch (e) {
+        console.log(e);
+      }
     }
 
-     if(  req.files && req.files.profile_pic > 0){
-    user.profile_pic =
-      req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
-     }
+    if (req.files && req.files.profile_pic > 0) {
+      user.profile_pic =
+        req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+    }
 
     await user.save();
 
@@ -825,7 +825,7 @@ export const forgotPassword = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Verification OTP",
-        html: await verificationMail(user.first_name,user.otp),
+        html: await verificationMail(user.first_name, user.otp),
       });
     }
 
@@ -883,7 +883,7 @@ export const verifyOTP = async (req, resp) => {
 export const GoogleLogin = async (req, res) => {
   try {
     const users = req.user;
-    const { role_type } = req.body;
+    const { role_type , fcm_token } = req.body;
 
     if (!users) {
       return handleResponse(401, "Unauthorized user", {}, res);
@@ -945,6 +945,7 @@ export const GoogleLogin = async (req, res) => {
         password: hasPassword,
         is_email_verified: true,
         role: role?._id,
+        is_vendor : role?.name == "Vendor" ? true : false 
       });
       await user.save();
 
@@ -955,6 +956,18 @@ export const GoogleLogin = async (req, res) => {
 
       user = await User.findById(user._id).populate("role");
     }
+
+
+        if (fcm_token) {
+      if (!Array.isArray(user.fcm_token)) user.fcm_token = [];
+
+      if (!user.fcm_token.includes(fcm_token)) {
+        user.fcm_token.push(fcm_token);
+      }
+      await user.save();
+    }
+
+
 
     if (user.role?.name == "Vendor") {
       // if (!user.phone || !user.is_phone_verified) {

@@ -87,7 +87,10 @@ export const checkRoleAuth = (allowedRoles = []) => {
       if (!user || !user.role) {
         return handleResponse(401, "Unauthorized", {}, res);
       }
+  
 
+      if (!user.is_vendor) {
+      
       if (!allowedRoles.includes(user.role.name)) {
         return handleResponse(
           403,
@@ -96,6 +99,7 @@ export const checkRoleAuth = (allowedRoles = []) => {
           res,
         );
       }
+    }
 
       next();
     } catch (err) {

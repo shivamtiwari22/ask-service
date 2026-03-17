@@ -83,6 +83,7 @@ export const registerVendor = async (req, resp) => {
       otp_for: "SIGNUP",
       is_phone_verified: false,
       is_email_verified: false,
+      is_vendor : true ,
       business_name,
     };
     const user = await User.create(payload);
