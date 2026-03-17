@@ -284,7 +284,7 @@ export const getAllUsers = async (req, resp) => {
       const [users, total] = await Promise.all([
         User.find(query)
           .select("-password -otp -otp_expires_at -otp_for")
-          .populate("role"),
+          .populate("role").sort({createdAt:-1}),
         User.countDocuments(query),
       ]);
 

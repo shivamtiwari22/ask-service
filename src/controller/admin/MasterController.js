@@ -50,6 +50,15 @@ export const createTokenMaster = async (req, resp) => {
       payload.per_credit_price = Number((payload.price / (payload.credits + (payload.bonus_credits || 0))).toFixed(2));
     }
     const creditPackage = await CreditPackage.create(payload);
+
+
+  if (payload.is_most_popular) {
+  await CreditPackage.updateMany(
+    { _id: { $ne: creditPackage._id } },
+    { $set: { is_most_popular: false } }
+  );
+}
+
     return handleResponse(201, "Credit package created successfully", creditPackage, resp);
   } catch (err) {
     if (err?.code === 11000) {
@@ -117,6 +126,15 @@ export const updateTokenMaster = async (req, resp) => {
 
     if (!creditPackage) return handleResponse(404, "Credit package not found", {}, resp);
 
+
+     if (req.body.is_most_popular) {
+  await CreditPackage.updateMany(
+    { _id: { $ne: creditPackage._id } },
+    { $set: { is_most_popular: false } }
+  );
+}
+
+
     return handleResponse(200, "Credit package updated successfully", creditPackage, resp);
   } catch (err) {
     if (err?.code === 11000) {
@@ -169,6 +187,11 @@ export const createTestimonialMaster = async (req, resp) => {
       ...req.body,
       createdBy: req.user._id,
     });
+
+
+    
+
+
     return handleResponse(
       201,
       "Testimonial master created successfully",

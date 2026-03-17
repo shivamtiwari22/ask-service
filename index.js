@@ -26,7 +26,10 @@ dotenv.config();
 
 dbConnection();
 
-app.use(cors());
+// app.use(cors());
+app.use(cors({
+  origin: "*"
+}));
 
 app.use(express.json());
 const server = http.createServer(app);
@@ -50,6 +53,7 @@ app.use((req, res, next) => {
   const ip = req.ip;
 
   if (blockedIPs.has(ip)) {
+    
     const unblockTime = blockedIPs.get(ip);
 
     if (Date.now() < unblockTime) {
