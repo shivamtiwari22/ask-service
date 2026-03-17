@@ -423,7 +423,7 @@ class ChatController {
 
       if (message.chat) {
         message.chat.users = await User.find(
-          { id: { $in: message.chat.users }, deletedAt: null },
+          { _id: { $in: message.chat.users }, deletedAt: null },
           "id first_name last_name username profile_pic",
         ).lean();
 
