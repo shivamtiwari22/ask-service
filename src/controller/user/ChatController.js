@@ -258,7 +258,7 @@ class ChatController {
       ],
     },
   })
-        .sort({ createdAt: -1 })
+        // .sort({ createdAt: -1 })
         .lean();
 
       console.log(chats);
@@ -328,6 +328,16 @@ class ChatController {
         );
         item.unreadCount = unreadCount ? unreadCount.count : 0;
       }
+
+
+
+      chats.sort((a, b) => {
+  if (b.unreadCount !== a.unreadCount) {
+    return b.unreadCount - a.unreadCount; // unread first
+  }
+  return new Date(b.updatedAt) - new Date(a.updatedAt); // then latest
+});
+
 
       return handleResponse(200, "chat fetched", chats, res);
     } catch (err) {
