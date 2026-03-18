@@ -56,6 +56,7 @@ import ChatController from "../controller/user/ChatController.js";
 import { getFaqsForUser } from "../controller/admin/FaqsController.js";
 import firebaseAuthenticateToken from "../../middleware/google-verification-middleware.js";
 import notificationController from "../controller/user/NotificationController.js";
+import { getQuestionsForUser } from "../controller/user/ServiceController.js";
 
 const router = express.Router();
 
@@ -66,6 +67,9 @@ router.get("/service-category/:id", getSingleServiceCategories);
 
 // get FAQs for users (active only, optional type filter)
 router.get("/faqs", getFaqsForUser);
+
+// get questions for users (active only) by service_id
+router.get("/service-questions/:service_id", getQuestionsForUser);
 
 
 router.put("/service-request/:id",  userAuthenticateToken,

@@ -16,6 +16,7 @@ import {
   createServiceCategoryValidation,
   createServiceDocumentRequirementValidation,
   createTestimonialMasterValidation,
+  createQuestionValidation,
   createTokenMasterValidation,
   forgotPasswordValidation,
   passwordChangeValidatrion,
@@ -25,6 +26,7 @@ import {
   updateServiceCategoryValidation,
   updateServiceDocumentRequirementValidation,
   updateTestimonialMasterValidation,
+  updateQuestionValidation,
   updateTokenMasterValidation,
   validateLoginAdmin,
   verifyOTPValidation,
@@ -44,7 +46,7 @@ import {
   getAllServiceCategories,
   getServiceCategoryById,
   restoreServiceCategory,
-  updateServiceCategory, 
+  updateServiceCategory,
 } from "../controller/admin/ServiceCategoryController.js";
 import {
   createFaq,
@@ -53,7 +55,7 @@ import {
   getFaqById,
   restoreFaq,
   updateFaq,
-  contactUs
+  contactUs,
 } from "../controller/admin/FaqsController.js";
 import {
   createServiceDocumentRequirement,
@@ -75,7 +77,7 @@ import {
   updateServiceDocumentRequirement,
   updateTestimonialMaster,
   updateTokenMaster,
-  getServiceDocumentRequirementById
+  getServiceDocumentRequirementById,
 } from "../controller/admin/MasterController.js";
 import {
   getAllVendorsWithDocuments,
@@ -83,6 +85,14 @@ import {
   updateVendorDocumentStatus,
   updateVendorKycStatus,
 } from "../controller/admin/VendorController.js";
+import {
+  createQuestion,
+  deleteQuestion,
+  getAllQuestions,
+  getQuestionById,
+  restoreQuestion,
+  updateQuestion,
+} from "../controller/admin/QuestionsController.js";
 
 const router = express.Router();
 
@@ -199,12 +209,7 @@ router.post(
   createFaqValidation,
   createFaq,
 );
-router.get(
-  "/faqs",
-  authenticateToken,
-  checkRoleAuth(["Admin"]),
-  getAllFaqs,
-);
+router.get("/faqs", authenticateToken, checkRoleAuth(["Admin"]), getAllFaqs);
 router.get(
   "/faqs/:id",
   authenticateToken,
@@ -232,8 +237,12 @@ router.put(
   restoreFaq,
 );
 
-router.get( "/all-contact-us", authenticateToken, checkRoleAuth(["Admin"]), contactUs);
-
+router.get(
+  "/all-contact-us",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  contactUs,
+);
 
 // token master
 router.post(
@@ -371,6 +380,42 @@ router.put(
   authenticateToken,
   checkRoleAuth(["Admin"]),
   restoreDeletedServiceDocumentRequirement,
+);
+
+// questions
+router.post(
+  "/questions",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  createQuestionValidation,
+  createQuestion,
+);
+router.get("/questions",authenticateToken,checkRoleAuth(["Admin"]),getAllQuestions,
+);
+router.get(
+  "/questions/:id",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getQuestionById,
+);
+router.put(
+  "/questions/:id",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  updateQuestionValidation,
+  updateQuestion,
+);
+router.delete(
+  "/questions/:id",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  deleteQuestion,
+);
+router.put(
+  "/questions/:id/restore",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  restoreQuestion,
 );
 
 export default router;

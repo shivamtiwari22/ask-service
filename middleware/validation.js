@@ -342,3 +342,99 @@ export const updateFaqValidation = [
   handleValidationErrors,
 ];
 
+export const createQuestionValidation = [
+  body("label").notEmpty().trim().withMessage("Label is required"),
+  body("key").notEmpty().trim().withMessage("Key is required"),
+  body("type")
+    .notEmpty()
+    .isIn([
+      "text",
+      "textarea",
+      "number",
+      "dropdown",
+      "radio",
+      "checkbox",
+      "date",
+      "file",
+    ])
+    .withMessage("Invalid question type"),
+  body("service_id")
+    .notEmpty()
+    .withMessage("Service id is required")
+    .isMongoId()
+    .withMessage("Invalid service id"),
+  body("step").notEmpty().isInt({ min: 1 }).withMessage("Step must be >= 1"),
+  body("order").optional().isInt({ min: 0 }).withMessage("Order must be >= 0"),
+  body("status")
+    .optional()
+    .isIn(["ACTIVE", "INACTIVE"])
+    .withMessage("Invalid status"),
+  body("is_multiple")
+    .optional()
+    .isBoolean()
+    .withMessage("is_multiple must be boolean"),
+  body("is_required")
+    .optional()
+    .isBoolean()
+    .withMessage("is_required must be boolean"),
+  body("options")
+    .optional()
+    .isArray()
+    .withMessage("Options must be an array"),
+  body("options.*.label")
+    .optional()
+    .isString()
+    .withMessage("Option label must be string"),
+  body("options.*.value")
+    .optional()
+    .isString()
+    .withMessage("Option value must be string"),
+  handleValidationErrors,
+];
+
+export const updateQuestionValidation = [
+  body("label").optional().notEmpty().trim().withMessage("Label cannot be empty"),
+  body("key").optional().notEmpty().trim().withMessage("Key cannot be empty"),
+  body("type")
+    .optional()
+    .isIn([
+      "text",
+      "textarea",
+      "number",
+      "dropdown",
+      "radio",
+      "checkbox",
+      "date",
+      "file",
+    ])
+    .withMessage("Invalid question type"),
+  body("service_id").optional().isMongoId().withMessage("Invalid service id"),
+  body("step").optional().isInt({ min: 1 }).withMessage("Step must be >= 1"),
+  body("order").optional().isInt({ min: 0 }).withMessage("Order must be >= 0"),
+  body("status")
+    .optional()
+    .isIn(["ACTIVE", "INACTIVE"])
+    .withMessage("Invalid status"),
+  body("is_multiple")
+    .optional()
+    .isBoolean()
+    .withMessage("is_multiple must be boolean"),
+  body("is_required")
+    .optional()
+    .isBoolean()
+    .withMessage("is_required must be boolean"),
+  body("options")
+    .optional()
+    .isArray()
+    .withMessage("Options must be an array"),
+  body("options.*.label")
+    .optional()
+    .isString()
+    .withMessage("Option label must be string"),
+  body("options.*.value")
+    .optional()
+    .isString()
+    .withMessage("Option value must be string"),
+  handleValidationErrors,
+];
+

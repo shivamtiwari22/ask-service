@@ -115,6 +115,18 @@ const ServiceRequestSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    dynamic_answers: [
+      {
+        question_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "questions",
+        },
+        key: String,
+        label: String,
+        value: String,
+      },
+    ],
   },
   { timestamps: true },
 );

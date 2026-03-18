@@ -24,6 +24,7 @@ import accountCredentialsMail from "../../../config/email/accountcredentialsMail
 import axios from "axios";
 import { log } from "console";
 import pushNotification from "../../../config/pushNotification.js";
+import Question from "../../models/QuestionsModel.js";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -158,6 +159,7 @@ export const initiateServiceRequest = async (req, resp) => {
       start_time,
       end_date,
       end_time,
+      dynamic_answers
     } = req.body;
 
     if (!contact_details) {
@@ -240,6 +242,7 @@ export const initiateServiceRequest = async (req, resp) => {
             start_time,
             end_date,
             end_time,
+            dynamic_answers
           },
         ],
         { session },
@@ -467,6 +470,7 @@ export const initiateServiceRequest = async (req, resp) => {
           start_time,
           end_date,
           end_time,
+          dynamic_answers
         },
       ],
       { session },
@@ -925,6 +929,7 @@ export const getQuoteDetails = async (req, resp) => {
           available_start_date: quote.available_start_date,
           quote_valid_days: quote.quote_valid_days,
           attachment_url: attachmentUrl,
+          
         },
         vendor: {
           _id: vendor._id,
@@ -1337,5 +1342,40 @@ export const updateServiceRequest = async (req, resp) => {
     return handleResponse(500, error.message, {}, resp);
   } finally {
     session.endSession();
+  }
+
+
+
+
+};
+
+
+
+  export const getQuestionsForUser = async (req, resp) => {
+  try {
+    const { step } = req.query;
+    const {service_id} = req.params ;
+
+    if (!service_id) {
+      return handleResponse(400, "service_id is required", {}, resp);
+    }
+    if (!mongoose.Types.ObjectId.isValid(service_id)) {
+      return handleResponse(400, "Invalid service_id", {}, resp);
+    }
+
+    const filter = {
+      deletedAt: null,
+      status: "ACTIVE",
+      service_id,
+      ...(step !== undefined && step !== "" ? { step: Number(step) } : {}),
+    };
+
+    const list = await Question.find(filter)
+      .sort({ step: 1, order: 1, createdAt: -1 })
+      .lean();
+
+    return handleResponse(200, "Questions fetched successfully", { list }, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
   }
 };
