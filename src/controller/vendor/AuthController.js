@@ -565,10 +565,10 @@ export const updateVendorProfile = async (req, resp) => {
       user.service = vendor_service._id;
     }
 
-    if (req.files && req.files.profile_pic > 0) {
-      user.profile_pic =
-        req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+
+      if (req.files && req.files.profile_pic.length > 0) {  user.profile_pic = req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
     }
+
 
     if (business_name !== undefined) user.business_name = business_name;
     if (address !== undefined) user.address = address;

@@ -929,7 +929,7 @@ export const getQuoteDetails = async (req, resp) => {
           available_start_date: quote.available_start_date,
           quote_valid_days: quote.quote_valid_days,
           attachment_url: attachmentUrl,
-          
+
         },
         vendor: {
           _id: vendor._id,
@@ -1238,6 +1238,7 @@ export const updateServiceRequest = async (req, resp) => {
       country,
       pincode,
       contact_details,
+      dynamic_answers ,
       start_date,
       start_time,
       end_date,
@@ -1320,6 +1321,8 @@ export const updateServiceRequest = async (req, resp) => {
     if (start_time !== undefined) updateData.start_time = start_time;
     if (end_date !== undefined) updateData.end_date = end_date;
     if (end_time !== undefined) updateData.end_time = end_time;
+            
+      updateData.dynamic_answers = dynamic_answers ;
 
     const updatedRequest = await ServiceRequest.findByIdAndUpdate(
       id,

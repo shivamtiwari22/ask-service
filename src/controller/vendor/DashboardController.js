@@ -177,9 +177,11 @@ export const getLeadById = async (req, res) => {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
 
-     const quote = VendorQuote.findOne({vendor_id:vendorId , service_request_id :leadId }) ;
+     const quote = await VendorQuote.findOne({vendor_id:vendorId , service_request_id :leadId }) ;
+     console.log(quote,"q");
+     
 
-     lead.canQuote =  quote ? true : false ;
+     lead.canQuote =  quote ? false : true ;
 
     const unlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,
