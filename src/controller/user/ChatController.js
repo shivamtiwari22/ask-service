@@ -346,8 +346,8 @@ class ChatController {
       const messages = await Message.find({ chat: req.params.chatId })
         .lean()
         // .sort({ _id: -1 })
-        .skip(parseInt(index))
-        .limit(parseInt(limit)); // Limit the number of results;
+        // .skip(parseInt(index))
+        // .limit(parseInt(limit)); // Limit the number of results;
 
       for (const item of messages) {
         item.sender = await User.findById(
