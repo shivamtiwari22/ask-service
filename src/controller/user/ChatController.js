@@ -355,7 +355,7 @@ class ChatController {
     try {
       const messages = await Message.find({ chat: req.params.chatId })
         .lean()
-        // .sort({ _id: -1 })
+        .sort({ _id: -1 })
         .skip(parseInt(index))
         .limit(parseInt(limit)); // Limit the number of results;
 
@@ -366,9 +366,8 @@ class ChatController {
         );
 
         if(item.sender){
-          item.sender.profile_pic = item.sender.profile_pic
-            ? `${base_url}/${item.sender.profile_pic}`
-            : null;
+
+          item.sender.profile_pic = item.sender.profile_pic ? `${base_url}/${item.sender.profile_pic}` : null;
 
         }
 
@@ -388,8 +387,9 @@ class ChatController {
       await readMessages(req.user._id, req.params.chatId);
 
       const lastIndex = parseInt(index) + messages.length;
+      const totalMsg = await Message.countDocuments({ chat: req.params.chatId })
 
-      return handleResponse(200, "all messages", { messages, lastIndex }, res);
+      return handleResponse(200, "all messages", { messages, lastIndex ,totalMsg}, res);
     } catch (e) {
       console.log(e);
       return handleResponse(500, e, e.message, res);
