@@ -33,7 +33,9 @@ app.use(cors({
 
 app.use(express.json());
 const server = http.createServer(app);
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: false, // ✅ disable blocking
+}));
 app.use(xss());
 app.use(mongoSanitize());
 app.use(cookieParser());

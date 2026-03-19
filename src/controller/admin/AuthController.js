@@ -107,8 +107,10 @@ export const changeAdminPassword = async (req, resp) => {
     const user = await User.findById(req.user._id);
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
-    if(old_password){
+  
+    
 
+    if(old_password){
       const isPasswordCorrect = await comparePassword(
         old_password,
         user.password
@@ -126,7 +128,6 @@ export const changeAdminPassword = async (req, resp) => {
     else {
 
 
-
     const hashedPassword = await hashPassword(new_password);
       const updateUser = await User.findByIdAndUpdate(
         user?._id,
@@ -134,12 +135,8 @@ export const changeAdminPassword = async (req, resp) => {
         { new: true }
       );
   
-            handleResponse(200, "Password Changed Successfully", {}, res);
-
-
-
+            handleResponse(200, "Password Changed Successfully", {}, resp);
     }
-
 
 
     return handleResponse(200, "Password changed successfully", {}, resp);
@@ -275,7 +272,7 @@ export const getAllRoleOptions = async (req, resp) => {
 // get all users
 export const getAllUsers = async (req, resp) => {
   try {
-    const { search, role, status, isDeleted } = req.query;
+    let { search, role, status, isDeleted } = req.query;
     const page = parseInt(req.query.page);
     const limit = parseInt(req.query.limit);
     const skip = (page - 1) * limit;
@@ -292,8 +289,10 @@ export const getAllUsers = async (req, resp) => {
       ];
     }
 
+    role = await Role.findOne({ name: RegExp("User", "i") })
+
     if (role) {
-      query.role = role;
+      query.role = role?._id;
     }
     if (status) {
       query.status = status;

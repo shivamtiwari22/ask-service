@@ -110,7 +110,6 @@ router.put(
   "/change-password",
   authenticateToken,
   checkRoleAuth(["Admin"]),
-  passwordChangeValidatrion,
   changeAdminPassword,
 );
 router.post("/forgot-password", forgotPasswordValidation, forgotPassword);
