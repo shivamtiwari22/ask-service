@@ -348,16 +348,21 @@ class ChatController {
   };
 
   static allMessages = async (req, res) => {
-    let { index = 0, limit = 20 } = req.query;
+      let { index = 1, limit = 20 } = req.query;
+
+  let  page = parseInt(index);
+    limit = parseInt(limit);
+
+    const skip = (page - 1) * limit;
 
     const base_url = `${req.protocol}://${req.get("host")}`;
 
     try {
       const messages = await Message.find({ chat: req.params.chatId })
-        .lean()
-        .sort({ _id: -1 })
-        .skip(parseInt(index))
-        .limit(parseInt(limit)); // Limit the number of results;
+           .lean()
+      .sort({ _id: -1 })
+      .skip(skip)
+      .limit(limit);
 
       for (const item of messages) {
         item.sender = await User.findById(
@@ -386,10 +391,11 @@ class ChatController {
 
       await readMessages(req.user._id, req.params.chatId);
 
-      const lastIndex = parseInt(index) + messages.length;
+      const lastIndex = page;
       const totalMsg = await Message.countDocuments({ chat: req.params.chatId })
+      const totalPages = Math.ceil(totalMsg / parseInt(limit));
 
-      return handleResponse(200, "all messages", { messages, lastIndex ,totalMsg}, res);
+      return handleResponse(200, "all messages", { messages, lastIndex ,totalMsg,totalPages}, res);
     } catch (e) {
       console.log(e);
       return handleResponse(500, e, e.message, res);
