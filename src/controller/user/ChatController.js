@@ -268,7 +268,7 @@ class ChatController {
         if (item.latestMessage) {
           item.latestMessage.sender = await User.findById(
             item.latestMessage.sender,
-            "_id first_name last_name username profile_pic",
+            "_id first_name last_name username profile_pic business_name",
           );
 
          if (item.latestMessage.sender) {
@@ -280,7 +280,7 @@ class ChatController {
 
         item.users = await User.find(
           { _id: { $in: item.users }, deletedAt: null },
-          "_id first_name last_name username profile_pic kyc_status",
+          "_id first_name last_name username profile_pic kyc_status business_name",
         ).populate("role").lean();
 
 

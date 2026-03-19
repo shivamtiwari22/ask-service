@@ -12,7 +12,7 @@ import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import pushNotification from "../../../config/pushNotification.js";
-
+import Stripe from "stripe";
 
 function generateTransactionNumber(id, date) {
   const year = new Date(date || Date.now()).getFullYear();
@@ -654,4 +654,103 @@ export const AllQuotes = async (req,res) => {
 
   }
 
+
 }
+
+
+export const createCheckoutSession = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { amount } = req.body;
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Service Payment",
+            },
+            unit_amount: amount * 100,
+          },
+          quantity: 1,
+        },
+      ],
+
+      mode: "payment",
+
+      success_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=fail`,
+      metadata: {
+        user_id: userId,
+      },
+    });
+
+    return handleResponse(
+      200,
+      "Payment URL created",
+      {
+        payment_url: session.url, // ✅ THIS IS WHAT YOU WANT
+        session_id: session.id,
+      },
+      res
+    );
+  } catch (err) {
+    console.log(err);
+    
+     return handleResponse(
+      500,
+      "Internal server",
+           err.message,
+      res
+    );
+  }
+};
+
+export const verifyPaymentFromStripe = async (req, res) => {
+  try {
+    const { session_id } = req.params;
+
+    if (!session_id) {
+      return handleResponse(400, "Session ID required", {}, res);
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+    // 🔥 fetch session from stripe
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+
+    if (!session) {
+      return handleResponse(404, "Session not found", {}, res);
+    }
+
+    // 🔥 check payment status
+    if (session.payment_status === "paid") {
+      // await Payment.findOneAndUpdate(
+      //   { session_id },
+      //   { status: "SUCCESS" }
+      // );
+
+      return handleResponse(200, "Payment verified", {
+        status: "SUCCESS",
+      }, res);
+    } else {
+      return handleResponse(400, "Payment not completed", {
+        status: session.payment_status,
+      }, res);
+    }
+  } catch (err) {
+    console.log(err);
+    
+     return handleResponse(
+      500,
+       err.message , {}
+  ,
+      res
+    );
+  }
+};

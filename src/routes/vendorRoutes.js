@@ -42,7 +42,9 @@ import {
   getTransactionsList,
   exportTransactionsListCsv,
   exportTransactionsListPdf,
-  AllQuotes
+  AllQuotes ,
+  createCheckoutSession ,
+  verifyPaymentFromStripe
 } from "../controller/vendor/DashboardController.js";
 import { serviceDocumentUpload, userProfileUpload, quoteDocumentUpload, chatMediaUpload } from "../../utils/multer.js";
 import {
@@ -156,6 +158,12 @@ router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), ge
 router.get("/transactions/export/csv",exportTransactionsListCsv);
 
 router.get("/transactions/export/pdf",exportTransactionsListPdf);
+
+router.post("/stipe-checkout", userAuthenticateToken, checkRoleAuth(["Vendor"]), createCheckoutSession);
+router.put("/verify-payment/:session_id", verifyPaymentFromStripe);
+
+
+
 
 
 router.get("/business-information", userAuthenticateToken , checkRoleAuth(["Vendor"]) , getBusinessInfo);
