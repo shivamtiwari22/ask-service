@@ -932,7 +932,7 @@ export const getQuoteDetails = async (req, resp) => {
 
         },
         vendor: {
-          _id: vendor._id,
+          _id: vendor?._id || null,
           provider_name: providerName,
           rating,
           reviews_count: reviewsCount,
@@ -946,6 +946,8 @@ export const getQuoteDetails = async (req, resp) => {
       resp,
     );
   } catch (err) {
+    console.log(err);
+    
     return handleResponse(500, err.message, {}, resp);
   }
 };
