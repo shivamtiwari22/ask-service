@@ -14,11 +14,10 @@ import cookieParser from "cookie-parser";
 import AdminRoutes from "./src/routes/AdminRoutes.js";
 import UserRoutes from "./src/routes/UserRoutes.js";
 import VendorRoutes from "./src/routes/vendorRoutes.js";
-import "./cron/serviceRequestExpiryCron.js"
-import {Server} from "socket.io"
+import "./cron/serviceRequestExpiryCron.js";
+import { Server } from "socket.io";
 import http from "http";
 import Message from "./src/models/MessageModel.js";
-
 
 const app = express();
 app.set("trust proxy", 1);
@@ -27,15 +26,19 @@ dotenv.config();
 dbConnection();
 
 // app.use(cors());
-app.use(cors({
-  origin: "*"
-}));
+app.use(
+  cors({
+    origin: "*",
+  }),
+);
 
 app.use(express.json());
 const server = http.createServer(app);
-app.use(helmet({
+app.use(
+  helmet({
     crossOriginResourcePolicy: false, // ✅ disable blocking
-}));
+  }),
+);
 app.use(xss());
 app.use(mongoSanitize());
 app.use(cookieParser());
@@ -55,7 +58,6 @@ app.use((req, res, next) => {
   const ip = req.ip;
 
   if (blockedIPs.has(ip)) {
-    
     const unblockTime = blockedIPs.get(ip);
 
     if (Date.now() < unblockTime) {
@@ -63,7 +65,7 @@ app.use((req, res, next) => {
         429,
         "Too many requests. You are blocked for 4 minutes.",
         {},
-        res
+        res,
       );
     } else {
       blockedIPs.delete(ip);
@@ -86,7 +88,7 @@ const limit = rateLimit({
       429,
       "Rate limit exceeded. You are temporarily blocked for 4 minutes.",
       {},
-      res
+      res,
     );
   },
 });
@@ -125,127 +127,86 @@ server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-
-
-
-
-// socket 
 const io = new Server(server);
-var users = {};
+const onlineUsers = new Set()
 io.on("connection", (socket) => {
-  console.log("connected to skip socket");
-  
-  console.log(socket.id);
+  let currentUser = null; 
 
   socket.on("setup", (userData) => {
+    currentUser = userData;
     socket.join(userData.id);
-    console.log(userData);
     socket.emit("connected");
+
+ onlineUsers.add(userData.id);
+
+    socket.emit("online:users", Array.from(onlineUsers));
+    io.emit("user:online", userData.id);
+    console.log("User online:", userData.id);
   });
 
   socket.on("join chat", (room) => {
     socket.join(room);
-    console.log("User Joined Room: " + room);
+    console.log("User Joined Room:", room);
   });
 
   socket.on("typing", (room) => socket.in(room).emit("typing"));
   socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
 
   socket.on("new message", (newMessageRecieved) => {
-    console.log("chat",newMessageRecieved);
-    
-    var chat = newMessageRecieved.chat;
-    
-    if (!chat.users)  console.log("chat.users not defined");
-    
+    const chat = newMessageRecieved.chat;
+    if (!chat?.users) return;
     chat.users.forEach((user) => {
-      console.log(user);
       if (user === newMessageRecieved.sender.id) return;
-      
-      console.log("done");
-      
       socket.in(user).emit("message recieved", newMessageRecieved);
     });
   });
 
-
-
 socket.on("message:seen", async ({ messageId, chatId, userId }) => {
-
   await Message.updateOne(
-    { id: messageId },
-    { $addToSet: { readBy: userId} }
+    { _id: messageId },             // ← _id is what MongoDB actually uses
+    { $addToSet: { readBy: userId } }
   );
-
   socket.in(chatId).emit("message:seen:update", {
     messageId,
-    userId
+    userId,
+    chatId,                         // ← add this so frontend cache patch works reliably
   });
-
 });
 
+  socket.on(
+    "message:reaction",
+    async ({ messageId, emoji, userId, chatId }) => {
+      await Message.updateOne(
+        { id: messageId },
+        { $pull: { reactions: { user: userId } } },
+      );
+      if (!emoji) {
+        socket
+          .in(chatId)
+          .emit("message:reaction:update", { messageId, emoji: null, userId });
+        return;
+      }
+      await Message.updateOne(
+        { id: messageId },
+        { $push: { reactions: { emoji, user: userId } } },
+      );
+      socket
+        .in(chatId)
+        .emit("message:reaction:update", { messageId, emoji, userId });
+    },
+  );
 
+  // ✅ Fix: disconnect gives a reason string, NOT userData
+  socket.on("disconnect", () => {
+    if (!currentUser) return;
+    console.log("User disconnected:", currentUser.id);
 
+    const room = io.sockets.adapter.rooms.get(currentUser.id);
+    const remainingSockets = room ? room.size : 0;
 
-// for message reaction 
-socket.on(
-  "message:reaction",
-  async ({ messageId, emoji, userId, chatId }) => {
-    // 1️⃣ remove existing reaction by same user (if any)
-    await Message.updateOne(
-      { id: messageId },
-      { $pull: { reactions: { user: userId } } }
-    );
-
-    // 2️⃣ if user clicked emoji again, stop here (means un-react)
-    if (!emoji) {
-      socket.in(chatId).emit("message:reaction:update", {
-        messageId,
-        emoji: null,
-        userId
-      });
-      return;
+    if (remainingSockets === 0) {
+      // No more connections → truly offline
+      io.emit("user:offline", currentUser.id);
     }
-
-    // 3️⃣ add new reaction
-    await Message.updateOne(
-      { id: messageId },
-      { $push: { reactions: { emoji, user: userId } } }
-    );
-
-    // 4️⃣ broadcast to all users in chat
-    socket.in(chatId).emit("message:reaction:update", {
-      messageId,
-      emoji,
-      userId
-    });
-  }
-);
-
-
-
-
-
-
-
-
-  socket.off("setup", () => {
-    console.log("USER DISCONNECTED");
-    socket.leave(userData.id);
   });
- 
-
-  socket.on("disconnect", (userData) => {
-    console.log("USER DISCONNECTED");
-    socket.leave(userData.id);
-  });
- 
-  // socket.on("disconnect", () => {
-  //   console.log("socket disconnected", socket.id);
-  //   delete users[socket.id];
-  //   io.emit("users-list", users);
-  // });
-
-
-
 });

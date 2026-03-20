@@ -7,6 +7,7 @@ import Message from "../../models/MessageModel.js";
 import User from "../../models/UserModel.js";
 import Chat from "../../models/ChatModel.js";
 import VendorReview from "../../models/VendorReviewModel.js";
+import pushNotification from "../../../config/pushNotification.js";
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -377,7 +378,7 @@ class ChatController {
         }
 
         item.readBy = await User.find(
-          { id: { $in: item.readBy }, deletedAt: null },
+          { _id: { $in: item.readBy }, deletedAt: null },
           "id first_name last_name username profile_pic",
         ).lean();
 
@@ -478,6 +479,27 @@ class ChatController {
       await chat.save();
 
       //  await Chat.findByIdAndUpdate(req.body.chatId, { latestMessage: message._id });
+
+// get receiver users (except sender)
+const receiverIds = chat.users.filter(
+  (userId) => userId.toString() !== req.user._id.toString()
+);
+
+// fetch their FCM tokens
+const users = await User.findOne(
+  { _id: { $in: receiverIds }, fcm_token: { $ne: null } },
+  "fcm_token first_name last_name"
+);
+
+
+// send push
+await pushNotification(
+  users.fcm_token,
+  "New Message",
+  content || "📎 Media message",
+
+);
+
 
       return handleResponse(200, "msg sent", message, res);
     } catch (e) {

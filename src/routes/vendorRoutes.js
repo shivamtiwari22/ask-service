@@ -164,8 +164,6 @@ router.put("/verify-payment/:session_id", verifyPaymentFromStripe);
 
 
 
-
-
 router.get("/business-information", userAuthenticateToken , checkRoleAuth(["Vendor"]) , getBusinessInfo);
 router.put("/business-information", userAuthenticateToken , checkRoleAuth(["Vendor"]) , createUpdateBusinessInfo);
 
