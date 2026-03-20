@@ -13,6 +13,12 @@ import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import pushNotification from "../../../config/pushNotification.js";
 import Stripe from "stripe";
+import notifications from "../../../config/notification.js";
+import Notification from "../../models/NotificationModel.js";
+import VendorNotification from "../../models/vendorNotificationModel.js";
+import UserNotification from "../../models/userNotificationModel.js";
+
+const LOW_CREDIT_THRESHOLD = 10;
 
 function generateTransactionNumber(id, date) {
   const year = new Date(date || Date.now()).getFullYear();
@@ -107,6 +113,27 @@ export const unlockLead = async (req, res) => {
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
+      const lowBalanceTitle = "Low Credit Balance";
+      const lowBalanceBody = `Your credit balance is low (${wallet.amount})`;
+      const vendor = await User.findById(vendorId).select("fcm_token").lean();
+      
+      const prefs = await VendorNotification.findOne({
+        user_id: vendorId,
+      }).lean();
+
+    if(prefs?.email_notifications?.low_credit_balance){
+      await Notification.create({
+        user_id: vendorId,
+        title: lowBalanceTitle,
+        body: lowBalanceBody,
+      });
+    }
+
+      const canPush = prefs?.push_notifications?.low_credits ?? false;
+      if (vendor?.fcm_token && canPush) {
+        await pushNotification(vendor.fcm_token, lowBalanceTitle, lowBalanceBody);
+      }
+
       return handleResponse(402, "Insufficient credits. Please buy more credits.", { required: creditsRequired, balance: wallet.amount }, res);
     }
 
@@ -141,6 +168,29 @@ export const unlockLead = async (req, res) => {
         { _id: tx._id },
         { $set: { transaction_number: generateTransactionNumber(tx._id, tx.createdAt) } }
       );
+    }
+
+    if (balanceAfter <= LOW_CREDIT_THRESHOLD) {
+      const lowBalanceTitle = "Low Credit Balance";
+      const lowBalanceBody = `Your remaining credits are ${balanceAfter}. Please top up to avoid missing new leads.`;
+      const vendor = await User.findById(vendorId).select("fcm_token").lean();
+      
+            const prefs = await VendorNotification.findOne({
+              user_id: vendorId,
+            }).lean();
+
+    if(prefs?.email_notifications?.low_credit_balance){
+      await Notification.create({
+        user_id: vendorId,
+        title: lowBalanceTitle,
+        body: lowBalanceBody,
+      });
+    }
+    
+      const canPush = prefs?.push_notifications?.low_credits ?? false;
+      if (vendor?.fcm_token && canPush) {
+        await pushNotification(vendor.fcm_token, lowBalanceTitle, lowBalanceBody);
+      }
     }
 
     const fullLead = await ServiceRequest.findById(leadId)
@@ -302,7 +352,28 @@ export const submitQuote = async (req, res) => {
       const user = await User.findById(lead.user);
 
       if(user){
-         pushNotification(user?.fcm_token,"Quote Received 💰" , "You have received a new quote from a vendor. Review it now");  
+         const title = "Quote Received 💰";
+         const body = "You have received a new quote from a vendor. Review it now";
+
+         const prefs = await UserNotification.findOne({
+           user_id: user._id,
+         }).lean();
+
+         // Treat `email_notifications` toggle as enabling normal in-app notifications.
+         const canInApp = prefs?.email_notifications?.new_quotes ?? true;
+         const canPush = prefs?.push_notifications?.new_quotes ?? true;
+
+         if (canInApp) {
+           await Notification.create({
+             user_id: user._id,
+             title,
+             body,
+           });
+         }
+
+         if (canPush && user?.fcm_token) {
+           await pushNotification(user.fcm_token, title, body);
+         }
       }
 
     return handleResponse(201, "Quote submitted successfully", populated, res);
@@ -671,7 +742,7 @@ export const createCheckoutSession = async (req, res) => {
       line_items: [
         {
           price_data: {
-            currency: "usd",
+            currency: "eur",
             product_data: {
               name: "Service Payment",
             },
@@ -683,10 +754,10 @@ export const createCheckoutSession = async (req, res) => {
 
       mode: "payment",
 
-      success_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=fail`,
+      success_url: `http://localhost:3000/vendor/credits?stripe_payment_status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `http://localhost:3000/vendor/credits?stripe_payment_status=fail`,
       metadata: {
-        user_id: userId,
+        user_id: userId.toString(),
       },
     });
 

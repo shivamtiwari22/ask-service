@@ -38,7 +38,7 @@ import axios from "axios";
 // register vendor
 export const registerVendor = async (req, resp) => {
   try {
-    const { first_name, last_name, email, phone, password, business_name } =
+    const { first_name, last_name, email, phone, password, business_name , fcm_token} =
       req.body;
 
     const existingEmail = await User.findOne({ email });
@@ -84,6 +84,7 @@ export const registerVendor = async (req, resp) => {
       is_phone_verified: false,
       is_email_verified: false,
       is_vendor : true ,
+      fcm_token: fcm_token ? [fcm_token] : [] ,
       business_name,
     };
     const user = await User.create(payload);
@@ -91,6 +92,10 @@ export const registerVendor = async (req, resp) => {
     await VendorCreditWallet.create({
       user_id: user._id,
       amount: 0,
+    });
+
+        await VendorNotification.create({
+      user_id: user._id,
     });
 
     try {

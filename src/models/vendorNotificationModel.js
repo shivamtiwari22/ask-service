@@ -18,7 +18,7 @@ const TransactionModel = mongoose.Schema(
     push_notifications: {
       new_leads: { type: Boolean, default: true },
       messages: { type: Boolean, default: true },
-      low_credits: { type: Boolean, default: false },
+      low_credits: { type: Boolean, default: true },
     },
     
     sms_notifications: {

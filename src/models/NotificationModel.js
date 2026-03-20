@@ -29,13 +29,7 @@ const RoleModelSchema = mongoose.Schema(
     notification_type: {
       type: String,
       enum: [
-        "ROOM_INVITE",
-        "COMMUNITY_INVITE",
-        "CHALLENGE_INVITE",
-        "FOLLOW_NOTIFICATION",
-        "LIKE_NOTIFICATION",
-        "COMMENT_NOTIFICATION",
-        "Notice"
+      
       ],
     },
     url: {
@@ -59,8 +53,7 @@ RoleModelSchema.path("updatedAt").get(function (value) {
 });
 
 
-
-
 const Notification = mongoose.model("Notification", RoleModelSchema);
+
 
 export default Notification;

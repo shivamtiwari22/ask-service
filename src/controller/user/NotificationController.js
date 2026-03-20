@@ -53,7 +53,7 @@ class notificationController {
 
   static markAsRead = async (req, res) => {
     try {  
-    const { id} = req.body ;
+    const { id} = req.params ;
     const notification = await Notification.findById(id);
 
       if (!notification) {

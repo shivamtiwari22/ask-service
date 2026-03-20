@@ -25,6 +25,8 @@ import axios from "axios";
 import { log } from "console";
 import pushNotification from "../../../config/pushNotification.js";
 import Question from "../../models/QuestionsModel.js";
+import Notification from "../../models/NotificationModel.js";
+import VendorNotification from "../../models/vendorNotificationModel.js";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -251,18 +253,45 @@ export const initiateServiceRequest = async (req, resp) => {
       await session.commitTransaction();
 
       const users = await User.find({ service: service_category }).select(
-        "fcm_token",
+        "_id fcm_token",
       );
 
       const tokens = users
         .map((user) => user.fcm_token)
         .filter((token) => token);
 
-      await pushNotification(
-        tokens,
-        "New Lead Received",
-        "You have received a new lead. Check the details and respond quickly.",
-      );
+      const title = "New Lead Received";
+      const body =
+        "You have received a new lead. Check the details and respond quickly.";
+
+      // Always save in-app notifications, but send push only if vendor allows it.
+      const vendorIds = users.map((u) => u._id);
+      const prefs = await VendorNotification.find({
+        user_id: { $in: vendorIds },
+      }).lean();
+      const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
+
+      const tokensToPush = users
+        .filter((u) => {
+          const pref = prefsByUserId.get(String(u._id));
+          return pref?.push_notifications?.new_leads ?? true;
+        })
+        .map((u) => u.fcm_token)
+        .filter(Boolean);
+
+      if (tokensToPush.length > 0) {
+        await pushNotification(tokensToPush, title, body);
+      }
+
+      if (users.length > 0) {
+        await Notification.insertMany(
+          users.map((vendor) => ({
+            user_id: vendor._id,
+            title,
+            body,
+          })),
+        );
+      }
 
       return handleResponse(
         201,
@@ -480,18 +509,45 @@ export const initiateServiceRequest = async (req, resp) => {
 
 
        const users = await User.find({ service: service_category }).select(
-        "fcm_token",
+        "_id fcm_token",
       );
 
       const tokens = users
         .map((user) => user.fcm_token)
         .filter((token) => token);
 
-      await pushNotification(
-        tokens,
-        "New Lead Received",
-        "You have received a new lead. Check the details and respond quickly.",
-      );
+      const title = "New Lead Received";
+      const body =
+        "You have received a new lead. Check the details and respond quickly.";
+
+      // Always save in-app notifications, but send push only if vendor allows it.
+      const vendorIds = users.map((u) => u._id);
+      const prefs = await VendorNotification.find({
+        user_id: { $in: vendorIds },
+      }).lean();
+      const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
+
+      const tokensToPush = users
+        .filter((u) => {
+          const pref = prefsByUserId.get(String(u._id));
+          return pref?.push_notifications?.new_leads ?? true;
+        })
+        .map((u) => u.fcm_token)
+        .filter(Boolean);
+
+      if (tokensToPush.length > 0) {
+        await pushNotification(tokensToPush, title, body);
+      }
+
+      if (users.length > 0) {
+        await Notification.insertMany(
+          users.map((vendor) => ({
+            user_id: vendor._id,
+            title,
+            body,
+          })),
+        );
+      }
 
 
 
@@ -1003,6 +1059,23 @@ export const acceptQuote = async (req, resp) => {
 
     quote.status = "ACCEPTED";
     await quote.save();
+
+    const vendorId = quote.vendor_id?.toString?.() || quote.vendor_id;
+    if (vendorId) {
+      const title = "Quote Accepted";
+      const body = `Your quote for request ${serviceRequest.reference_no} has been accepted.`;
+
+      await Notification.create({
+        user_id: vendorId,
+        title,
+        body,
+      });
+
+      // const vendorUser = await User.findById(vendorId).select("fcm_token").lean();
+      // if (vendorUser?.fcm_token) {
+      //   await pushNotification(vendorUser.fcm_token, title, body);
+      // }
+    }
 
     return handleResponse(
       200,

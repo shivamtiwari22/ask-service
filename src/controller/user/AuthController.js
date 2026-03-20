@@ -21,11 +21,12 @@ import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import ContactUs from "../../models/ContactUsModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
 import axios from "axios";
+import VendorNotification from "../../models/vendorNotificationModel.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
   try {
-    const { first_name, last_name, phone, email, password } = req.body;
+    const { first_name, last_name, phone, email, password , fcm_token } = req.body;
 
     if (!phone && !email) {
       return handleResponse(400, "Phone or email are required", {}, resp);
@@ -73,11 +74,17 @@ export const signup = async (req, resp) => {
       phone_otp_expiry: moment().add(5, "minutes").toDate(),
       otp: emailOtp,
       email_verification_token: emailToken,
+      fcm_token : fcm_token ? [fcm_token]: []
     });
 
     await VendorCreditWallet.create({
       user_id: user._id,
     });
+
+
+       await UserNotification.create({
+          user_id: user._id,
+        });
 
     if (email) {
       const link = `https://ask.webdesignnoida.in/api/user/verify-email?token=${emailToken}`;
@@ -958,6 +965,19 @@ export const GoogleLogin = async (req, res) => {
         user_id: user._id,
         amount: 0,
       });
+
+      if(user.is_vendor){
+            await VendorNotification.create({
+          user_id: user._id,
+        });
+      }
+      else {  
+        await UserNotification.create({
+          user_id: user._id,
+        });
+
+      }
+
 
       user = await User.findById(user._id).populate("role");
     }
