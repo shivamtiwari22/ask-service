@@ -356,6 +356,8 @@ export const createQuestionValidation = [
       "checkbox",
       "date",
       "file",
+      "datetime",
+      "time"
     ])
     .withMessage("Invalid question type"),
   body("service_id")

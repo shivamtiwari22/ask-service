@@ -110,7 +110,7 @@ export const unlockLead = async (req, res) => {
       return handleResponse(409, "You have already unlocked this lead", { unlocked: true }, res);
     }
 
-    const creditsRequired = lead.service_category?.credit ?? 3;
+    const creditsRequired =  lead.contact_details.client_type == "Individual" ?    lead.service_category?.credit  : lead.service_category?.company_credit ;
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
@@ -254,7 +254,7 @@ export const getLeadById = async (req, res) => {
         masked.user.email = (masked.user.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3");
       }
       masked.unlocked = false;
-      masked.creditsToUnlock = lead.service_category?.credit ?? 3;
+      masked.creditsToUnlock =  lead.contact_details.client_type == "Individual" ?  lead.service_category?.credit  : lead.service_category?.company_credit ;
       return handleResponse(200, "Lead details", masked, res);
     }
 
@@ -755,8 +755,8 @@ export const createCheckoutSession = async (req, res) => {
 
       mode: "payment",
 
-      success_url: `http://localhost:3000/vendor/credits?stripe_payment_status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `http://localhost:3000/vendor/credits?stripe_payment_status=fail`,
+      success_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=fail`,
       metadata: {
         user_id: userId.toString(),
       },

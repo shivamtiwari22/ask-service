@@ -16,6 +16,8 @@ const QuestionsSchema = new mongoose.Schema(
         "checkbox",
         "date",
         "file",
+        "datetime",
+        "time"
       ],
       required: true,
     },
