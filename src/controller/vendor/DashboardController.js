@@ -97,9 +97,10 @@ export const unlockLead = async (req, res) => {
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
-    if (lead.service_category._id.toString() !== user.service?.toString()) {
-      return handleResponse(403, "This lead is not for your service category", {}, res);
-    }
+
+    // if (lead.service_category._id.toString() !== user.service?.toString()) {
+    //   return handleResponse(403, "This lead is not for your service category", {}, res);
+    // }
 
     const alreadyUnlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,
