@@ -974,7 +974,7 @@ export const availableLeads = async (req, resp) => {
     const leadsWithMasking = await Promise.all(
       leads.map(async (lead) => {
         const unlocked = unlockedIds.has(lead._id.toString());
-        const creditsToUnlock =  lead.contact_details.client_type == "Individual" ?    lead.service_category?.credit  : lead.service_category?.company_credit   ;
+        const creditsToUnlock =  lead.contact_details.client_type == "Individual"     ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3)  ;
 
         const quotesCount = await VendorQuote.countDocuments({
           service_request_id: lead._id,

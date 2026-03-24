@@ -110,7 +110,7 @@ export const unlockLead = async (req, res) => {
       return handleResponse(409, "You have already unlocked this lead", { unlocked: true }, res);
     }
 
-    const creditsRequired =  lead.contact_details.client_type == "Individual" ?    lead.service_category?.credit  : lead.service_category?.company_credit ;
+    const creditsRequired =  lead.contact_details.client_type == "Individual"   ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3) ;
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
@@ -254,7 +254,7 @@ export const getLeadById = async (req, res) => {
         masked.user.email = (masked.user.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3");
       }
       masked.unlocked = false;
-      masked.creditsToUnlock =  lead.contact_details.client_type == "Individual" ?  lead.service_category?.credit  : lead.service_category?.company_credit ;
+      masked.creditsToUnlock =  lead.contact_details.client_type == "Individual"   ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3)  ;
       return handleResponse(200, "Lead details", masked, res);
     }
 
