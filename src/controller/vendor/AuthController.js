@@ -908,14 +908,16 @@ function maskContactDetails(contact) {
 export const availableLeads = async (req, resp) => {
   try {
     const vendorId = req?.user?._id;
-    const { city, state, country, sort } = req.query;
+    const { city, state, country, sort , service } = req.query ;
 
     let filter = {
-      service_category: req?.user?.service,
+      // service_category: req?.user?.service,
       deletedAt: null,
       status: "ACTIVE",
     };
 
+
+    if(service) filter.service_category = service ;
     if (city) filter.city = city;
     if (state) filter.state = state;
     if (country) filter.country = country;
