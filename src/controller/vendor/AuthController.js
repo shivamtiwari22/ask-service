@@ -194,7 +194,8 @@ export const resendOTP = async (req, resp) => {
       user.otp_phone_expiry_at = moment().add(2, "minutes").toDate();
 
       try {
-        let msg = `Your verification code is ${user.otp_phone}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+        let msg = `Votre code de vérification est ${user.otp_phone}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+
 
         const response = await axios.post(
           "https://rest.clicksend.com/v3/sms/send",
@@ -202,7 +203,7 @@ export const resendOTP = async (req, resp) => {
             messages: [
               {
                 source: "nodejs",
-                from: "MyApp",
+                from: "AskService",
                 body: msg,
                 to: `+${user.phone}`,
               },
@@ -532,7 +533,8 @@ export const updateVendorProfile = async (req, resp) => {
       user.otp_for = "VERIFY_PHONE";
 
       try {
-        let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+        let msg = `Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+
 
         const response = await axios.post(
           "https://rest.clicksend.com/v3/sms/send",
@@ -540,7 +542,7 @@ export const updateVendorProfile = async (req, resp) => {
             messages: [
               {
                 source: "nodejs",
-                from: "MyApp",
+                from: "AskService",
                 body: msg,
                 to: `+${phone}`,
               },

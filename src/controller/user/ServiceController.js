@@ -352,7 +352,8 @@ export const initiateServiceRequest = async (req, resp) => {
       await existingUser.save({ session });
 
       try {
-        let msg = `Your verification code is ${existingUser.phone_otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+        let msg = `Votre code de vérification est ${existingUser.phone_otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+
 
         const response = await axios.post(
           "https://rest.clicksend.com/v3/sms/send",
@@ -360,7 +361,7 @@ export const initiateServiceRequest = async (req, resp) => {
             messages: [
               {
                 source: "nodejs",
-                from: "MyApp",
+                from: "AskService",
                 body: msg,
                 to: `+${existingUser?.phone}`,
               },
@@ -432,7 +433,9 @@ export const initiateServiceRequest = async (req, resp) => {
     //  account cred mail
 
     try {
-      let msg = `Your verification code is ${phoneOtp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+    
+        let msg = `Votre code de vérification est ${phoneOtp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+
 
       const response = await axios.post(
         "https://rest.clicksend.com/v3/sms/send",
@@ -440,7 +443,7 @@ export const initiateServiceRequest = async (req, resp) => {
           messages: [
             {
               source: "nodejs",
-              from: "MyApp",
+              from: "AskService",
               body: msg,
               to: `+${phone}`,
             },

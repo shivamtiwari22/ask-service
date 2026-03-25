@@ -486,7 +486,7 @@ export const resendPhoneOTP = async (req, resp) => {
     user.otp_for = type;
 
     try {
-      let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+      let msg = `Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
 
       const response = await axios.post(
         "https://rest.clicksend.com/v3/sms/send",
@@ -494,7 +494,7 @@ export const resendPhoneOTP = async (req, resp) => {
           messages: [
             {
               source: "nodejs",
-              from: "MyApp",
+              from: "AskService",
               body: msg,
               to: `+${phone}`,
             },
@@ -715,7 +715,8 @@ export const updateUserProfile = async (req, resp) => {
       user.otp_for = "VERIFY_PHONE";
 
       try {
-        let msg = `Your verification code is ${otp}. Please enter this code to verify your phone number. Do not share this code with anyone.`;
+
+        let msg = `Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
 
         const response = await axios.post(
           "https://rest.clicksend.com/v3/sms/send",
@@ -723,7 +724,7 @@ export const updateUserProfile = async (req, resp) => {
             messages: [
               {
                 source: "nodejs",
-                from: "MyApp",
+                from: "AskService",
                 body: msg,
                 to: `+${phone}`,
               },
@@ -1191,7 +1192,7 @@ export const PostContactUs = async (req, res) => {
 
 export const getAllTestimonialMasters = async (req, resp) => {
   try {
-    let findQuery = await TestimonialMaster.find().sort({ createdAt: -1 });
+    let findQuery = await TestimonialMaster.find().sort({ createdAt: -1 }).limit(6);
 
     return handleResponse(
       200,

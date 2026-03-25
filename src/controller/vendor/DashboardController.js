@@ -33,10 +33,14 @@ function formatFrenchInvoiceDate(date) {
   if (!date) return null;
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return null;
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
-  return `${year}-${month}-${day}`;
+  // Example: "24 mars 2026"
+  return d
+    .toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    })
+    .replace(/\./g, "");
 }
 
 function buildInvoiceNumber(tx) {
@@ -50,6 +54,38 @@ function buildInvoiceNumber(tx) {
       ? parseInt(tx._id.toString().slice(-4), 16) % 10000
       : 0;
   return `INV-${year}-${String(serial).padStart(4, "0")}`;
+}
+
+function formatEuroFR(value) {
+  const num = Number(value || 0);
+  const fixed = num.toFixed(2);
+  const withComma = fixed.replace(".", ".");
+  return `${withComma} €`;
+}
+
+function paymentStatusToFrench(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "completed" || s === "paid" || s === "success") return "Payé";
+  if (s === "failed") return "Échoué";
+  if (s === "refunded") return "Remboursé";
+  if (!s) return "En attente";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function drawDashedSeparator(doc, y, x1, x2) {
+  const left = x1 ?? doc.page.margins.left;
+  const right = x2 ?? doc.page.width - doc.page.margins.right;
+  doc.save();
+  doc.strokeColor("#CFCFCF");
+  // pdfkit supports dash/undash in most versions; if not, fall back to solid line.
+  if (typeof doc.dash === "function") {
+    doc.dash(4, { space: 4 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    if (typeof doc.undash === "function") doc.undash();
+  } else {
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+  }
+  doc.restore();
 }
 
 /**
@@ -435,6 +471,11 @@ export const getCreditPackages = async (req, res) => {
       packages = DEFAULT_CREDIT_PACKAGES.map((p) => ({ ...p, _id: null }));
     }
 
+    for(const item of packages){
+          item.vat_rate = process.env.VAT_RATE  ;
+    }
+
+
     return handleResponse(200, "Credit packages fetched successfully", packages, res);
   } catch (err) {
     return handleResponse(500, err.message, {}, res);
@@ -514,7 +555,7 @@ export const purchaseCredits = async (req, res) => {
       balance_after: wallet.amount,
       reference_type: "credit_purchase",
       reference_id: pkg._id && typeof pkg._id === "object" ? pkg._id : undefined,
-      plat_form: "manual",
+      plat_form: "stripe",
       amount_paid: pkg.price,
       currency: pkg.currency || "EUR",
       payment_method: req.body.payment_method || null,
@@ -542,7 +583,7 @@ export const purchaseCredits = async (req, res) => {
 
 /**
  * GET /credits/invoice/:transactionId
- * Return invoice data for vendor credit purchase.
+ * Return invoice PDF for vendor credit purchase.
  */
 export const getCreditPurchaseInvoice = async (req, res) => {
   try {
@@ -569,13 +610,12 @@ export const getCreditPurchaseInvoice = async (req, res) => {
       tx?.reference_id ? CreditPackage.findById(tx.reference_id).lean() : null,
     ]);
 
-    const totalHt = Number(tx.amount || 0);
-    const tvaRate = Number(creditPackage?.per_credit_price || 0.2);
+    const totalHt = Number(creditPackage.price || 0);
+    const tvaRate = Number(global?.tva_rate || 0.2);
     const tvaAmount = Number((totalHt * tvaRate).toFixed(2));
     const totalTtc = Number((totalHt + tvaAmount).toFixed(2));
     const creditsAdded = Number(tx.amount || 0);
-    const pricePerCredit =
-      creditsAdded > 0 ? Number((totalHt / creditsAdded).toFixed(2)) : 0;
+    const pricePerCredit = creditPackage?.per_credit_price || 0.2;
     const invoiceNumber = buildInvoiceNumber(tx);
     const issueDate = formatFrenchInvoiceDate(tx.createdAt) || "-";
     const currency = tx.currency || "EUR";
@@ -613,7 +653,7 @@ export const getCreditPurchaseInvoice = async (req, res) => {
 
     const formatEuro = (value) => {
       const number = Number(value || 0);
-      return `${number.toFixed(2).replace(".", ",")} ${currency}`;
+      return `${number.toFixed(2).replace(".", ".")} ${currency}`;
     };
 
     const drawSectionBox = (x, y, w, h, title) => {
@@ -750,6 +790,7 @@ export const getCreditPurchaseInvoice = async (req, res) => {
     return handleResponse(500, err.message, {}, res);
   }
 };
+
 
 
 

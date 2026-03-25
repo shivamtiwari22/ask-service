@@ -34,7 +34,28 @@ Hello ${name},<br>
 Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre email.
 </p>
 
+<!-- OTP Box -->
+// <div style="margin:30px 0;">
+// <span style="
+// display:inline-block;
+// font-size:32px;
+// letter-spacing:6px;
+// font-weight:bold;
+// color:#4f46e5;
+// background:#f5f7ff;
+// padding:14px 30px;
+// border-radius:8px;
+// border:1px dashed #4f46e5;
+// ">
+// ${otp}
+// </span>
+// </div>
 
+
+
+<p style="font-size:13px;color:#999;margin-top:25px;">
+If you did not request this verification, you can safely ignore this email.
+</p>
 
 </td>
 </tr>
