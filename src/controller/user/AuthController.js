@@ -22,6 +22,7 @@ import ContactUs from "../../models/ContactUsModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
 import axios from "axios";
 import VendorNotification from "../../models/vendorNotificationModel.js";
+import Global from "../../models/GlobalModel.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -1204,3 +1205,18 @@ export const getAllTestimonialMasters = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+
+
+ export const getGlobalSetting = async (req, res) => {
+    try {
+      const firstRecord = await Global.findOne().sort({ _id: 1 }).exec();
+      if (!firstRecord) {
+        return handleResponse(200, "Not Found", {}, res);
+      }
+
+      handleResponse(200, "global setting get successfully", firstRecord, res);
+    } catch (err) {
+      return handleResponse(500, err.message, {}, res);
+    }
+  };

@@ -32,6 +32,7 @@ import {
   verifyOTPValidation,
 } from "../../middleware/validation.js";
 import {
+  multipleglobalUpload,
   serviceCategoryUpload,
   userProfileUpload,
 } from "../../utils/multer.js";
@@ -56,6 +57,8 @@ import {
   restoreFaq,
   updateFaq,
   contactUs,
+  addOrUpdateGlobal,
+  getGlobalSetting,
 } from "../controller/admin/FaqsController.js";
 import {
   createServiceDocumentRequirement,
@@ -416,5 +419,25 @@ router.put(
   checkRoleAuth(["Admin"]),
   restoreQuestion,
 );
+
+
+router.post(
+  "/update-global-setting",
+  authenticateToken,
+  multipleglobalUpload ,
+  checkRoleAuth(["Admin"]),
+  addOrUpdateGlobal,
+);
+
+router.get(
+  "/get-global",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getGlobalSetting,
+);
+
+
+
+
 
 export default router;

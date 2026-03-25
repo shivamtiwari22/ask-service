@@ -50,6 +50,7 @@ import {
   GoogleLogin,
   phoneSignUp,
   getAllTestimonialMasters,
+  getGlobalSetting,
 } from "../controller/user/AuthController.js";
 import { chatMediaUpload, userProfileUpload } from "../../utils/multer.js";
 import ChatController from "../controller/user/ChatController.js";
@@ -360,5 +361,10 @@ router.get(
   checkRoleAuth(["User"]),
   notificationController.ChatMessages,
 );
+
+
+
+router.get("/get-global", getGlobalSetting);
+
 
 export default router;

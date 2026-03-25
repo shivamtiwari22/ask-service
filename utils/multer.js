@@ -18,3 +18,15 @@ const chatPath = fileUpload("public/chat");
 export const chatMediaUpload = chatPath.fields([
   { name: "media" },
 ]);
+
+
+
+const upload = fileUpload("public/global");
+
+export const multipleglobalUpload = upload.fields([
+  { name: "logo" },
+  { name: "icon_image" },
+  { name: "instagram_logo" },
+  { name: "facebook_logo" },
+  { name: "x_logo" },
+]);

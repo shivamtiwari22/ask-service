@@ -1,6 +1,7 @@
 import handleResponse from "../../../utils/http-response.js";
 import ContactUs from "../../models/ContactUsModel.js";
 import Faqs from "../../models/FaqsModel.js";
+import Global from "../../models/GlobalModel.js";
 
 // create FAQ
 export const createFaq = async (req, resp) => {
@@ -221,5 +222,139 @@ export const contactUs = async (req, res) => {
 
     } catch (error) {
       return handleResponse(500, error.message, {}, res);
+    }
+  };
+
+
+
+
+  export const addOrUpdateGlobal = async (req,res) => {
+       try {
+      const user = req.user;
+
+      const images = req.files;
+      const { logo, socialMedia, icon_image, ...globalSetting } = req.body;
+
+      let existingGlobal = await Global.findOne();
+
+      if (existingGlobal) {
+
+
+        if (images && images.logo) {
+          existingGlobal.logo = images.logo[0].path.replace(
+            /\\/g,
+            "/"
+          );
+        }
+
+        if (images && images.icon_image) {
+          existingGlobal.icon_image = images.icon_image[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        }
+
+        if (images && images.instagram_logo) {
+          existingGlobal.instagram_logo = images.instagram_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+
+        if (images && images.facebook_logo) {
+          existingGlobal.facebook_logo = images.facebook_logo[0].path.replace(
+            /\\/g,
+            "/"
+          );
+        }
+
+        if (images && images.x_logo) {
+          existingGlobal.x_logo = images.x_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+
+        Object.assign(existingGlobal, globalSetting);
+        await existingGlobal.save();
+        return handleResponse(
+          200,
+          "global settings updated successfully.",
+          existingGlobal,
+          res
+        );
+      } else {
+        const newShippingPolicy = new Global({
+          created_by: user.id,
+          ...globalSetting,
+        });
+
+        if (newShippingPolicy) {
+     
+
+          if (images && images.logo) {
+            newShippingPolicy.logo = images.logo[0].path.replace(
+              /\\/g,
+              "/"
+            )
+          }
+
+          if (images && images.icon_image) {
+            newShippingPolicy.icon_image = images.icon_image[0].path.replace(
+              /\\/g,
+              "/"
+            )
+          }
+
+          if (images && images.instagram_logo) {
+            newShippingPolicy.instagram_logo = images.instagram_logo[0].path.replace(
+              /\\/g,
+              "/"
+            )
+          }
+
+          if (images && images.facebook_logo) {
+            newShippingPolicy.facebook_logo = images.facebook_logo[0].path.replace(
+              /\\/g,
+              "/"
+            )
+          }
+
+          if (images && images.x_logo) {
+            newShippingPolicy.x_logo = images.x_logo[0].path.replace(
+              /\\/g,
+              "/"
+            )
+          }
+
+        }
+
+
+        await newShippingPolicy.save();
+        return handleResponse(
+          201,
+          "Global Settings Created successfully.",
+          { newShippingPolicy },
+          res
+        );
+      }
+    } catch (err) {
+      return handleResponse(500, err.message, {}, res);
+    }
+  }
+
+
+  export const getGlobalSetting =  async (req, res) => {
+    try {
+      const firstRecord = await Global.findOne().sort({ _id: 1 }).exec();
+      if (!firstRecord) {
+        return handleResponse(200, "Not Found", {}, res);
+      }
+
+      handleResponse(200, "global setting get successfully", firstRecord, res);
+    } catch (err) {
+      return handleResponse(500, err.message, {}, res);
     }
   };

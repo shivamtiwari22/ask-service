@@ -55,6 +55,7 @@ import {
 import ChatController from "../controller/user/ChatController.js";
 import firebaseAuthenticateToken from "../../middleware/google-verification-middleware.js";
 import notificationController from "../controller/user/NotificationController.js";
+import { getGlobalSetting } from "../controller/user/AuthController.js";
 
 const router = express.Router();
 
@@ -127,6 +128,7 @@ router.post("/reset-password", authenticateForgotPasswordToken("forgot-password"
 
 // get all services
 router.get("/get-all-services", getAllServices );
+router.get("/get-global", getGlobalSetting);
 
 
 // get all services document required

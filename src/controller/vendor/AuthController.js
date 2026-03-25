@@ -34,6 +34,7 @@ import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import verificationMail from "../../../config/email/verificationMail.js";
 import axios from "axios";
+import { ifError } from "assert";
 
 // register vendor
 export const registerVendor = async (req, resp) => {
@@ -571,7 +572,8 @@ export const updateVendorProfile = async (req, resp) => {
     }
 
 
-      if (req.files && req.files.profile_pic.length > 0) {  user.profile_pic = req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
+      if (req.files &&  Array.isArray(req.files?.profile_pic) && req.files?.profile_pic.length > 0) { 
+         user.profile_pic = req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
     }
 
 
@@ -601,6 +603,8 @@ export const updateVendorProfile = async (req, resp) => {
       resp,
     );
   } catch (err) {
+    console.log(err);
+    
     return handleResponse(500, err.message, {}, resp);
   }
 };
