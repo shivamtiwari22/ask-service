@@ -44,7 +44,8 @@ import {
   exportTransactionsListPdf,
   AllQuotes ,
   createCheckoutSession ,
-  verifyPaymentFromStripe
+  verifyPaymentFromStripe,
+  getCreditPurchaseInvoice,
 } from "../controller/vendor/DashboardController.js";
 import { serviceDocumentUpload, userProfileUpload, quoteDocumentUpload, chatMediaUpload } from "../../utils/multer.js";
 import {
@@ -154,6 +155,7 @@ router.post("/leads/:leadId/quotes", userAuthenticateToken, checkRoleAuth(["Vend
 router.get("/credits/packages", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditPackages);
 router.get("/credits/balance", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditBalance);
 router.post("/credits/purchase", userAuthenticateToken, checkRoleAuth(["Vendor"]), purchaseCredits);
+router.get("/credits/invoice/:transactionId", getCreditPurchaseInvoice);
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);
 
