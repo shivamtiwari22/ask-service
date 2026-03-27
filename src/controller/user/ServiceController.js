@@ -27,6 +27,7 @@ import pushNotification from "../../../config/pushNotification.js";
 import Question from "../../models/QuestionsModel.js";
 import Notification from "../../models/NotificationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
+import verificationMail from "../../../config/email/verificationMail.js";
 
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
@@ -323,8 +324,7 @@ export const initiateServiceRequest = async (req, resp) => {
         await sendEmail({
           to: email,
           subject: "Verification OTP",
-          html: `<p>One time password:${emailOwner.otp}</p>
-                `,
+          html:  await verificationMail(emailOwner.first_name, emailOwner.otp),
         });
 
         return handleResponse(

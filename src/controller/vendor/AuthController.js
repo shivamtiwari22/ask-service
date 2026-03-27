@@ -506,11 +506,11 @@ export const updateVendorProfile = async (req, resp) => {
       user.otp = generateOTP();
       user.otp_for = "VERIFY_EMAIL";
 
-      await sendEmail({
-        to: email,
-        subject: "Verification OTP",
-        html: await verificationMail(user.first_name, user.otp),
-      });
+      // await sendEmail({
+      //   to: email,
+      //   subject: "Verification OTP",
+      //   html: await verificationMail(user.first_name, user.otp),
+      // });
     }
 
     if (phone !== undefined && phone !== user.phone) {
@@ -531,33 +531,33 @@ export const updateVendorProfile = async (req, resp) => {
       user.otp_for = "VERIFY_PHONE";
 
       try {
-        let msg = `Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+        // let msg = `Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
 
 
-        const response = await axios.post(
-          "https://rest.clicksend.com/v3/sms/send",
-          {
-            messages: [
-              {
-                source: "nodejs",
-                from: "AskService",
-                body: msg,
-                to: `+${phone}`,
-              },
-            ],
-          },
-          {
-            auth: {
-              username: process.env.SMS_USERNAME,
-              password: process.env.SMS_API,
-            },
-            headers: {
-              "Content-Type": "application/json",
-            },
-          },
-        );
+        // const response = await axios.post(
+        //   "https://rest.clicksend.com/v3/sms/send",
+        //   {
+        //     messages: [
+        //       {
+        //         source: "nodejs",
+        //         from: "AskService",
+        //         body: msg,
+        //         to: `+${phone}`,
+        //       },
+        //     ],
+        //   },
+        //   {
+        //     auth: {
+        //       username: process.env.SMS_USERNAME,
+        //       password: process.env.SMS_API,
+        //     },
+        //     headers: {
+        //       "Content-Type": "application/json",
+        //     },
+        //   },
+        // );
 
-        console.log("SMS Response:", response.data);
+        // console.log("SMS Response:", response.data);
       } catch (e) {
         console.log(e);
       }
