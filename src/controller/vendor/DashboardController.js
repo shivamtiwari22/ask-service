@@ -20,7 +20,6 @@ import UserNotification from "../../models/userNotificationModel.js";
 import BusinessInformation from "../../models/BusinessInformationModel.js";
 import mongoose from "mongoose";
 import Global from "../../models/GlobalModel.js";
-import { glob } from "fs";
 
 const LOW_CREDIT_THRESHOLD = 10;
 
