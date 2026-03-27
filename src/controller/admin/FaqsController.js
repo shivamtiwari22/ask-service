@@ -277,6 +277,15 @@ export const contactUs = async (req, res) => {
         };
 
 
+          if (images && images.linkedin_logo) {
+          existingGlobal.linkedin_logo = images.linkedin_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+
+
         Object.assign(existingGlobal, globalSetting);
         await existingGlobal.save();
         return handleResponse(
@@ -328,6 +337,15 @@ export const contactUs = async (req, res) => {
               "/"
             )
           }
+
+
+            if (images && images.linkedin_logo) {
+          newShippingPolicy.linkedin_logo = images.linkedin_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
 
         }
 

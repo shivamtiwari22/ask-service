@@ -55,6 +55,16 @@ const GlobalSchema = mongoose.Schema(
       },
     },
     x_link: { type: String, default: null },
+    linkedin_logo: {
+      type: String,
+      get: (val) => {
+        if (!val) return null;
+        return `${process.env.IMAGE_URL}${val}`;
+      },
+    },
+
+    linkedin_link : { type: String, default: null }, 
+
     address: {
       type: String,
       default: null,

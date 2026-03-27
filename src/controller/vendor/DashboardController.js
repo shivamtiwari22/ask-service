@@ -20,6 +20,7 @@ import UserNotification from "../../models/userNotificationModel.js";
 import BusinessInformation from "../../models/BusinessInformationModel.js";
 import mongoose from "mongoose";
 import Global from "../../models/GlobalModel.js";
+import { glob } from "fs";
 
 const LOW_CREDIT_THRESHOLD = 10;
 
@@ -376,7 +377,8 @@ export const submitQuote = async (req, res) => {
       return handleResponse(409, "You have already submitted a quote for this lead", {}, res);
     }
 
-    const MAX_QUOTES_PER_REQUEST = 5;
+    const global = await Global.findOne();
+    const MAX_QUOTES_PER_REQUEST = global?.quote_limit ?? 5;
     const quotesCount = await VendorQuote.countDocuments({
       service_request_id: leadId,
       status: "SENT",

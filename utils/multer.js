@@ -29,4 +29,5 @@ export const multipleglobalUpload = upload.fields([
   { name: "instagram_logo" },
   { name: "facebook_logo" },
   { name: "x_logo" },
+  { name: "linkedin_logo" },
 ]);

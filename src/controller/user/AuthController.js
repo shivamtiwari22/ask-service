@@ -748,9 +748,9 @@ export const updateUserProfile = async (req, resp) => {
     }
 
 
-    console.log(req.files);
     
-    if (req.files && req.files.profile_pic.length > 0) {
+    
+    if (req.files && req.files?.profile_pic?.length > 0) {
     console.log(req.files?.profile_pic?.[0]?.path,"pic");
 
       user.profile_pic = req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic);

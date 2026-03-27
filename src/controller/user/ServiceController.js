@@ -121,7 +121,7 @@ export const getSingleServiceCategories = async (req, resp) => {
   try {
     const data = await ServiceCategory.findById(req.params.id);
 
-    if (!data) return handleResponse(404, "category not found", {}, res);
+    if (!data) return handleResponse(404, "category not found", {}, resp);
 
     return handleResponse(
       200,

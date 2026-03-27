@@ -145,9 +145,7 @@ export const NewPassword = async (req, res) => {
       );
     }
   } catch (e) {
-    console.log("====================================");
     console.log(e);
-    console.log("====================================");
     return handleResponse(500, e.message, {}, res);
   }
 };
