@@ -284,6 +284,12 @@ export const contactUs = async (req, res) => {
           )
         };
 
+            if (images && images.footer_logo) {
+          existingGlobal.footer_logo = images.footer_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
 
 
         Object.assign(existingGlobal, globalSetting);
@@ -341,6 +347,14 @@ export const contactUs = async (req, res) => {
 
             if (images && images.linkedin_logo) {
           newShippingPolicy.linkedin_logo = images.linkedin_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+
+           if (images && images.footer_logo) {
+          newShippingPolicy.footer_logo = images.footer_logo[0].path.replace(
             /\\/g,
             "/"
           )

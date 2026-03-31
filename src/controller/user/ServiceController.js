@@ -868,9 +868,9 @@ export const getQuotesForServiceRequest = async (req, resp) => {
       const stats = statsByVendor.get(vid) || {};
       const business = businessByVendor.get(vid);
       const quoteCreated = q.createdAt ? new Date(q.createdAt).getTime() : 0;
-      const respondedInHours = requestCreated
-        ? ((quoteCreated - requestCreated) / (1000 * 60 * 60)).toFixed(1)
-        : null;
+      const respondedInHours = requestCreated && quoteCreated
+        ?  Math.max(0, Math.round(((quoteCreated - requestCreated) / (1000 * 60 * 60)) * 10) / 10)
+        : 0;
       return {
         _id: q._id,
         quote_id: q._id,
@@ -886,7 +886,7 @@ export const getQuotesForServiceRequest = async (req, resp) => {
         responded_in_hours: respondedInHours,
         price: q.quote_price,
         currency: q.currency || "EUR",
-        price_display: `${q.currency || "EUR"}${q.quote_price} per visit`,
+        price_display: `${q.quote_price} € prix TTC`,
         available_start_date: q.available_start_date,
         status: q.status,
         preferred_time_of_day: serviceRequest?.preferred_time_of_day,

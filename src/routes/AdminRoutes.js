@@ -2,6 +2,7 @@ import express from "express";
 import {
   adminLogin,
   changeAdminPassword,
+  changeUserStatus,
   forgotPassword,
   getAdminProfile,
   getAllRoleOptions,
@@ -136,6 +137,13 @@ router.get(
   checkRoleAuth(["Admin"]),
   getAllUsers,
 );
+
+
+router.patch("/user/:id/status",  authenticateToken,
+  checkRoleAuth(["Admin"]), changeUserStatus);
+
+
+
 router.get(
   "/vendors-with-documents",
   authenticateToken,

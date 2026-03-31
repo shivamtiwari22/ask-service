@@ -355,3 +355,42 @@ export const getAllUsers = async (req, resp) => {
     return handleResponse(500, err?.message, {}, resp);
   }
 };
+
+
+
+export const  changeUserStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+
+    // validate status
+    if (!["ACTIVE", "INACTIVE"].includes(status)) {
+      return handleResponse(400, "Invalid status value", {}, res);
+    }
+
+    const user = await User.findOneAndUpdate(
+      {
+        _id: id,
+      },
+      {
+        status,
+        updatedAt: new Date(),
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      return handleResponse(404, "User not found", {}, res);
+    }
+
+    return handleResponse(
+      200,
+      `User ${status} successfully`,
+      user,
+      res
+    );
+  } catch (error) {
+    return handleResponse(500, error.message, {}, res);
+  }
+};

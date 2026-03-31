@@ -10,12 +10,25 @@ import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementM
  */
 export const getAllVendorsWithDocuments = async (req, res) => {
   try {
+
+       const { service , kyc_status} = req.query ;
     const vendorRole = await Role.findOne({ name: RegExp("^Vendor$", "i") });
     if (!vendorRole) {
       return handleResponse(404, "Vendor role not found", {}, res);
     }
 
-    const vendors = await User.find({ role: vendorRole._id })
+
+     let filter  = { role :vendorRole._id  }
+
+     if(service) {
+         filter.service = service 
+     }
+     if(kyc_status){
+          filter.kyc_status = kyc_status
+     }
+
+
+    const vendors = await User.find(filter)
       .select("-password -otp -otp_phone -otp_expires_at -otp_phone_expiry_at -otp_for")
       .populate("service", "title")
       .populate("role", "name")
