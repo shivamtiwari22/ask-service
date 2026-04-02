@@ -76,6 +76,8 @@ const GlobalSchema = mongoose.Schema(
       default: null,
     },
 
+    home_youtube_link: { type: String, default: null },
+
     quote_limit: { type: Number, default: 5 },
     quote_expired: { type: Number, default: 7 },
   },

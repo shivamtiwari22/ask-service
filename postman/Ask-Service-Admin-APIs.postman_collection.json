@@ -12,7 +12,9 @@
     { "key": "tokenMasterId", "value": "" },
     { "key": "testimonialId", "value": "" },
     { "key": "documentReqId", "value": "" },
-    { "key": "serviceCategoryId", "value": "" }
+    { "key": "serviceCategoryId", "value": "" },
+    { "key": "serviceId", "value": "" },
+    { "key": "questionId", "value": "" }
   ],
   "auth": {
     "type": "bearer",
@@ -464,6 +466,79 @@
           "request": {
             "method": "PUT",
             "url": "{{baseUrl}}/api/admin/service-document-requirements/{{documentReqId}}/restore"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Questions",
+      "item": [
+        {
+          "name": "Create Question",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Company Name\",\n  \"key\": \"company_name\",\n  \"type\": \"text\",\n  \"service_id\": \"{{serviceId}}\",\n  \"step\": 1,\n  \"order\": 0,\n  \"is_required\": true,\n  \"is_multiple\": false,\n  \"placeholder\": \"Enter company name\",\n  \"status\": \"ACTIVE\",\n  \"options\": []\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/questions",
+            "description": "type: text | textarea | number | dropdown | radio | checkbox | date | file"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success && json.data && (json.data._id || json.data.id)) {",
+                  "  pm.collectionVariables.set('questionId', json.data._id || json.data.id);",
+                  "  console.log('questionId saved to collection variable');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Questions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/questions?service_id={{serviceId}}&page=1&limit=10"
+          }
+        },
+        {
+          "name": "Get Question By ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/questions/{{questionId}}"
+          }
+        },
+        {
+          "name": "Update Question",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Company Name (updated)\",\n  \"placeholder\": \"Type company name\",\n  \"order\": 1,\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": "{{baseUrl}}/api/admin/questions/{{questionId}}"
+          }
+        },
+        {
+          "name": "Delete Question (Soft Delete)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/questions/{{questionId}}"
+          }
+        },
+        {
+          "name": "Restore Question",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/questions/{{questionId}}/restore"
           }
         }
       ]
