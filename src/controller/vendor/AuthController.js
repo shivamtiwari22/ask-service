@@ -912,7 +912,7 @@ function maskContactDetails(contact) {
 export const availableLeads = async (req, resp) => {
   try {
     const vendorId = req?.user?._id;
-    const { city, state, country, sort, service } = req.query;
+    const { city, state, country, sort, service, unlocked } = req.query;
 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
@@ -928,6 +928,21 @@ export const availableLeads = async (req, resp) => {
     if (city) filter.city = city;
     if (state) filter.state = state;
     if (country) filter.country = country;
+
+    // ?unlocked=true → only leads this vendor has unlocked; ?unlocked=false → only locked leads
+    if (vendorId && unlocked !== undefined && unlocked !== "") {
+      const unlockedLeadIds = await VendorLeadUnlock.find({
+        vendor_id: vendorId,
+      }).distinct("service_request_id");
+      const u = String(unlocked).toLowerCase();
+      if (u === "true") {
+        filter._id = { $in: unlockedLeadIds };
+      } else if (u === "false") {
+        if (unlockedLeadIds.length > 0) {
+          filter._id = { $nin: unlockedLeadIds };
+        }
+      }
+    }
 
     let sortOption = {};
 

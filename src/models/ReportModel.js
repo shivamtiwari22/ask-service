@@ -39,7 +39,6 @@ const RoleSchema = new mongoose.Schema(
   }
 );
 
-RoleSchema.index({ name: 1 }, { unique: true });
 
 const Report = mongoose.model("Report", RoleSchema);
 export default Report;

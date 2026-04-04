@@ -1157,7 +1157,7 @@ export const vendorDetails = async (req, resp) => {
     const userId = req.user._id;
     const { id } = req.params;
 
-    const vendor = await User.findById(id).select("-password -otp -otp_phone");
+    const vendor = await User.findById(id).select("-password -otp -otp_phone").populate("service");
     if (!vendor) return handleResponse(404, "Vendor not found", {}, resp);
 
     const businessInformation = await BusinessInformation.findOne({

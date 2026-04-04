@@ -178,8 +178,8 @@ export const unlockLead = async (req, res) => {
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
-      const lowBalanceTitle = "Low Credit Balance";
-      const lowBalanceBody = `Your credit balance is low (${wallet.amount})`;
+      const lowBalanceTitle = "Low Point Balance";
+      const lowBalanceBody = `Your point balance is low (${wallet.amount})`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
       
       const prefs = await VendorNotification.findOne({
@@ -199,7 +199,7 @@ export const unlockLead = async (req, res) => {
         await pushNotification(vendor.fcm_token, lowBalanceTitle, lowBalanceBody);
       }
 
-      return handleResponse(402, "Insufficient credits. Please buy more credits.", { required: creditsRequired, balance: wallet.amount }, res);
+      return handleResponse(402, "Insufficient points. Please buy more points.", { required: creditsRequired, balance: wallet.amount }, res);
     }
 
     wallet.amount -= creditsRequired;
@@ -217,7 +217,7 @@ export const unlockLead = async (req, res) => {
       }),
       Transaction.create({
         user_id: vendorId,
-        // amount: creditsRequired,
+        amount: creditsRequired,
         amount_paid: creditsRequired ,
         type: "debit",
         status: "completed",
