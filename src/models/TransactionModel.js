@@ -23,7 +23,8 @@ const TransactionModel = mongoose.Schema(
       enum: ["stripe", "paypal", "razorpay", "manual"],
     },
     payment_method : {
-      type :String 
+      type :String ,
+      default : "Stripe"
     },
     status: {
       type: String,

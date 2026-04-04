@@ -29,6 +29,47 @@ import Notification from "../../models/NotificationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
 
+/**
+ * Distinct cities that have at least one active service request (for filters / dropdowns).
+ * Optional query: service_category, country, state
+ */
+export const getCitiesWithServiceRequests = async (req, resp) => {
+  try {
+    const { service_category, country, state } = req.query;
+
+    const match = {
+      deletedAt: null,
+      status: "ACTIVE",
+      city: { $exists: true, $nin: [null, ""] },
+    };
+
+    if (service_category && mongoose.Types.ObjectId.isValid(service_category)) {
+      match.service_category = new mongoose.Types.ObjectId(service_category);
+    }
+    if (country && String(country).trim()) {
+      match.country = String(country).trim();
+    }
+    if (state && String(state).trim()) {
+      match.state = String(state).trim();
+    }
+
+    const raw = await ServiceRequest.distinct("city", match);
+    const seen = new Set();
+    const cities = [];
+    for (const c of raw) {
+      const t = String(c ?? "").trim();
+      if (!t || seen.has(t.toLowerCase())) continue;
+      seen.add(t.toLowerCase());
+      cities.push(t);
+    }
+    cities.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    return handleResponse(200, "Cities fetched successfully", { cities }, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
 // get service category list for users
 export const getUserServiceCategories = async (req, resp) => {
   try {
@@ -290,6 +331,7 @@ export const initiateServiceRequest = async (req, resp) => {
             user_id: vendor._id,
             title,
             body,
+            for: "Vendor"
           })),
         );
       }
@@ -548,6 +590,7 @@ export const initiateServiceRequest = async (req, resp) => {
             user_id: vendor._id,
             title,
             body,
+            for: "Vendor"
           })),
         );
       }
@@ -1072,6 +1115,7 @@ export const acceptQuote = async (req, resp) => {
         user_id: vendorId,
         title,
         body,
+        for: "Vendor"
       });
 
       // const vendorUser = await User.findById(vendorId).select("fcm_token").lean();

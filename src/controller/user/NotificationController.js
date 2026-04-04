@@ -9,9 +9,15 @@ class notificationController {
 
   static mine = async (req, res) => {
     try {
+
+
+       const role = req.user?.role?.name ;
+
       const notification = await Notification.find({
         user_id: req.user._id,
+        for: role
       }).sort({ id: -1 });
+
       return handleResponse(200, "notification", notification, res);
     } catch (e) {
       console.error("Error approving innovation:", e);
@@ -21,6 +27,8 @@ class notificationController {
 
   static count = async (req, res) => {
     try {
+
+      
       const unreadCount = await Notification.countDocuments({
         user_id: req.user._id,
         is_read: false,

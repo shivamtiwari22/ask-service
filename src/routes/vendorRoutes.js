@@ -143,7 +143,6 @@ router.post("/upload-service-selection-document", userAuthenticateToken, checkRo
 
 router.get("/all-quotes", userAuthenticateToken, checkRoleAuth(["Vendor"]), AllQuotes);
 
-
 router.get("/dashboard", userAuthenticateToken, checkRoleAuth(["Vendor"]), getDashboardStats);
 
 router.get("/available-leads", userAuthenticateToken , checkRoleAuth(["Vendor"]) , availableLeads);
@@ -159,9 +158,9 @@ router.get("/credits/invoice/:transactionId", getCreditPurchaseInvoice);
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);
 
-router.get("/transactions/export/csv",exportTransactionsListCsv);
+router.get("/transactions/export/csv",userAuthenticateToken, checkRoleAuth(["Vendor"]),exportTransactionsListCsv);
 
-router.get("/transactions/export/pdf",exportTransactionsListPdf);
+router.get("/transactions/export/pdf",userAuthenticateToken, checkRoleAuth(["Vendor"]),exportTransactionsListPdf);
 
 router.post("/stipe-checkout", userAuthenticateToken, checkRoleAuth(["Vendor"]), createCheckoutSession);
 router.put("/verify-payment/:session_id", verifyPaymentFromStripe);

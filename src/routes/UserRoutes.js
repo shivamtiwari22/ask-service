@@ -57,13 +57,19 @@ import ChatController from "../controller/user/ChatController.js";
 import { getFaqsForUser } from "../controller/admin/FaqsController.js";
 import firebaseAuthenticateToken from "../../middleware/google-verification-middleware.js";
 import notificationController from "../controller/user/NotificationController.js";
-import { getQuestionsForUser } from "../controller/user/ServiceController.js";
+import {
+  getQuestionsForUser,
+  getCitiesWithServiceRequests,
+} from "../controller/user/ServiceController.js";
 
 const router = express.Router();
 
 // ==============================SERVICE==============================
 // get service category list for users
 router.get("/service-categories", getUserServiceCategories);
+
+// cities that have at least one active service request (optional: ?service_category=&country=&state=)
+router.get("/service-request-cities", getCitiesWithServiceRequests);
 router.get("/service-category/:id", getSingleServiceCategories);
 
 // get FAQs for users (active only, optional type filter)

@@ -22,6 +22,10 @@ const RoleModelSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    for : {
+       type : String ,
+        enum : ["Vendor", "User"],
+    } ,
     image: {
       type: String,
       default: null,

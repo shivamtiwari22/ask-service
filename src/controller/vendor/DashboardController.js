@@ -111,19 +111,28 @@ export const getDashboardStats = async (req, res) => {
       }, res);
     }
 
-    const [availableLeadsCount, purchasedLeadsCount, wallet, quotesSentCount] = await Promise.all([
-      ServiceRequest.countDocuments({
-        service_category: serviceCategoryId,
-        deletedAt: null,
-        status: "ACTIVE",
-      }),
-      VendorLeadUnlock.countDocuments({ vendor_id: vendorId }),
+
+
+    const activeServiceRequest = await ServiceRequest.find({deletedAt: null,
+  status: "ACTIVE",}).distinct("_id")
+
+    const [purchasedLeadIds, purchasedLeadsCount, wallet, quotesSentCount] = await Promise.all([
+       VendorLeadUnlock.find({ vendor_id: vendorId }).distinct("service_request_id"),
+      VendorLeadUnlock.countDocuments({ vendor_id: vendorId , service_request_id: { $in: activeServiceRequest } }),
       VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
       VendorQuote.countDocuments({ vendor_id: vendorId, status: "SENT" }),
     ]);
 
+
+    const availableLeadsCount = await ServiceRequest.countDocuments({
+  deletedAt: null,
+  status: "ACTIVE",
+  _id: { $nin: purchasedLeadIds }, // 👈 exclude purchased leads
+});
+
     const creditBalance = wallet?.amount ?? 0;
     const canPurchaseLeads = user.kyc_status === "ACTIVE";
+    
 
     return handleResponse(200, "Dashboard fetched successfully", {
       availableLeadsCount,
@@ -191,6 +200,7 @@ export const unlockLead = async (req, res) => {
         user_id: vendorId,
         title: lowBalanceTitle,
         body: lowBalanceBody,
+        for : "Vendor"
       });
     }
 
@@ -249,6 +259,7 @@ export const unlockLead = async (req, res) => {
         user_id: vendorId,
         title: lowBalanceTitle,
         body: lowBalanceBody,
+        for : "Vendor"
       });
     }
     
@@ -282,11 +293,19 @@ export const getLeadById = async (req, res) => {
   try {
     const vendorId = req.user._id;
     const leadId = req.params.leadId;
+    const BASE_URL = process.env.IMAGE_URL;
 
     const lead = await ServiceRequest.findById(leadId)
       .populate({ path: "service_category", select: "title credit" })
-      .populate({ path: "user", select: "first_name last_name email phone createdAt" })
+      .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
       .lean();
+
+
+
+if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
+  lead.user.profile_pic = `${BASE_URL}${lead.user.profile_pic}`;
+}
+
 
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
@@ -434,6 +453,7 @@ export const submitQuote = async (req, res) => {
              user_id: user._id,
              title,
              body,
+            for : "User"
            });
          }
 
@@ -923,7 +943,8 @@ export const exportTransactionsListCsv = async (req, res) => {
 
 export const exportTransactionsListPdf = async (req, res) => {
   try {
-    const vendorId = "6992b5256e13a6e65469ca5a";
+      const vendorId = req.user._id;
+
     const { period, from_date, to_date, type } = req.query;
 
     const filter = { user_id: vendorId };

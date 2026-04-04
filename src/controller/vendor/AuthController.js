@@ -803,6 +803,7 @@ export const getDocumentRequiredForService = async (req, resp) => {
     }
     const documents = await ServiceDocumentRequirement.find({
       service_category: service._id,
+      deletedAt: null
     });
     return handleResponse(
       200,
@@ -1640,9 +1641,42 @@ export const exportTransactionsCsv = async (req, res) => {
   }
 };
 
+/** Split table rows across pages so PDFKit does not draw past the page bottom. */
+function paginateTransactionPdfRows(doc, allRows, headerHeight, rowHeight) {
+  if (allRows.length === 0) return [[]];
+  const bottom = doc.page.margins?.bottom ?? 40;
+  const top = doc.page.margins?.top ?? 40;
+  const safety = 14;
+
+  const availableFirst = doc.page.height - doc.y - bottom - safety;
+  const rowsFirst = Math.max(
+    1,
+    Math.floor((availableFirst - headerHeight) / rowHeight),
+  );
+
+  const availableRest = doc.page.height - top - bottom - safety;
+  const rowsRest = Math.max(
+    1,
+    Math.floor((availableRest - headerHeight) / rowHeight),
+  );
+
+  const chunks = [];
+  let offset = 0;
+  const n1 = Math.min(rowsFirst, allRows.length);
+  chunks.push(allRows.slice(0, n1));
+  offset = n1;
+  while (offset < allRows.length) {
+    const take = Math.min(rowsRest, allRows.length - offset);
+    chunks.push(allRows.slice(offset, offset + take));
+    offset += take;
+  }
+  return chunks;
+}
+
 export const exportTransactionsPdf = async (req, res) => {
   try {
     const userId = req.user._id;
+    
     const { from_date, to_date, status, period } = req.query;
 
     const filter = { user_id: userId };
@@ -1684,7 +1718,7 @@ export const exportTransactionsPdf = async (req, res) => {
       'attachment; filename="transactions.pdf"',
     );
 
-    const doc = new PDFDocument({ margin: 40 });
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
     doc.pipe(res);
 
     doc
@@ -1693,6 +1727,14 @@ export const exportTransactionsPdf = async (req, res) => {
       .text("Transactions", { align: "center" });
     doc.moveDown(1.2);
     doc.font("Helvetica").fontSize(10);
+
+    if (transactions.length === 0) {
+      doc.fontSize(11).text("No transactions found for this period.", {
+        align: "center",
+      });
+      doc.end();
+      return;
+    }
 
     const headers = [
       "Transaction ID",
@@ -1703,7 +1745,8 @@ export const exportTransactionsPdf = async (req, res) => {
       "Credits",
       "Status",
     ];
-    const columnWidths = [88, 78, 62, 58, 48, 72, 126];
+    // Sum 532 (A4 content width @ 40pt margins). Currency column widened so "Currency" fits in header.
+    const columnWidths = [88, 78, 62, 58, 54, 72, 120];
     const rows = transactions.map((t) => [
       toTransactionId(t.transaction_number, t._id, t.createdAt) || "",
       formatTransactionDateTime(t.createdAt) || "",
@@ -1718,7 +1761,28 @@ export const exportTransactionsPdf = async (req, res) => {
         : "Pending",
     ]);
 
-    drawPdfTable(doc, { headers, rows, columnWidths });
+    const headerHeight = 24;
+    const rowHeight = 20;
+    const rowChunks = paginateTransactionPdfRows(
+      doc,
+      rows,
+      headerHeight,
+      rowHeight,
+    );
+
+    rowChunks.forEach((chunk, pageIndex) => {
+      if (pageIndex > 0) {
+        doc.addPage();
+        doc.font("Helvetica").fontSize(10);
+      }
+      drawPdfTable(doc, {
+        headers,
+        rows: chunk,
+        columnWidths,
+        headerHeight,
+        rowHeight,
+      });
+    });
 
     doc.end();
   } catch (error) {
