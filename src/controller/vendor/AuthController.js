@@ -503,8 +503,8 @@ export const updateVendorProfile = async (req, resp) => {
       user.email = email;
       user.is_email_verified = false;
 
-      user.otp = generateOTP();
-      user.otp_for = "VERIFY_EMAIL";
+      // user.otp = generateOTP();
+      // user.otp_for = "VERIFY_EMAIL";
 
       // await sendEmail({
       //   to: email,
@@ -526,9 +526,9 @@ export const updateVendorProfile = async (req, resp) => {
       user.is_phone_verified = false;
 
       const otp = generateOTP();
-      user.otp_phone = otp;
-      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
-      user.otp_for = "VERIFY_PHONE";
+      // user.otp_phone = otp;
+      // user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      // user.otp_for = "VERIFY_PHONE";
 
       try {
         // let msg = `Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
@@ -571,7 +571,7 @@ export const updateVendorProfile = async (req, resp) => {
       user.service = vendor_service._id;
     }
 
-
+    
       if (req.files &&  Array.isArray(req.files?.profile_pic) && req.files?.profile_pic.length > 0) { 
          user.profile_pic = req.files?.profile_pic?.[0]?.path || normalizePath(profile_pic) || null;
     }
@@ -912,7 +912,11 @@ function maskContactDetails(contact) {
 export const availableLeads = async (req, resp) => {
   try {
     const vendorId = req?.user?._id;
-    const { city, state, country, sort , service } = req.query ;
+    const { city, state, country, sort, service } = req.query;
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
 
     let filter = {
       // service_category: req?.user?.service,
@@ -920,8 +924,7 @@ export const availableLeads = async (req, resp) => {
       status: "ACTIVE",
     };
 
-
-    if(service) filter.service_category = service ;
+    if (service) filter.service_category = service;
     if (city) filter.city = city;
     if (state) filter.state = state;
     if (country) filter.country = country;
@@ -941,26 +944,46 @@ export const availableLeads = async (req, resp) => {
       sortOption.createdAt = -1;
     }
 
-    const leads = await ServiceRequest.find(filter)
-      .populate({
-        path: "service_category",
-        select: "title credit",
-      })
-      .sort(sortOption)
-      .lean();
+    const sortByCreditInMemory =
+      sort === "high_to_low" || sort === "low_to_high";
 
-    if (sort === "high_to_low") {
-      leads.sort(
-        (a, b) =>
-          (b.service_category?.credit || 0) - (a.service_category?.credit || 0),
-      );
-    }
+    let leads;
+    let total;
 
-    if (sort === "low_to_high") {
-      leads.sort(
-        (a, b) =>
-          (a.service_category?.credit || 0) - (b.service_category?.credit || 0),
-      );
+    if (sortByCreditInMemory) {
+      const allLeads = await ServiceRequest.find(filter)
+        .populate({
+          path: "service_category",
+          select: "title credit company_credit",
+        })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (sort === "high_to_low") {
+        allLeads.sort(
+          (a, b) =>
+            (b.service_category?.credit || 0) - (a.service_category?.credit || 0),
+        );
+      } else {
+        allLeads.sort(
+          (a, b) =>
+            (a.service_category?.credit || 0) - (b.service_category?.credit || 0),
+        );
+      }
+
+      total = allLeads.length;
+      leads = allLeads.slice(skip, skip + limit);
+    } else {
+      total = await ServiceRequest.countDocuments(filter);
+      leads = await ServiceRequest.find(filter)
+        .populate({
+          path: "service_category",
+          select: "title credit company_credit",
+        })
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limit)
+        .lean();
     }
 
     const leadObjectIds = leads.map((l) => l._id);
@@ -1004,7 +1027,20 @@ export const availableLeads = async (req, resp) => {
       }),
     );
 
-    return handleResponse(200, "leads", leadsWithMasking, resp);
+    const totalPages = Math.ceil(total / limit) || 0;
+
+    return handleResponse(
+      200,
+      "leads",
+      {
+        items: leadsWithMasking,
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

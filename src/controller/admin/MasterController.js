@@ -74,7 +74,7 @@ export const getAllTokenMasters = async (req, resp) => {
     const { skip, page, limit, isPaginationDisabled } = getPagination(req);
     const query = buildListQuery(req.query);
 
-    let findQuery = CreditPackage.find(query).sort({ sort_order: 1, createdAt: -1 });
+    let findQuery = CreditPackage.find(query).sort({createdAt: -1 });
 
     if (!isPaginationDisabled) {
       findQuery = findQuery.skip(skip).limit(limit);

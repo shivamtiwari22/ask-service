@@ -160,14 +160,16 @@ export const unlockLead = async (req, res) => {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
 
-    // if (lead.service_category._id.toString() !== user.service?.toString()) {
-    //   return handleResponse(403, "This lead is not for your service category", {}, res);
-    // }
+    if (lead.user.toString() === vendorId.toString()) {
+      return handleResponse(403, "You cannot unlock your own lead", {}, res);
+    }
 
     const alreadyUnlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,
       service_request_id: leadId,
     });
+
+
     if (alreadyUnlocked) {
       return handleResponse(409, "You have already unlocked this lead", { unlocked: true }, res);
     }

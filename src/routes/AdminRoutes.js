@@ -90,6 +90,10 @@ import {
   updateVendorKycStatus,
 } from "../controller/admin/VendorController.js";
 import {
+  getAllReportedVendors,
+  updateReportStatus,
+} from "../controller/admin/ReportController.js";
+import {
   createQuestion,
   deleteQuestion,
   getAllQuestions,
@@ -167,6 +171,20 @@ router.put(
   authenticateToken,
   checkRoleAuth(["Admin"]),
   updateVendorKycStatus,
+);
+
+// vendor reports (users reporting vendors)
+router.get(
+  "/reported-vendors",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getAllReportedVendors,
+);
+router.patch(
+  "/reports/:reportId/status",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  updateReportStatus,
 );
 
 // service category master

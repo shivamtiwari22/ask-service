@@ -291,9 +291,11 @@ export const getAllUsers = async (req, resp) => {
 
     role = await Role.findOne({ name: RegExp("User", "i") })
 
-    if (role) {
-      query.role = role?._id;
-    }
+    // if (role) {
+    //   query.role = role?._id;
+    // }
+
+
     if (status) {
       query.status = status;
     }

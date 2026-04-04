@@ -687,8 +687,8 @@ export const updateUserProfile = async (req, resp) => {
 
       user.email = email;
       user.is_email_verified = false;
-      user.otp = generateOTP();
-      user.otp_for = "VERIFY_EMAIL";
+      // user.otp = generateOTP();
+      // user.otp_for = "VERIFY_EMAIL";
 
       // await sendEmail({
       //   to: email,
@@ -710,9 +710,9 @@ export const updateUserProfile = async (req, resp) => {
       user.is_phone_verified = false;
 
       const otp = generateOTP();
-      user.otp_phone = otp;
-      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
-      user.otp_for = "VERIFY_PHONE";
+      // user.otp_phone = otp;
+      // user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      // user.otp_for = "VERIFY_PHONE";
 
       try {
 
