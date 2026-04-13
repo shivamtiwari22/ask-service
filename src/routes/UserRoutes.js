@@ -68,7 +68,7 @@ const router = express.Router();
 // get service category list for users
 router.get("/service-categories", getUserServiceCategories);
 
-// cities that have at least one active service request (optional: ?service_category=&country=&state=)
+// cities that have at least one active service request (optional: ? service_category=&country=&state=)
 router.get("/service-request-cities", getCitiesWithServiceRequests);
 router.get("/service-category/:id", getSingleServiceCategories);
 

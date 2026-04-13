@@ -18,12 +18,14 @@ import "./cron/serviceRequestExpiryCron.js";
 import { Server } from "socket.io";
 import http from "http";
 import Message from "./src/models/MessageModel.js";
+import initBucket from "./utils/initBucket.js";
 
 const app = express();
 app.set("trust proxy", 1);
 dotenv.config();
 
 dbConnection();
+initBucket();
 
 // app.use(cors());
 app.use(
