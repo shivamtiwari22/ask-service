@@ -389,50 +389,83 @@ export const initiateServiceRequest = async (req, resp) => {
 
     if (existingUser) {
       // if (!existingUser.is_phone_verified) {
-      existingUser.phone_otp = generateOTP();
-      existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
-      await existingUser.save({ session });
 
+      // existingUser.phone_otp = generateOTP();
+      // existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
+
+
+      
       try {
-        let msg = `Votre code de vérification est ${existingUser.phone_otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+
+         existingUser.otp = generateOTP();
+      await existingUser.save({ session });
+     
+        await sendEmail({
+          to: existingUser.email,
+          subject: "Verification OTP",
+          html:  await verificationMail(existingUser.first_name, existingUser.otp),
+        });
+
+      }
+      catch(e){
+         console.log(e);
+      }
 
 
-        const response = await axios.post(
-          "https://rest.clicksend.com/v3/sms/send",
-          {
-            messages: [
-              {
-                source: "nodejs",
-                from: "AskService",
-                body: msg,
-                to: `+${existingUser?.phone}`,
-              },
-            ],
-          },
-          {
-            auth: {
-              username: process.env.SMS_USERNAME,
-              password: process.env.SMS_API,
-            },
-            headers: {
-              "Content-Type": "application/json",
-            },
-          },
+      // try {
+      //   let msg = `Votre code de vérification est ${existingUser.phone_otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+
+
+      //   const response = await axios.post(
+      //     "https://rest.clicksend.com/v3/sms/send",
+      //     {
+      //       messages: [
+      //         {
+      //           source: "nodejs",
+      //           from: "AskService",
+      //           body: msg,
+      //           to: `+${existingUser?.phone}`,
+      //         },
+      //       ],
+      //     },
+      //     {
+      //       auth: {
+      //         username: process.env.SMS_USERNAME,
+      //         password: process.env.SMS_API,
+      //       },
+      //       headers: {
+      //         "Content-Type": "application/json",
+      //       },
+      //     },
+      //   );
+
+      //   console.log("SMS Response:", response.data);
+      // } catch (e) {
+      //   console.log(e);
+      // }
+
+
+
+   return handleResponse(
+          403,
+          "Email verification required",
+          { flow: "EMAIL_VERIFICATION_REQUIRED" },
+          resp,
         );
 
-        console.log("SMS Response:", response.data);
-      } catch (e) {
-        console.log(e);
-      }
+
+
 
       await session.commitTransaction();
 
-      return handleResponse(
-        403,
-        "Phone verification required",
-        { flow: "PHONE_VERIFICATION_REQUIRED" },
-        resp,
-      );
+
+
+      // return handleResponse(
+      //   403,
+      //   "Phone verification required",
+      //   { flow: "PHONE_VERIFICATION_REQUIRED" },
+      //   resp,
+      // );
       // }
 
       await session.abortTransaction();
@@ -463,7 +496,7 @@ export const initiateServiceRequest = async (req, resp) => {
           is_phone_verified: false,
           is_email_verified: false,
           otp_phone: phoneOtp,
-          otp_phone_expiry_at: moment().add(5, "minutes").toDate(),
+          otp_phone_expiry_at: moment().add(20, "minutes").toDate(),
           otp_for: "VERIFY_PHONE",
           email_verification_token: emailToken,
           status: "ACTIVE",
@@ -476,8 +509,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
     try {
     
-        let msg = `Votre code de vérification est ${phoneOtp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
-
+      let msg = `Votre code de vérification est ${phoneOtp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
 
       const response = await axios.post(
         "https://rest.clicksend.com/v3/sms/send",
