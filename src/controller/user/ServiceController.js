@@ -361,7 +361,7 @@ export const initiateServiceRequest = async (req, resp) => {
         await session.abortTransaction();
 
         emailOwner.otp = generateOTP();
-        await emailOwner.save({ session });
+        await emailOwner.save();
 
         await sendEmail({
           to: email,
@@ -398,7 +398,7 @@ export const initiateServiceRequest = async (req, resp) => {
       try {
 
          existingUser.otp = generateOTP();
-      await existingUser.save({ session });
+      await existingUser.save();
      
         await sendEmail({
           to: existingUser.email,
