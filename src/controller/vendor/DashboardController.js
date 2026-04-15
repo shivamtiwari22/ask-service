@@ -314,8 +314,8 @@ if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
      const quote = await VendorQuote.findOne({vendor_id:vendorId , service_request_id :leadId }) ;
      console.log(quote,"q");
      
-
      lead.canQuote =  quote ? false : true ;
+     lead.quote_id =  quote?._id || null ;
 
     const unlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,
