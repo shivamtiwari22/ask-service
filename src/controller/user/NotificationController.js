@@ -15,7 +15,7 @@ class notificationController {
 
       const notification = await Notification.find({
         user_id: req.user._id,
-        for: role
+        for: "User"
       }).sort({ id: -1 });
 
       return handleResponse(200, "notification", notification, res);
@@ -24,6 +24,27 @@ class notificationController {
       return handleResponse(500, "Error approving innovation", {}, res);
     }
   };
+
+
+   static vendorNotifications = async (req, res) => {
+    try {
+
+
+       const role = req.user?.role?.name ;
+
+      const notification = await Notification.find({
+        user_id: req.user._id,
+        for: "Vendor"
+      }).sort({ id: -1 });
+
+      return handleResponse(200, "notification", notification, res);
+    } catch (e) {
+      console.error("Error approving innovation:", e);
+      return handleResponse(500, "Error approving innovation", {}, res);
+    }
+  };
+
+
 
   static count = async (req, res) => {
     try {
@@ -48,6 +69,8 @@ class notificationController {
       const unreadCount = await Notification.find({
         user_id: req.user._id,
         is_read: false,
+        for: "User"
+
       });
 
       return handleResponse(200, "unread notification", unreadCount, res);
@@ -57,6 +80,28 @@ class notificationController {
       return handleResponse(500, "Error approving innovation", {}, res);
     }
   };
+
+
+   static vendorUnread = async (req, res) => {
+    try {
+      const unreadCount = await Notification.find({
+        user_id: req.user._id,
+        is_read: false,
+        for: "Vendor"
+
+      });
+
+      return handleResponse(200, "unread notification", unreadCount, res);
+      
+    } catch (e) {
+      console.error("Error approving innovation:", e);
+      return handleResponse(500, "Error approving innovation", {}, res);
+    }
+  };
+
+
+
+
 
 
   static markAsRead = async (req, res) => {

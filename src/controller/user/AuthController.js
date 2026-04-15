@@ -1192,7 +1192,7 @@ export const PostContactUs = async (req, res) => {
 
 export const getAllTestimonialMasters = async (req, resp) => {
   try {
-    let findQuery = await TestimonialMaster.find().sort({ createdAt: -1 }).limit(6);
+    let findQuery = await TestimonialMaster.find({deletedAt:null,status:"ACTIVE"}).sort({ createdAt: -1 }).limit(6);
 
     return handleResponse(
       200,

@@ -198,9 +198,9 @@ router.get("/all-messages/:chatId", userAuthenticateToken , checkRoleAuth(["Vend
 router.post("/send-msg", userAuthenticateToken , checkRoleAuth(["Vendor"]) , chatMediaUpload , ChatController.sendMessage)
 
 
-router.get("/notification/all",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.mine)
+router.get("/notification/all",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.vendorNotifications)
 router.get("/notification/count",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.count)
-router.get("/notification/unread",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.unread)
+router.get("/notification/unread",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.vendorUnread)
 router.put("/notification/markAsRead/:id",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.markAsRead)
 router.get("/notification/older",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.older) 
 

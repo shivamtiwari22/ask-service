@@ -246,8 +246,8 @@ export const unlockLead = async (req, res) => {
     }
 
     if (balanceAfter <= LOW_CREDIT_THRESHOLD) {
-      const lowBalanceTitle = "Low Credit Balance";
-      const lowBalanceBody = `Your remaining credits are ${balanceAfter}. Please top up to avoid missing new leads.`;
+      const lowBalanceTitle = "Low Point Balance";
+      const lowBalanceBody = `Your remaining point are ${balanceAfter}. Please top up to avoid missing new leads.`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
       
             const prefs = await VendorNotification.findOne({

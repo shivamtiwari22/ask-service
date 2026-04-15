@@ -2,8 +2,6 @@ import admin from "../config/firebase.js";
 import handleResponse from "../utils/http-response.js";
 
 
-
-
 // Middleware to verify Firebase ID token
 async function firebaseAuthenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;

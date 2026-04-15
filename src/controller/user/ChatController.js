@@ -78,7 +78,7 @@ class ChatController {
 
   static accessChat = async (req, res) => {
     const { userId, quote_id } = req.body;
-    const base_url = `${req.protocol}://${req.get("host")}`;
+    const base_url = process.env.IMAGE_URL;
     try {
       if (!userId) {
         return handleResponse(
@@ -112,6 +112,15 @@ class ChatController {
       }
 
       if (isChat.length > 0) {
+
+         if (quote_id) {
+    await Chat.findByIdAndUpdate(isChat[0]._id, {
+      quote_id: quote_id,
+    });
+    isChat[0].quote_id = quote_id;
+
+  }
+
         for (const chat of isChat) {
           chat.users = await User.find(
             { _id: { $in: chat.users }, deletedAt: null },
@@ -225,7 +234,8 @@ class ChatController {
 
   static fetchChats = async (req, res) => {
     const { search } = req.query;
-    const base_url = `${req.protocol}://${req.get("host")}`;
+    const base_url = process.env.IMAGE_URL;
+
 
     let userIds = [req.user._id];
 
@@ -356,7 +366,7 @@ class ChatController {
 
     const skip = (page - 1) * limit;
 
-    const base_url = `${req.protocol}://${req.get("host")}`;
+    const base_url =  process.env.IMAGE_URL;
 
     try {
       const messages = await Message.find({ chat: req.params.chatId })
@@ -372,15 +382,24 @@ class ChatController {
         );
 
         if(item.sender){
-
-          item.sender.profile_pic = item.sender.profile_pic ? `${base_url}/${item.sender.profile_pic}` : null;
-
+          item.sender.profile_pic = item.sender.profile_pic.startsWith("http") ?     item.sender.profile_pic : `${base_url}/${item.sender.profile_pic}` ;
         }
 
         item.readBy = await User.find(
           { _id: { $in: item.readBy }, deletedAt: null },
           "id first_name last_name username profile_pic",
         ).lean();
+
+        const formatImage = (path) => {
+  if (!path) return null;
+  return path.startsWith("http") ? path : `${base_url}${path}`;
+};
+
+item.readBy = item.readBy.map((user) => ({
+  ...user,
+  profile_pic: formatImage(user.profile_pic),
+}));
+
 
         item.chat = await Chat.findById(item.chat);
 

@@ -28,6 +28,7 @@ import Question from "../../models/QuestionsModel.js";
 import Notification from "../../models/NotificationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
+import VendorLeadUnlock from "../../models/VendorLeadUnlockModel.js";
 
 /**
  * Distinct cities that have at least one active service request (for filters / dropdowns).
@@ -62,7 +63,9 @@ export const getCitiesWithServiceRequests = async (req, resp) => {
       seen.add(t.toLowerCase());
       cities.push(t);
     }
-    cities.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    cities.sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" }),
+    );
 
     return handleResponse(200, "Cities fetched successfully", { cities }, resp);
   } catch (err) {
@@ -203,7 +206,7 @@ export const initiateServiceRequest = async (req, resp) => {
       start_time,
       end_date,
       end_time,
-      dynamic_answers
+      dynamic_answers,
     } = req.body;
 
     if (!contact_details) {
@@ -286,7 +289,7 @@ export const initiateServiceRequest = async (req, resp) => {
             start_time,
             end_date,
             end_time,
-            dynamic_answers
+            dynamic_answers,
           },
         ],
         { session },
@@ -331,7 +334,7 @@ export const initiateServiceRequest = async (req, resp) => {
             user_id: vendor._id,
             title,
             body,
-            for: "Vendor"
+            for: "Vendor",
           })),
         );
       }
@@ -366,7 +369,7 @@ export const initiateServiceRequest = async (req, resp) => {
         await sendEmail({
           to: email,
           subject: "Verification OTP",
-          html:  await verificationMail(emailOwner.first_name, emailOwner.otp),
+          html: await verificationMail(emailOwner.first_name, emailOwner.otp),
         });
 
         return handleResponse(
@@ -393,28 +396,24 @@ export const initiateServiceRequest = async (req, resp) => {
       // existingUser.phone_otp = generateOTP();
       // existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
 
-
-      
       try {
+        existingUser.otp = generateOTP();
+        await existingUser.save();
 
-         existingUser.otp = generateOTP();
-      await existingUser.save();
-     
         await sendEmail({
           to: existingUser.email,
           subject: "Verification OTP",
-          html:  await verificationMail(existingUser.first_name, existingUser.otp),
+          html: await verificationMail(
+            existingUser.first_name,
+            existingUser.otp,
+          ),
         });
-
+      } catch (e) {
+        console.log(e);
       }
-      catch(e){
-         console.log(e);
-      }
-
 
       // try {
       //   let msg = `Votre code de vérification est ${existingUser.phone_otp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
-
 
       //   const response = await axios.post(
       //     "https://rest.clicksend.com/v3/sms/send",
@@ -444,21 +443,14 @@ export const initiateServiceRequest = async (req, resp) => {
       //   console.log(e);
       // }
 
-
-
-   return handleResponse(
-          403,
-          "Email verification required",
-          { flow: "EMAIL_VERIFICATION_REQUIRED" },
-          resp,
-        );
-
-
-
+      return handleResponse(
+        403,
+        "Email verification required",
+        { flow: "EMAIL_VERIFICATION_REQUIRED" },
+        resp,
+      );
 
       await session.commitTransaction();
-
-
 
       // return handleResponse(
       //   403,
@@ -508,7 +500,6 @@ export const initiateServiceRequest = async (req, resp) => {
     //  account cred mail
 
     try {
-    
       let msg = `Votre code de vérification est ${phoneOtp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
 
       const response = await axios.post(
@@ -576,7 +567,7 @@ export const initiateServiceRequest = async (req, resp) => {
           start_time,
           end_date,
           end_time,
-          dynamic_answers
+          dynamic_answers,
         },
       ],
       { session },
@@ -584,50 +575,45 @@ export const initiateServiceRequest = async (req, resp) => {
 
     await session.commitTransaction();
 
+    const users = await User.find({ service: service_category }).select(
+      "_id fcm_token",
+    );
 
-       const users = await User.find({ service: service_category }).select(
-        "_id fcm_token",
+    const tokens = users.map((user) => user.fcm_token).filter((token) => token);
+
+    const title = "New Lead Received";
+    const body =
+      "You have received a new lead. Check the details and respond quickly.";
+
+    // Always save in-app notifications, but send push only if vendor allows it.
+    const vendorIds = users.map((u) => u._id);
+    const prefs = await VendorNotification.find({
+      user_id: { $in: vendorIds },
+    }).lean();
+    const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
+
+    const tokensToPush = users
+      .filter((u) => {
+        const pref = prefsByUserId.get(String(u._id));
+        return pref?.push_notifications?.new_leads ?? true;
+      })
+      .map((u) => u.fcm_token)
+      .filter(Boolean);
+
+    if (tokensToPush.length > 0) {
+      await pushNotification(tokensToPush, title, body);
+    }
+
+    if (users.length > 0) {
+      await Notification.insertMany(
+        users.map((vendor) => ({
+          user_id: vendor._id,
+          title,
+          body,
+          for: "Vendor",
+        })),
       );
-
-      const tokens = users
-        .map((user) => user.fcm_token)
-        .filter((token) => token);
-
-      const title = "New Lead Received";
-      const body =
-        "You have received a new lead. Check the details and respond quickly.";
-
-      // Always save in-app notifications, but send push only if vendor allows it.
-      const vendorIds = users.map((u) => u._id);
-      const prefs = await VendorNotification.find({
-        user_id: { $in: vendorIds },
-      }).lean();
-      const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
-
-      const tokensToPush = users
-        .filter((u) => {
-          const pref = prefsByUserId.get(String(u._id));
-          return pref?.push_notifications?.new_leads ?? true;
-        })
-        .map((u) => u.fcm_token)
-        .filter(Boolean);
-
-      if (tokensToPush.length > 0) {
-        await pushNotification(tokensToPush, title, body);
-      }
-
-      if (users.length > 0) {
-        await Notification.insertMany(
-          users.map((vendor) => ({
-            user_id: vendor._id,
-            title,
-            body,
-            for: "Vendor"
-          })),
-        );
-      }
-
-
+    }
 
     // if (email && emailToken) {
     //   setImmediate(async () => {
@@ -744,7 +730,7 @@ export const getCreatedServiceRequests = async (req, resp) => {
     const skip = (page - 1) * limit;
     const { search, service, status, fromDate, toDate } = req.query;
 
-    const query = { user: userId, deletedAt: null };
+    const query = { user: userId, deletedAt: null , status:"ACTIVE"};
 
     if (search) {
       query.$and = query.$and || [];
@@ -943,9 +929,15 @@ export const getQuotesForServiceRequest = async (req, resp) => {
       const stats = statsByVendor.get(vid) || {};
       const business = businessByVendor.get(vid);
       const quoteCreated = q.createdAt ? new Date(q.createdAt).getTime() : 0;
-      const respondedInHours = requestCreated && quoteCreated
-        ?  Math.max(0, Math.round(((quoteCreated - requestCreated) / (1000 * 60 * 60)) * 10) / 10)
-        : 0;
+      const respondedInHours =
+        requestCreated && quoteCreated
+          ? Math.max(
+              0,
+              Math.round(
+                ((quoteCreated - requestCreated) / (1000 * 60 * 60)) * 10,
+              ) / 10,
+            )
+          : 0;
       return {
         _id: q._id,
         quote_id: q._id,
@@ -1063,7 +1055,6 @@ export const getQuoteDetails = async (req, resp) => {
           available_start_date: quote.available_start_date,
           quote_valid_days: quote.quote_valid_days,
           attachment_url: attachmentUrl,
-
         },
         vendor: {
           _id: vendor?._id || null,
@@ -1081,7 +1072,7 @@ export const getQuoteDetails = async (req, resp) => {
     );
   } catch (err) {
     console.log(err);
-    
+
     return handleResponse(500, err.message, {}, resp);
   }
 };
@@ -1147,7 +1138,7 @@ export const acceptQuote = async (req, resp) => {
         user_id: vendorId,
         title,
         body,
-        for: "Vendor"
+        for: "Vendor",
       });
 
       // const vendorUser = await User.findById(vendorId).select("fcm_token").lean();
@@ -1186,6 +1177,29 @@ export const submitReview = async (req, res) => {
       return handleResponse(400, "Rating must be between 1 and 5", {}, res);
     }
 
+    const serviceRequest = await ServiceRequest.findOne({
+      _id: service_request_id,
+      user: customerId,
+    });
+
+    const leadPurchased = await VendorLeadUnlock.findOne({
+      vendor_id: vendor,
+      service_request_id: service_request_id,
+    });
+
+    if (!serviceRequest) {
+      return handleResponse(404, "Your service request not found", {}, res);
+    }
+
+    if (!leadPurchased) {
+      return handleResponse(
+        403,
+        "You can only review vendors who have purchased your lead",
+        {},
+        res,
+      );
+    }
+
     // Check if already reviewed
     const existingReview = await VendorReview.findOne({
       user: customerId,
@@ -1203,10 +1217,6 @@ export const submitReview = async (req, res) => {
     }
 
     // Optional: Check if service exists
-    const serviceRequest = await ServiceRequest.findById(service_request_id);
-    if (!serviceRequest) {
-      return handleResponse(404, "Service request not found", {}, res);
-    }
 
     const newReview = await VendorReview.create({
       user: customerId,
@@ -1233,7 +1243,9 @@ export const vendorDetails = async (req, resp) => {
     const userId = req.user._id;
     const { id } = req.params;
 
-    const vendor = await User.findById(id).select("-password -otp -otp_phone").populate("service");
+    const vendor = await User.findById(id)
+      .select("-password -otp -otp_phone")
+      .populate("service");
     if (!vendor) return handleResponse(404, "Vendor not found", {}, resp);
 
     const businessInformation = await BusinessInformation.findOne({
@@ -1392,7 +1404,7 @@ export const updateServiceRequest = async (req, resp) => {
       country,
       pincode,
       contact_details,
-      dynamic_answers ,
+      dynamic_answers,
       start_date,
       start_time,
       end_date,
@@ -1475,8 +1487,8 @@ export const updateServiceRequest = async (req, resp) => {
     if (start_time !== undefined) updateData.start_time = start_time;
     if (end_date !== undefined) updateData.end_date = end_date;
     if (end_time !== undefined) updateData.end_time = end_time;
-            
-      updateData.dynamic_answers = dynamic_answers ;
+
+    updateData.dynamic_answers = dynamic_answers;
 
     const updatedRequest = await ServiceRequest.findByIdAndUpdate(
       id,
@@ -1500,18 +1512,12 @@ export const updateServiceRequest = async (req, resp) => {
   } finally {
     session.endSession();
   }
-
-
-
-
 };
 
-
-
-  export const getQuestionsForUser = async (req, resp) => {
+export const getQuestionsForUser = async (req, resp) => {
   try {
     const { step } = req.query;
-    const {service_id} = req.params ;
+    const { service_id } = req.params;
 
     if (!service_id) {
       return handleResponse(400, "service_id is required", {}, resp);
@@ -1531,7 +1537,12 @@ export const updateServiceRequest = async (req, resp) => {
       .sort({ step: 1, order: 1, createdAt: -1 })
       .lean();
 
-    return handleResponse(200, "Questions fetched successfully", { list }, resp);
+    return handleResponse(
+      200,
+      "Questions fetched successfully",
+      { list },
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
