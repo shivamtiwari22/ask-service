@@ -112,14 +112,12 @@ class ChatController {
       }
 
       if (isChat.length > 0) {
-
-         if (quote_id) {
-    await Chat.findByIdAndUpdate(isChat[0]._id, {
-      quote_id: quote_id,
-    });
-    isChat[0].quote_id = quote_id;
-
-  }
+        if (quote_id) {
+          await Chat.findByIdAndUpdate(isChat[0]._id, {
+            quote_id: quote_id,
+          });
+          isChat[0].quote_id = quote_id;
+        }
 
         for (const chat of isChat) {
           chat.users = await User.find(
@@ -141,7 +139,7 @@ class ChatController {
 
               user.totalReviews = reviews.length;
 
-             user.averageRating =
+              user.averageRating =
                 totalReviews > 0
                   ? (
                       reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
@@ -178,11 +176,11 @@ class ChatController {
           FullChat.users = await User.find(
             { _id: { $in: FullChat.users }, deletedAt: null },
             "id first_name last_name username profile_pic kyc_status",
-          ).populate("role").lean();
+          )
+            .populate("role")
+            .lean();
 
-
-
-           for (const user of FullChat.users) {
+          for (const user of FullChat.users) {
             let totalReviews = 0;
             let averageRating = 0;
 
@@ -194,7 +192,7 @@ class ChatController {
 
               user.totalReviews = reviews.length;
 
-             user.averageRating =
+              user.averageRating =
                 totalReviews > 0
                   ? (
                       reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
@@ -202,21 +200,12 @@ class ChatController {
                     ).toFixed(1)
                   : 0;
 
-
-                 user.profile_pic = user.profile_pic
-              ? `${base_url}/${user.profile_pic}`
-              : null,
-
-            user.itsMe = user._id.toString() === req.user._id.toString()
+              ((user.profile_pic = user.profile_pic
+                ? `${base_url}/${user.profile_pic}`
+                : null),
+                (user.itsMe = user._id.toString() === req.user._id.toString()));
             }
-
-
           }
-
-
-
-
-
 
           return handleResponse(200, "chat access", FullChat, res);
         } catch (error) {
@@ -236,7 +225,6 @@ class ChatController {
     const { search } = req.query;
     const base_url = process.env.IMAGE_URL;
 
-
     let userIds = [req.user._id];
 
     if (search) {
@@ -255,20 +243,20 @@ class ChatController {
         users: { $in: userIds },
         isGroupChat: false,
       })
-         .populate({
-    path: "quote_id",
-    populate: {
-      path: "service_request_id",
-      populate: [
-        {
-          path: "service_category",
-        },
-        {
-          path: "child_category",
-        },
-      ],
-    },
-  })
+        .populate({
+          path: "quote_id",
+          populate: {
+            path: "service_request_id",
+            populate: [
+              {
+                path: "service_category",
+              },
+              {
+                path: "child_category",
+              },
+            ],
+          },
+        })
         // .sort({ createdAt: -1 })
         .lean();
 
@@ -282,44 +270,42 @@ class ChatController {
             "_id first_name last_name username profile_pic business_name",
           );
 
-         if (item.latestMessage.sender) {
-    item.latestMessage.sender.profile_pic = item.latestMessage.sender.profile_pic
-      ? `${base_url}/${item.latestMessage.sender.profile_pic}`
-      : null;
-  }
+          if (item.latestMessage.sender) {
+            item.latestMessage.sender.profile_pic = item.latestMessage.sender
+              .profile_pic
+              ? `${base_url}/${item.latestMessage.sender.profile_pic}`
+              : null;
+          }
         }
 
         item.users = await User.find(
           { _id: { $in: item.users }, deletedAt: null },
           "_id first_name last_name username profile_pic kyc_status business_name",
-        ).populate("role").lean();
+        )
+          .populate("role")
+          .lean();
 
+        for (const user of item.users) {
+          let totalReviews = 0;
+          let averageRating = 0;
 
-         for ( const user of item.users ) {
-            let totalReviews = 0;
-            let averageRating = 0;
+          // ✅ Only for vendor role
+          if (user.role?.name === "Vendor") {
+            const reviews = await VendorReview.find({
+              vendor: user._id,
+            }).lean();
 
-            // ✅ Only for vendor role
-            if (user.role?.name === "Vendor") {
-              const reviews = await VendorReview.find({
-                vendor: user._id,
-              }).lean();
+            user.totalReviews = reviews.length;
 
-              user.totalReviews = reviews.length;
-
-             user.averageRating =
-                totalReviews > 0
-                  ? (
-                      reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
-                      totalReviews
-                    ).toFixed(1)
-                  : 0;
-            }
+            user.averageRating =
+              totalReviews > 0
+                ? (
+                    reviews.reduce((sum, r) => sum + (r.rating || 0), 0) /
+                    totalReviews
+                  ).toFixed(1)
+                : 0;
           }
-
-
-
-
+        }
 
         item.users = item.users.map((user) => ({
           ...user,
@@ -340,40 +326,37 @@ class ChatController {
         item.unreadCount = unreadCount ? unreadCount.count : 0;
       }
 
-
-
       chats.sort((a, b) => {
-  if (b.unreadCount !== a.unreadCount) {
-    return b.unreadCount - a.unreadCount; // unread first
-  }
-  return new Date(b.updatedAt) - new Date(a.updatedAt); // then latest
-});
-
+        if (b.unreadCount !== a.unreadCount) {
+          return b.unreadCount - a.unreadCount; // unread first
+        }
+        return new Date(b.updatedAt) - new Date(a.updatedAt); // then latest
+      });
 
       return handleResponse(200, "chat fetched", chats, res);
     } catch (err) {
       console.log(err);
-      
+
       return handleResponse(500, err.message, {}, res);
     }
   };
 
   static allMessages = async (req, res) => {
-      let { index = 1, limit = 20 } = req.query;
+    let { index = 1, limit = 20 } = req.query;
 
-  let  page = parseInt(index);
+    let page = parseInt(index);
     limit = parseInt(limit);
 
     const skip = (page - 1) * limit;
 
-    const base_url =  process.env.IMAGE_URL;
+    const base_url = process.env.IMAGE_URL;
 
     try {
       const messages = await Message.find({ chat: req.params.chatId })
-           .lean()
-      .sort({ _id: -1 })
-      .skip(skip)
-      .limit(limit);
+        .lean()
+        .sort({ _id: -1 })
+        .skip(skip)
+        .limit(limit);
 
       for (const item of messages) {
         item.sender = await User.findById(
@@ -381,8 +364,10 @@ class ChatController {
           "id first_name last_name username profile_pic",
         );
 
-        if(item.sender){
-          item.sender.profile_pic = item.sender.profile_pic.startsWith("http") ?     item.sender.profile_pic : `${base_url}/${item.sender.profile_pic}` ;
+        if (item.sender) {
+          item.sender.profile_pic = item.sender?.profile_pic?.startsWith("http")
+            ? item.sender.profile_pic
+            : `${base_url}/${item.sender.profile_pic}`;
         }
 
         item.readBy = await User.find(
@@ -391,15 +376,16 @@ class ChatController {
         ).lean();
 
         const formatImage = (path) => {
-  if (!path) return null;
-  return path.startsWith("http") ? path : `${base_url}${path}`;
-};
+          if (!path) return null;
+          return path.startsWith("http") ? path : `${base_url}${path}`;
+        };
 
-item.readBy = item.readBy.map((user) => ({
-  ...user,
-  profile_pic: formatImage(user.profile_pic),
-}));
-
+        item.readBy = item.readBy.map((user) => ({
+          ...user,
+          profile_pic: user?.profile_pic
+            ? formatImage(user?.profile_pic)
+            : null,
+        }));
 
         item.chat = await Chat.findById(item.chat);
 
@@ -412,10 +398,17 @@ item.readBy = item.readBy.map((user) => ({
       await readMessages(req.user._id, req.params.chatId);
 
       const lastIndex = page;
-      const totalMsg = await Message.countDocuments({ chat: req.params.chatId })
+      const totalMsg = await Message.countDocuments({
+        chat: req.params.chatId,
+      });
       const totalPages = Math.ceil(totalMsg / parseInt(limit));
 
-      return handleResponse(200, "all messages", { messages, lastIndex ,totalMsg,totalPages}, res);
+      return handleResponse(
+        200,
+        "all messages",
+        { messages, lastIndex, totalMsg, totalPages },
+        res,
+      );
     } catch (e) {
       console.log(e);
       return handleResponse(500, e, e.message, res);
@@ -499,26 +492,23 @@ item.readBy = item.readBy.map((user) => ({
 
       //  await Chat.findByIdAndUpdate(req.body.chatId, { latestMessage: message._id });
 
-// get receiver users (except sender)
-const receiverIds = chat.users.filter(
-  (userId) => userId.toString() !== req.user._id.toString()
-);
+      // get receiver users (except sender)
+      const receiverIds = chat.users.filter(
+        (userId) => userId.toString() !== req.user._id.toString(),
+      );
 
-// fetch their FCM tokens
-const users = await User.findOne(
-  { _id: { $in: receiverIds }, fcm_token: { $ne: null } },
-  "fcm_token first_name last_name"
-);
+      // fetch their FCM tokens
+      const users = await User.findOne(
+        { _id: { $in: receiverIds }, fcm_token: { $ne: null } },
+        "fcm_token first_name last_name",
+      );
 
-
-// send push
-await pushNotification(
-  users.fcm_token,
-  "New Message",
-  content || "📎 Media message",
-
-);
-
+      // send push
+      await pushNotification(
+        users.fcm_token,
+        "New Message",
+        content || "📎 Media message",
+      );
 
       return handleResponse(200, "msg sent", message, res);
     } catch (e) {
