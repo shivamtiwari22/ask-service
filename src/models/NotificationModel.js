@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import moment from "moment";
+import { translateNotificationText } from "../../utils/i18n.js";
 
 
 const RoleModelSchema = mongoose.Schema(
@@ -54,6 +55,24 @@ RoleModelSchema.path("createdAt").get(function (value) {
 
 RoleModelSchema.path("updatedAt").get(function (value) {
   return value ? moment(value).format("DD-MM-YYYY [at] hh:mm A") : null;
+});
+
+RoleModelSchema.pre("save", function (next) {
+  if (this.isModified("title")) {
+    this.title = translateNotificationText(this.title);
+  }
+  if (this.isModified("body")) {
+    this.body = translateNotificationText(this.body);
+  }
+  next();
+});
+
+RoleModelSchema.pre("insertMany", function (next, docs) {
+  docs.forEach((doc) => {
+    if (doc?.title) doc.title = translateNotificationText(doc.title);
+    if (doc?.body) doc.body = translateNotificationText(doc.body);
+  });
+  next();
 });
 
 

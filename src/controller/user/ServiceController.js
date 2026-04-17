@@ -305,9 +305,9 @@ export const initiateServiceRequest = async (req, resp) => {
         .map((user) => user.fcm_token)
         .filter((token) => token);
 
-      const title = "New Lead Received";
+      const title = "Nouveau prospect recu";
       const body =
-        "You have received a new lead. Check the details and respond quickly.";
+        "Vous avez recu un nouveau prospect. Consultez les details et repondez rapidement.";
 
       // Always save in-app notifications, but send push only if vendor allows it.
       const vendorIds = users.map((u) => u._id);
@@ -581,9 +581,9 @@ export const initiateServiceRequest = async (req, resp) => {
 
     const tokens = users.map((user) => user.fcm_token).filter((token) => token);
 
-    const title = "New Lead Received";
+    const title = "Nouveau prospect recu";
     const body =
-      "You have received a new lead. Check the details and respond quickly.";
+      "Vous avez recu un nouveau prospect. Consultez les details et repondez rapidement.";
 
     // Always save in-app notifications, but send push only if vendor allows it.
     const vendorIds = users.map((u) => u._id);
@@ -1131,8 +1131,8 @@ export const acceptQuote = async (req, resp) => {
 
     const vendorId = quote.vendor_id?.toString?.() || quote.vendor_id;
     if (vendorId) {
-      const title = "Quote Accepted";
-      const body = `Your quote for request ${serviceRequest.reference_no} has been accepted.`;
+      const title = "Devis accepte";
+      const body = `Votre devis pour la demande ${serviceRequest.reference_no} a ete accepte.`;
 
       await Notification.create({
         user_id: vendorId,

@@ -54,6 +54,18 @@ const FR_TRANSLATIONS = {
   "Verification successful": "Vérification réussie",
   "Phone verification required": "Vérification du téléphone requise",
   "Email verification required": "Vérification de l'e-mail requise",
+  "New Lead Received": "Nouveau prospect reçu",
+  "You have received a new lead. Check the details and respond quickly.":
+    "Vous avez reçu un nouveau prospect. Consultez les détails et répondez rapidement.",
+  "Low Point Balance": "Solde de points faible",
+  "Quote Received 💰": "Devis reçu 💰",
+  "You have received a new quote from a vendor. Review it now":
+    "Vous avez reçu un nouveau devis d'un prestataire. Consultez-le maintenant.",
+  "Quote Accepted": "Devis accepté",
+  "New Message": "Nouveau message",
+  "This is the dummy push notification!":
+    "Ceci est une notification push de test !",
+  "📎 Media message": "📎 Message média",
 };
 
 const DICTIONARIES = {
@@ -81,5 +93,28 @@ export function translateText(text, lang = "fr") {
   if (lang === "en") return text;
   const dict = DICTIONARIES[lang] || {};
   return dict[text] || text;
+}
+
+export function translateNotificationText(text) {
+  if (typeof text !== "string") return text;
+
+  if (
+    text.startsWith("Your quote for request ") &&
+    text.endsWith(" has been accepted.")
+  ) {
+    const reference = text
+      .replace("Your quote for request ", "")
+      .replace(" has been accepted.", "");
+    return `Votre devis pour la demande ${reference} a ete accepte.`;
+  }
+
+  if (text.startsWith("You have a new message from ") && text.endsWith("!")) {
+    const senderName = text
+      .replace("You have a new message from ", "")
+      .replace("!", "");
+    return `Vous avez un nouveau message de ${senderName} !`;
+  }
+
+  return translateText(text, "fr");
 }
 

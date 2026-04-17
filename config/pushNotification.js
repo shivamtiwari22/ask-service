@@ -1,11 +1,14 @@
 import admin from "./firebase.js";
+import { translateNotificationText } from "../utils/i18n.js";
 
 const pushNotification = async (tokens, title, body, res, req) => {
   try {
+    const localizedTitle = translateNotificationText(title);
+    const localizedBody = translateNotificationText(body);
     const message = {
       notification: {
-        title: title,
-        body: body,
+        title: localizedTitle,
+        body: localizedBody,
       },
       tokens: tokens, 
     };

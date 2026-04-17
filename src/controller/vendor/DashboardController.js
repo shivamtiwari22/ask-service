@@ -187,8 +187,8 @@ export const unlockLead = async (req, res) => {
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
-      const lowBalanceTitle = "Low Point Balance";
-      const lowBalanceBody = `Your point balance is low (${wallet.amount})`;
+      const lowBalanceTitle = "Solde de points faible";
+      const lowBalanceBody = `Votre solde de points est faible (${wallet.amount})`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
       
       const prefs = await VendorNotification.findOne({
@@ -246,8 +246,8 @@ export const unlockLead = async (req, res) => {
     }
 
     if (balanceAfter <= LOW_CREDIT_THRESHOLD) {
-      const lowBalanceTitle = "Low Point Balance";
-      const lowBalanceBody = `Your remaining point are ${balanceAfter}. Please top up to avoid missing new leads.`;
+      const lowBalanceTitle = "Solde de points faible";
+      const lowBalanceBody = `Vos points restants sont ${balanceAfter}. Rechargez pour ne pas manquer de nouveaux prospects.`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
       
             const prefs = await VendorNotification.findOne({
@@ -437,8 +437,8 @@ export const submitQuote = async (req, res) => {
       const user = await User.findById(lead.user);
 
       if(user){
-         const title = "Quote Received 💰";
-         const body = "You have received a new quote from a vendor. Review it now";
+         const title = "Devis recu 💰";
+         const body = "Vous avez recu un nouveau devis d'un prestataire. Consultez-le maintenant.";
 
          const prefs = await UserNotification.findOne({
            user_id: user._id,

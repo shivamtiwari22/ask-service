@@ -506,8 +506,8 @@ class ChatController {
       // send push
       await pushNotification(
         users.fcm_token,
-        "New Message",
-        content || "📎 Media message",
+        "Nouveau message",
+        content || "📎 Message media",
       );
 
       return handleResponse(200, "msg sent", message, res);

@@ -143,8 +143,8 @@ class notificationController {
     static testPush = async (req, res) => {
     try {
   
-      const title = "New Message";
-      const body = "This is the dummy push notification!";
+      const title = "Nouveau message";
+      const body = "Ceci est une notification push de test !";
       const tokens = [
         'cdiL5aAkoljIGMl-d_1Wd3:APA91bFH6S2-ErpmcXjy6Zy5wNFLq_k6bXd4AIEvXFPUhH9T5FraiT0oZ9nlRBmCnGqG7QVOusEmNhvEv_0-p8KsqxI293zraw-HJ4dESlLK49xP2vTHcXs'
         // 'cvN-_psvT7-w_0Izc9dFON:APA91bEMQENf9607D6Danc1ZCz9xBmvUVprNkoypcwhXK3cPvvQ7iE3vqVV84jqoNnmHqlQbb-rRRWepnamlXtlc5Z9pKx-RE-Ez4CQxpebRnd-e69RcVE_yqSBVgD_G5jXnWlR6RlT3',
@@ -178,8 +178,8 @@ class notificationController {
         return handleResponse(404, "Not Found", {}, res);
       }
        
-      const title = "New Message";
-      const body = `You have a new message from ${req.user.first_name}!`;
+      const title = "Nouveau message";
+      const body = `Vous avez un nouveau message de ${req.user.first_name} !`;
       const token =  user.fcm_token;
       
       // console.log(pushNotification(token,title,body));
