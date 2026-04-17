@@ -1,10 +1,12 @@
 
 import moment from "moment";
 import logger from "./logger.js";
+import { translateText } from "./i18n.js";
 function handleResponse(code, msg, data, res) {
   let statusCode = code || 500;
   let message = msg || 'Internal Server Error';
   let success = false;
+  const shouldSkipTranslation = [200, 201].includes(statusCode);
 
   // Set success based on status code range
   if (statusCode >= 200 && statusCode < 400) {
@@ -82,11 +84,18 @@ function handleResponse(code, msg, data, res) {
 
   // Update message if it's not provided explicitly
   message = message || statusMessages[statusCode] || 'Unknown Error';
+  const responseLanguage = shouldSkipTranslation ? "en" : "fr";
+  const localizedMessage = shouldSkipTranslation
+    ? message
+    : translateText(message, responseLanguage);
+  const localizedHttpStatusMessage = shouldSkipTranslation
+    ? statusMessages[statusCode] || "Unknown Error"
+    : translateText(statusMessages[statusCode] || "Unknown Error", responseLanguage);
 
   if (statusCode >= 500) {
     logger.error("API_FAILURE", {
       statusCode,
-      message,
+      message: localizedMessage,
       path: res.req.originalUrl,
       method: res.req.method,
       body: res.req.body,
@@ -99,7 +108,7 @@ function handleResponse(code, msg, data, res) {
   else if (statusCode >= 400) {
     logger.warn("API_CLIENT_ERROR", {
       statusCode,
-      message,
+      message: localizedMessage,
       path: res.req.originalUrl,
       method: res.req.method,
       body: res.req.body,
@@ -111,10 +120,11 @@ function handleResponse(code, msg, data, res) {
 
   res.status(statusCode).json({
     http_status_code: statusCode,
-    http_status_msg: statusMessages[statusCode],
+    http_status_msg: localizedHttpStatusMessage,
     success,
     data: data,
-    message,
+    message: localizedMessage,
+    language: responseLanguage,
     timestamp: moment().toISOString()
   });
 }
