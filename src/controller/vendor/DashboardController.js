@@ -106,33 +106,35 @@ export const getDashboardStats = async (req, res) => {
         creditBalance: 0,
         quotesSentCount: 0,
         // kyc_status: user.kyc_status || "PENDING",
-        kyc_status : "Service not updated" ,
+        kyc_status: "Service not updated",
         canPurchaseLeads: false,
       }, res);
     }
 
 
 
-    const activeServiceRequest = await ServiceRequest.find({deletedAt: null,
-  status: "ACTIVE",}).distinct("_id")
+    const activeServiceRequest = await ServiceRequest.find({
+      deletedAt: null,
+      status: "ACTIVE",
+    }).distinct("_id")
 
     const [purchasedLeadIds, purchasedLeadsCount, wallet, quotesSentCount] = await Promise.all([
-       VendorLeadUnlock.find({ vendor_id: vendorId }).distinct("service_request_id"),
-      VendorLeadUnlock.countDocuments({ vendor_id: vendorId , service_request_id: { $in: activeServiceRequest } }),
+      VendorLeadUnlock.find({ vendor_id: vendorId }).distinct("service_request_id"),
+      VendorLeadUnlock.countDocuments({ vendor_id: vendorId, service_request_id: { $in: activeServiceRequest } }),
       VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
       VendorQuote.countDocuments({ vendor_id: vendorId, status: "SENT" }),
     ]);
 
 
     const availableLeadsCount = await ServiceRequest.countDocuments({
-  deletedAt: null,
-  status: "ACTIVE",
-  _id: { $nin: purchasedLeadIds }, // 👈 exclude purchased leads
-});
+      deletedAt: null,
+      status: "ACTIVE",
+      _id: { $nin: purchasedLeadIds }, // 👈 exclude purchased leads
+    });
 
     const creditBalance = wallet?.amount ?? 0;
     const canPurchaseLeads = user.kyc_status === "ACTIVE";
-    
+
 
     return handleResponse(200, "Dashboard fetched successfully", {
       availableLeadsCount,
@@ -183,26 +185,26 @@ export const unlockLead = async (req, res) => {
       return handleResponse(409, "You have already unlocked this lead", { unlocked: true }, res);
     }
 
-    const creditsRequired =  lead.contact_details.client_type == "Individual"   ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3) ;
+    const creditsRequired = lead.contact_details.client_type == "Individual" ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3);
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
       const lowBalanceTitle = "Solde de points faible";
       const lowBalanceBody = `Votre solde de points est faible (${wallet.amount})`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
-      
+
       const prefs = await VendorNotification.findOne({
         user_id: vendorId,
       }).lean();
 
-    if(prefs?.email_notifications?.low_credit_balance){
-      await Notification.create({
-        user_id: vendorId,
-        title: lowBalanceTitle,
-        body: lowBalanceBody,
-        for : "Vendor"
-      });
-    }
+      if (prefs?.email_notifications?.low_credit_balance) {
+        await Notification.create({
+          user_id: vendorId,
+          title: lowBalanceTitle,
+          body: lowBalanceBody,
+          for: "Vendor"
+        });
+      }
 
       const canPush = prefs?.push_notifications?.low_credits ?? false;
       if (vendor?.fcm_token && canPush) {
@@ -228,7 +230,7 @@ export const unlockLead = async (req, res) => {
       Transaction.create({
         user_id: vendorId,
         amount: creditsRequired,
-        amount_paid: creditsRequired ,
+        amount_paid: creditsRequired,
         type: "debit",
         status: "completed",
         description,
@@ -249,20 +251,20 @@ export const unlockLead = async (req, res) => {
       const lowBalanceTitle = "Solde de points faible";
       const lowBalanceBody = `Vos points restants sont ${balanceAfter}. Rechargez pour ne pas manquer de nouveaux prospects.`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
-      
-            const prefs = await VendorNotification.findOne({
-              user_id: vendorId,
-            }).lean();
 
-    if(prefs?.email_notifications?.low_credit_balance){
-      await Notification.create({
+      const prefs = await VendorNotification.findOne({
         user_id: vendorId,
-        title: lowBalanceTitle,
-        body: lowBalanceBody,
-        for : "Vendor"
-      });
-    }
-    
+      }).lean();
+
+      if (prefs?.email_notifications?.low_credit_balance) {
+        await Notification.create({
+          user_id: vendorId,
+          title: lowBalanceTitle,
+          body: lowBalanceBody,
+          for: "Vendor"
+        });
+      }
+
       const canPush = prefs?.push_notifications?.low_credits ?? false;
       if (vendor?.fcm_token && canPush) {
         await pushNotification(vendor.fcm_token, lowBalanceTitle, lowBalanceBody);
@@ -296,26 +298,23 @@ export const getLeadById = async (req, res) => {
     const BASE_URL = process.env.IMAGE_URL;
 
     const lead = await ServiceRequest.findById(leadId)
-      .populate({ path: "service_category", select: "title credit" })
+      .populate({ path: "service_category", select: "title credit company_credit" })
       .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
       .lean();
 
 
-
-if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
-  lead.user.profile_pic = `${BASE_URL}${lead.user.profile_pic}`;
-}
+    if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
+      lead.user.profile_pic = `${BASE_URL}${lead.user.profile_pic}`;
+    }
 
 
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
 
-     const quote = await VendorQuote.findOne({vendor_id:vendorId , service_request_id :leadId }) ;
-     console.log(quote,"q");
-     
-     lead.canQuote =  quote ? false : true ;
-     lead.quote_id =  quote?._id || null ;
+    const quote = await VendorQuote.findOne({ vendor_id: vendorId, service_request_id: leadId });
+    lead.canQuote = quote ? false : true;
+    lead.quote_id = quote?._id || null;
 
     const unlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,
@@ -337,7 +336,7 @@ if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
         masked.user.email = (masked.user.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3");
       }
       masked.unlocked = false;
-      masked.creditsToUnlock =  lead.contact_details.client_type == "Individual"   ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3)  ;
+      masked.creditsToUnlock = lead.contact_details.client_type == "Individual" ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3);
       return handleResponse(200, "Lead details", masked, res);
     }
 
@@ -357,8 +356,8 @@ export const submitQuote = async (req, res) => {
     const vendorId = req.user._id;
     const leadId = req.params.leadId;
     const attachmentFile = req.files;
-    const attachmentPath =     Array.isArray(req.files?.attachment) && attachmentFile?.attachment?.length > 0 ? attachmentFile.attachment[0].path : null;
-    
+    const attachmentPath = Array.isArray(req.files?.attachment) && attachmentFile?.attachment?.length > 0 ? attachmentFile.attachment[0].path : null;
+
     const {
       quote_price,
       service_description,
@@ -434,33 +433,33 @@ export const submitQuote = async (req, res) => {
       .lean();
 
 
-      const user = await User.findById(lead.user);
+    const user = await User.findById(lead.user);
 
-      if(user){
-         const title = "Devis recu 💰";
-         const body = "Vous avez recu un nouveau devis d'un prestataire. Consultez-le maintenant.";
+    if (user) {
+      const title = "Devis recu 💰";
+      const body = "Vous avez recu un nouveau devis d'un prestataire. Consultez-le maintenant.";
 
-         const prefs = await UserNotification.findOne({
-           user_id: user._id,
-         }).lean();
+      const prefs = await UserNotification.findOne({
+        user_id: user._id,
+      }).lean();
 
-         // Treat `email_notifications` toggle as enabling normal in-app notifications.
-         const canInApp = prefs?.email_notifications?.new_quotes ?? true;
-         const canPush = prefs?.push_notifications?.new_quotes ?? true;
+      // Treat `email_notifications` toggle as enabling normal in-app notifications.
+      const canInApp = prefs?.email_notifications?.new_quotes ?? true;
+      const canPush = prefs?.push_notifications?.new_quotes ?? true;
 
-         if (canInApp) {
-           await Notification.create({
-             user_id: user._id,
-             title,
-             body,
-            for : "User"
-           });
-         }
-
-         if (canPush && user?.fcm_token) {
-           await pushNotification(user.fcm_token, title, body);
-         }
+      if (canInApp) {
+        await Notification.create({
+          user_id: user._id,
+          title,
+          body,
+          for: "User"
+        });
       }
+
+      if (canPush && user?.fcm_token) {
+        await pushNotification(user.fcm_token, title, body);
+      }
+    }
 
     return handleResponse(201, "Quote submitted successfully", populated, res);
 
@@ -494,8 +493,8 @@ export const getCreditPackages = async (req, res) => {
       packages = DEFAULT_CREDIT_PACKAGES.map((p) => ({ ...p, _id: null }));
     }
 
-    for(const item of packages){
-          item.vat_rate = process.env.VAT_RATE  ;
+    for (const item of packages) {
+      item.vat_rate = process.env.VAT_RATE;
     }
 
 
@@ -611,21 +610,21 @@ export const purchaseCredits = async (req, res) => {
 export const getCreditPurchaseInvoice = async (req, res) => {
   try {
     const { transactionId } = req.params;
-    
+
     if (!transactionId) {
       return handleResponse(400, "transactionId is required", {}, res);
     }
-    
+
     const txFilter = {
-      _id : transactionId
+      _id: transactionId
     };
-    
-    
+
+
     const tx = await Transaction.findOne(txFilter).lean();
     if (!tx) {
       return handleResponse(404, "Invoice transaction not found", {}, res);
     }
-    
+
     const vendorId = tx?.user_id;
     const [vendor, global, creditPackage] = await Promise.all([
       User.findById(vendorId).lean(),
@@ -943,7 +942,7 @@ export const exportTransactionsListCsv = async (req, res) => {
 
 export const exportTransactionsListPdf = async (req, res) => {
   try {
-      const vendorId = req.user._id;
+    const vendorId = req.user._id;
 
     const { period, from_date, to_date, type } = req.query;
 
@@ -1010,12 +1009,12 @@ export const exportTransactionsListPdf = async (req, res) => {
 
 
 
-export const AllQuotes = async (req,res) => {
-   try {
+export const AllQuotes = async (req, res) => {
+  try {
     const userId = req.user._id;
 
     const quote = await VendorQuote.find({
-         vendor_id: userId
+      vendor_id: userId
     });
 
 
@@ -1062,7 +1061,7 @@ export const createCheckoutSession = async (req, res) => {
       mode: "payment",
 
       success_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=fail`,
+      cancel_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=fail`,
       metadata: {
         user_id: userId.toString(),
       },
@@ -1079,11 +1078,11 @@ export const createCheckoutSession = async (req, res) => {
     );
   } catch (err) {
     console.log(err);
-    
-     return handleResponse(
+
+    return handleResponse(
       500,
       "Internal server",
-           err.message,
+      err.message,
       res
     );
   }
@@ -1123,11 +1122,11 @@ export const verifyPaymentFromStripe = async (req, res) => {
     }
   } catch (err) {
     console.log(err);
-    
-     return handleResponse(
+
+    return handleResponse(
       500,
-       err.message , {}
-  ,
+      err.message, {}
+      ,
       res
     );
   }

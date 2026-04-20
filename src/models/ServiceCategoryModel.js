@@ -61,12 +61,10 @@ const ServiceCategorySchema = new mongoose.Schema(
       type: Number,
       default: 3,
     },
-
-    company_credit : {
-  type: Number,
+    company_credit: {
+      type: Number,
       default: 3,
-    }
-,
+    },
     deletedAt: {
       type: Date,
       default: null,
@@ -91,7 +89,7 @@ const ServiceCategorySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    is_tasks_required_visible : {
+    is_tasks_required_visible: {
       type: Boolean,
       default: false,
     },
