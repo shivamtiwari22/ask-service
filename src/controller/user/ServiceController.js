@@ -368,7 +368,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
         await sendEmail({
           to: email,
-          subject: "Verification OTP",
+          subject: "Code de vérification",
           html: await verificationMail(emailOwner.first_name, emailOwner.otp),
         });
 
@@ -402,7 +402,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
         await sendEmail({
           to: existingUser.email,
-          subject: "Verification OTP",
+          subject: "Code de vérification",
           html: await verificationMail(
             existingUser.first_name,
             existingUser.otp,

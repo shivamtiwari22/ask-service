@@ -102,7 +102,7 @@ export const registerVendor = async (req, resp) => {
     try {
       await sendEmail({
         to: user.email,
-        subject: "Verify your email",
+        subject: "Vérifiez votre adresse e-mail",
         html: await verificationMail(user.first_name, user.otp),
       });
     } catch (e) {
@@ -181,7 +181,7 @@ export const resendOTP = async (req, resp) => {
       try {
         await sendEmail({
           to: user.email,
-          subject: "Verify your email",
+          subject: "Vérifiez votre adresse e-mail",
           html: await verificationMail(user.first_name, user.otp),
         });
       } catch (e) {

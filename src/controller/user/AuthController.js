@@ -92,7 +92,7 @@ export const signup = async (req, resp) => {
 
       await sendEmail({
         to: email,
-        subject: "Verification Code",
+        subject: "Code de vérification",
         html: await verificationMail(user?.first_name, emailOtp),
       });
     }
@@ -200,7 +200,7 @@ export const loginPhoneEmail = async (req, resp) => {
     if (email) {
       await sendEmail({
         to: email,
-        subject: "Verification OTP",
+        subject: "Code de vérification",
         html: await verificationMail(user.first_name, user.otp),
       });
     }
@@ -381,7 +381,7 @@ export const login = async (req, resp) => {
 
       await sendEmail({
         to: user.email,
-        subject: "Verification OTP",
+        subject: "Code de vérification",
         html: await verificationMail(user.first_name, otp),
       });
 
@@ -563,7 +563,7 @@ export const resendEmailVerification = async (req, resp) => {
 
     await sendEmail({
       to: email,
-      subject: "Verification OTP",
+      subject: "Code de vérification",
       html: await verificationMail(user.first_name, otp),
     });
 
@@ -838,7 +838,7 @@ export const forgotPassword = async (req, resp) => {
     if (email) {
       await sendEmail({
         to: email,
-        subject: "Verification OTP",
+        subject: "Code de vérification",
         html: await verificationMail(user.first_name, user.otp),
       });
     }
