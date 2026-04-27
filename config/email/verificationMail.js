@@ -4,7 +4,7 @@ const verificationMail = async (name, otp) => {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Code Verification</title>
+<title>Verification du code</title>
 </head>
 
 <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
@@ -27,11 +27,11 @@ Ask Service
 <tr>
 <td style="padding:40px;text-align:center;color:#333;">
 
-<h2 style="margin-top:0;"> Verification Code</h2>
+<h2 style="margin-top:0;">Code de verification</h2>
 
 <p style="font-size:15px;color:#666;line-height:1.6;">
-Hello ${name},<br>
-Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre email.
+Bonjour ${name},<br>
+Votre code de verification est ${otp}. Saisissez-le pour verifier votre e-mail.
 </p>
 
 
@@ -42,10 +42,10 @@ Votre code de vérification est ${otp}. Saisissez-le pour vérifier votre email.
 <!-- Footer -->
 <tr>
 <td style="background:#f9fafb;text-align:center;padding:20px;font-size:13px;color:#888;">
-Need help? Contact us 
+Besoin d'aide ? Contactez-nous
 <br><br>
 
-© 2026 Ask Service. All rights reserved.
+© 2026 Ask Service. Tous droits reserves.
 </td>
 </tr>
 

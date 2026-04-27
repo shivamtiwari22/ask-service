@@ -3,17 +3,27 @@ import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import  minioClient from "../config/minio.js";
-const BUCKET = "public";
+
+const resolveBucketAndKey = (folder = "") => {
+  const normalizedFolder = String(folder).replace(/\\/g, "/").replace(/^\/+/, "");
+  const isPrivate = normalizedFolder.startsWith("private");
+  const bucket = isPrivate ? "private" : "public";
+  const objectPrefix = normalizedFolder
+    .replace(/^public\/?/, "")
+    .replace(/^private\/?/, "")
+    .replace(/\/+$/, "");
+
+  return { bucket, objectPrefix };
+};
 
 
 const uploadToMinio = async (file, folder) => {
-
-    const cleanFolder = folder.replace(/^public\//, "");
-
-  const fileName = `${cleanFolder}/${Date.now()}-${file.filename}`;
+  const { bucket, objectPrefix } = resolveBucketAndKey(folder);
+  const generatedName = `${Date.now()}-${file.filename}`;
+  const fileName = objectPrefix ? `${objectPrefix}/${generatedName}` : generatedName;
 
   await minioClient.fPutObject(
-    BUCKET,
+    bucket,
     fileName,
     file.path,
     {
@@ -25,7 +35,7 @@ const uploadToMinio = async (file, folder) => {
   fs.unlinkSync(file.path);
 
   // return fileName;
-       return `public/${fileName}`;
+       return `${bucket}/${fileName}`;
 };
 
 

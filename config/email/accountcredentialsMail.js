@@ -4,7 +4,7 @@ const accountCredentialsMail = async (name, email, password) => {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Your Account Credentials</title>
+<title>Vos identifiants de compte</title>
 </head>
 
 <body style="margin:0;padding:0;background:#f2f4f7;font-family:Arial,Helvetica,sans-serif;">
@@ -25,9 +25,9 @@ const accountCredentialsMail = async (name, email, password) => {
 <!-- Hero Section -->
 <tr>
 <td style="padding:35px 40px;text-align:center;">
-<h2 style="margin:0;color:#111;font-size:24px;">Welcome, ${name} 👋</h2>
+<h2 style="margin:0;color:#111;font-size:24px;">Bienvenue, ${name} 👋</h2>
 <p style="color:#666;font-size:15px;margin-top:10px;">
-Your account has been successfully created. Below are your login details.
+Votre compte a ete cree avec succes. Voici vos identifiants de connexion.
 </p>
 </td>
 </tr>
@@ -44,7 +44,7 @@ Your account has been successfully created. Below are your login details.
 </tr>
 
 <tr>
-<td style="padding:14px 16px;font-weight:600;color:#333;">Password</td>
+<td style="padding:14px 16px;font-weight:600;color:#333;">Mot de passe</td>
 <td style="padding:14px 16px;color:#555;">${password}</td>
 </tr>
 
@@ -60,7 +60,7 @@ Your account has been successfully created. Below are your login details.
 <td style="text-align:center;padding:35px 40px;">
 <a href="https://ask-service.vercel.app/"
 style="background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:600;font-size:15px;display:inline-block;">
-Login To Your Account
+Se connecter a votre compte
 </a>
 </td>
 </tr>
@@ -68,8 +68,8 @@ Login To Your Account
 <!-- Security Note -->
 <tr>
 <td style="padding:0 40px 30px 40px;color:#666;font-size:14px;line-height:1.6;text-align:center;">
-For security reasons, we recommend changing your password after your first login.
-If you did not request this account, please contact our support team.
+Pour des raisons de securite, nous vous recommandons de changer votre mot de passe apres votre premiere connexion.
+Si vous n'avez pas demande ce compte, veuillez contacter notre equipe support.
 </td>
 </tr>
 
@@ -84,7 +84,7 @@ If you did not request this account, please contact our support team.
 
 
 
-<p style="margin-top:15px;">© Ask Service. All rights reserved.</p>
+<p style="margin-top:15px;">© Ask Service. Tous droits reserves.</p>
 
 </td>
 </tr>

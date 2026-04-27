@@ -316,10 +316,12 @@ export const getLeadById = async (req, res) => {
     lead.canQuote = quote ? false : true;
     lead.quote_id = quote?._id || null;
 
+
     const unlocked = await VendorLeadUnlock.findOne({
       vendor_id: vendorId,
       service_request_id: leadId,
     });
+    
 
     if (!unlocked) {
       const masked = { ...lead };

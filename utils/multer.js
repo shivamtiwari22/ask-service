@@ -7,10 +7,10 @@ export const userProfileUpload=userProfile.fields([{name:"profile_pic",maxCount:
 const serviceCategory=fileUpload("public/service-category")
 export const serviceCategoryUpload=serviceCategory.fields([{name:"image",maxCount:1}]);
 
-const serviceDocument=fileUpload("public/document")
+const serviceDocument=fileUpload("private/document")
 export const serviceDocumentUpload=serviceDocument.any();
 
-const quoteDocument=fileUpload("public/quote-document");
+const quoteDocument=fileUpload("private/quote-document");
 export const quoteDocumentUpload=quoteDocument.fields([{ name: "attachment", maxCount: 1 }]);
 
 
