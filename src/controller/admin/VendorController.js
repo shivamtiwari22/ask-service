@@ -72,7 +72,7 @@ export const getAllVendorsWithDocuments = async (req, res) => {
                     ? baseUrl +
                       (uploaded.file.startsWith("/")
                         ? uploaded.file
-                        : "/" + uploaded.file)
+                        :   uploaded.file)
                     : null,
                 }
               : null,
