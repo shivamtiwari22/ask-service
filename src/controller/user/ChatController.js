@@ -271,10 +271,8 @@ class ChatController {
           );
 
           if (item.latestMessage.sender) {
-            item.latestMessage.sender.profile_pic = item.latestMessage.sender
-              .profile_pic
-              ? `${base_url}/${item.latestMessage.sender.profile_pic}`
-              : null;
+            item.latestMessage.sender.profile_pic = item?.latestMessage?.sender?.profile_pic?.startsWith("http")
+              ? item?.latestMessage?.sender?.profile_pic : `${base_url}/${item.latestMessage.sender.profile_pic}`
           }
         }
 
@@ -309,9 +307,7 @@ class ChatController {
 
         item.users = item.users.map((user) => ({
           ...user,
-          profile_pic: user?.profile_pic
-            ? `${base_url}/${user.profile_pic}`
-            : null,
+          profile_pic: user?.profile_pic?.startsWith("http") ? user?.profile_pic : `${base_url}${user.profile_pic}`
         }));
 
         item.users = item.users.map((u) => ({
