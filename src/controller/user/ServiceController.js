@@ -470,7 +470,10 @@ export const initiateServiceRequest = async (req, resp) => {
       );
     }
 
-    const role = await Role.findOne({ name: "User" });
+    let role = await Role.findOne({ name: "User" });
+    if (!role) {
+      role = await Role.create({ name: "User" });
+    }
 
     const phoneOtp = generateOTP();
     const emailToken = email ? crypto.randomBytes(32).toString("hex") : null;

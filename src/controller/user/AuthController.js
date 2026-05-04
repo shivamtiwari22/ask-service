@@ -55,7 +55,10 @@ export const signup = async (req, resp) => {
       return handleResponse(409, "User already exists", {}, resp);
     }
 
-    const role = await Role.findOne({ name: "User" });
+    let role = await Role.findOne({ name: "User" });
+    if(!role){
+      role = await Role.create({ name: "User" });
+    }
 
     const phoneOtp = generateOTP();
     const emailOtp = generateOTP();
@@ -945,10 +948,10 @@ export const GoogleLogin = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hasPassword = await bcrypt.hash(password, salt);
     if (!user) {
-      const role = await Role.findOne({ name: role_type });
+      let role = await Role.findOne({ name: role_type });
 
       if (!role) {
-        return handleResponse(400, "Invalid role type", {}, res);
+        role = await Role.create({ name: role_type });
       }
 
       user = new User({

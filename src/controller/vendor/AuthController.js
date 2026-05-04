@@ -66,7 +66,10 @@ export const registerVendor = async (req, resp) => {
     }
 
     const hashedPassword = await hashPassword(password);
-    const role = await Role.findOne({ name: "Vendor" });
+     let role = await Role.findOne({ name: "Vendor" });
+        if(!role){
+          role = await Role.create({ name: "Vendor" });
+        }
 
     const payload = {
       first_name,

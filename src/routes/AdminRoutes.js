@@ -114,37 +114,14 @@ router.put(
   updateAdminProfile,
 );
 router.get("/get-profile", authenticateToken, getAdminProfile);
-router.put(
-  "/change-password",
-  authenticateToken,
-  checkRoleAuth(["Admin"]),
-  changeAdminPassword,
-);
+router.put("/change-password",authenticateToken,checkRoleAuth(["Admin"]),changeAdminPassword);
 router.post("/forgot-password", forgotPasswordValidation, forgotPassword);
 router.post("/resend-otp", resendOTPValidation, resendOTP);
 router.post("/verify-otp", verifyOTPValidation, verifyOTP);
-router.post(
-  "/reset-password",
-  resetPasswordValidation,
-  authenticateForgotPasswordToken,
-  resetPassword,
-);
-router.get(
-  "/get-all-role-options",
-  authenticateToken,
-  checkRoleAuth(["Admin"]),
-  getAllRoleOptions,
-);
-router.get(
-  "/get-all-users",
-  authenticateToken,
-  checkRoleAuth(["Admin"]),
-  getAllUsers,
-);
-
-
-router.patch("/user/:id/status",  authenticateToken,
-  checkRoleAuth(["Admin"]), changeUserStatus);
+router.post("/reset-password",resetPasswordValidation,authenticateForgotPasswordToken,resetPassword);
+router.get("/get-all-role-options",authenticateToken,checkRoleAuth(["Admin"]),getAllRoleOptions);
+router.get("/get-all-users", authenticateToken,checkRoleAuth(["Admin"]) , getAllUsers );
+router.patch("/user/:id/status", authenticateToken , checkRoleAuth(["Admin"]), changeUserStatus);
 
 
 
