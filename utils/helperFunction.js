@@ -88,7 +88,7 @@ export const createReference = () => {
 };
 
 const sendGeneratedPasswordToPhone = async ({ phone, password }) => {
-  console.log(`Generated password for ${phone}: ${password}`);
+  // console.log(`Generated password for ${phone}: ${password}`);
 };
 
 export const getIdentifierQuery = ({ email, phone }) => {

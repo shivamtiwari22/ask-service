@@ -143,12 +143,12 @@ io.on("connection", (socket) => {
 
     socket.emit("online:users", Array.from(onlineUsers));
     io.emit("user:online", userData.id);
-    console.log("User online:", userData.id);
+    // console.log("User online:", userData.id);
   });
 
   socket.on("join chat", (room) => {
     socket.join(room);
-    console.log("User Joined Room:", room);
+    // console.log("User Joined Room:", room);
   });
 
   socket.on("typing", (room) => socket.in(room).emit("typing"));
@@ -201,7 +201,7 @@ socket.on("message:seen", async ({ messageId, chatId, userId }) => {
   // ✅ Fix: disconnect gives a reason string, NOT userData
   socket.on("disconnect", () => {
     if (!currentUser) return;
-    console.log("User disconnected:", currentUser.id);
+    // console.log("User disconnected:", currentUser.id);
 
     const room = io.sockets.adapter.rooms.get(currentUser.id);
     const remainingSockets = room ? room.size : 0;

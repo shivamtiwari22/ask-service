@@ -14,7 +14,7 @@ export const authenticateToken = async (req, res, next) => {
 
     const decoded = verifyToken(token, JWT_SECRET);
 
-    const user = await User.findById(decoded._id).populate("role");
+    const user = await User.findById(decoded._id).select("-password").populate("role");
 
     if (!user) {
       return handleResponse(404, "User not found", {}, res);
@@ -48,7 +48,7 @@ export const userAuthenticateToken = async (req, res, next) => {
 
     const decoded = verifyToken(token, JWT_SECRET);
 
-    const user = await User.findById(decoded._id).populate("role");
+    const user = await User.findById(decoded._id).select("-password").populate("role");
 
     if (!user) {
       
@@ -121,7 +121,7 @@ export const authenticateForgotPasswordToken = (
 
       const decoded = verifyToken(token, JWT_SECRET);
 
-      const user = await User.findById(decoded._id).populate("role");
+      const user = await User.findById(decoded._id).select("-password").populate("role");
 
       if (!user) {
         return handleResponse(404, "User not found", {}, res);
@@ -149,7 +149,7 @@ export const optionalAuthenticateToken = async (req, res, next) => {
     }
 
     const decoded = verifyToken(token, JWT_SECRET);
-    const user = await User.findById(decoded._id).populate("role");
+    const user = await User.findById(decoded._id).select("-password").populate("role");
 
     if (!user) {
       return next();
