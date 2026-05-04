@@ -906,7 +906,7 @@ export const GoogleLogin = async (req, res) => {
       return handleResponse(401, "Unauthorized user", {}, res);
     }
 
-    console.log(users);
+  
 
     let firstName = "First";
     let lastName = "Last";
@@ -938,7 +938,7 @@ export const GoogleLogin = async (req, res) => {
       email: users.email,
     }).populate("role");
 
-    console.log(user);
+ 
     //   const role = await Role.findOne({ user_id: user.id });
 
     const password = Math.floor(

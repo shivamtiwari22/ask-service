@@ -44,7 +44,7 @@ export const registerVendor = async (req, resp) => {
 
     const existingEmail = await User.findOne({ email });
 
-    console.log(existingEmail);
+  
 
     if (existingEmail)
       return handleResponse(
@@ -239,7 +239,7 @@ export const resendOTP = async (req, resp) => {
 export const verifyRegistrationOTP = async (req, resp) => {
   try {
     const { email, phone, otp_phone, otp_email, type } = req.body;
-    console.log(email);
+   
 
     let user;
 
@@ -260,7 +260,7 @@ export const verifyRegistrationOTP = async (req, resp) => {
     let phoneVerified = user.is_phone_verified;
 
     if (otp_email) {
-      console.log(user);
+   
 
       if (user.otp != otp_email) {
         return handleResponse(401, "Invalid Email OTP", {}, resp);
@@ -1205,7 +1205,7 @@ export const GoogleLogin = async (req, res) => {
       return handleResponse(401, "Unauthorized user", {}, res);
     }
 
-    console.log(users);
+    
 
     let firstName = "First";
     let lastName = "Last";
@@ -1237,7 +1237,6 @@ export const GoogleLogin = async (req, res) => {
       email: users.email,
     });
 
-    console.log(user);
     //   const role = await Role.findOne({ user_id: user.id });
 
     const password = Math.floor(
