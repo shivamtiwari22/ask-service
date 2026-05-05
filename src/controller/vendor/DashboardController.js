@@ -1062,8 +1062,8 @@ export const createCheckoutSession = async (req, res) => {
 
       mode: "payment",
 
-      success_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `https://ask-service.vercel.app/vendor/credits?stripe_payment_status=fail`,
+      success_url: `${process.env.FRONTEND_URL}vendor/credits?stripe_payment_status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}vendor/credits?stripe_payment_status=fail`,
       metadata: {
         user_id: userId.toString(),
       },
