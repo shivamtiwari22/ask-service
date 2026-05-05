@@ -98,10 +98,10 @@ function handleResponse(code, msg, data, res) {
       message: localizedMessage,
       path: res.req.originalUrl,
       method: res.req.method,
-      body: res.req.body,
       query: res.req.query,
       ip: res.req.ip,
-      user: res.req.user?._id || null,
+      // body: res.req.body,
+      // user: res.req.user?._id || null,
       timestamp: new Date().toISOString()
     });
   }
@@ -111,8 +111,8 @@ function handleResponse(code, msg, data, res) {
       message: localizedMessage,
       path: res.req.originalUrl,
       method: res.req.method,
-      body: res.req.body,
-      user: res.req.user?._id || null,
+      // body: res.req.body,
+      // user: res.req.user?._id || null,
       timestamp: new Date().toISOString()
     });
   }
