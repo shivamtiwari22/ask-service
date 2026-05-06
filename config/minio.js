@@ -1,12 +1,15 @@
 
 import { Client } from 'minio';
+import dotenv from "dotenv";
+dotenv.config();
+
 // const Minio = require('minio');
 const minioClient = new Client({
-  endPoint: 'storage.webdesignnoida.in',
+  endPoint: process.env.MINIO_ENDPOINT ,
   port: 443,
   useSSL: true,
-  accessKey: 'admin',
-  secretKey: 'StrongPassword123',
+  accessKey:  process.env.MINIO_ACCESS_KEY,
+  secretKey: process.env.MINIO_SECRET_KEY,
 });
 
 
