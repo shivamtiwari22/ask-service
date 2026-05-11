@@ -3,11 +3,35 @@ import User from "../../models/UserModel.js";
 import Role from "../../models/RoleModel.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
+import minioClient from "../../../config/minio.js";
 
 /**
  * Admin API: Get all vendors with their verification documents
  * Similar structure to vendor's VerificationDocument but for all vendors
  */
+
+
+const generatePresignedUrl = async (
+  filePath,
+  expiry = 60 * 60 // 1 hour
+) => {
+  if (!filePath) return null;
+
+  const parts = filePath.split("/");
+
+  const bucket = parts[0];
+
+  const objectName = parts.slice(1).join("/");
+
+  const url = await minioClient.presignedGetObject(
+    bucket,
+    objectName,
+    expiry
+  );
+
+  return url;
+};
+
 export const getAllVendorsWithDocuments = async (req, res) => {
   try {
 
@@ -35,7 +59,6 @@ export const getAllVendorsWithDocuments = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const baseUrl = process.env.IMAGE_URL || "";
     const vendorsWithDocs = await Promise.all(
       vendors.map(async (vendor) => {
         const requirements = await ServiceDocumentRequirement.find({
@@ -54,31 +77,31 @@ export const getAllVendorsWithDocuments = async (req, res) => {
           vendorDocs.map((d) => [d.document_id.toString(), d])
         );
 
-        const documents = requirements.map((reqItem) => {
-          const uploaded = docByRequirement.get(reqItem._id.toString());
-          const status = uploaded ? uploaded.status : "Not uploaded";
-          return {
-            document_id: reqItem._id,
-            name: reqItem.name,
-            description: reqItem.description || null,
-            type: reqItem.type,
-            is_required: reqItem.is_required,
-            status,
-            file: uploaded
-              ? {
-                  path: uploaded.file,
-                  file_name: uploaded.file_name || uploaded.name,
-                  url: uploaded.file
-                    ? baseUrl +
-                      (uploaded.file.startsWith("/")
-                        ? uploaded.file
-                        :   uploaded.file)
-                    : null,
-                }
-              : null,
-            uploadedAt: uploaded?.updatedAt || null,
-          };
-        });
+        const documents = await Promise.all(
+          requirements.map(async (reqItem) => {
+            const uploaded = docByRequirement.get(reqItem._id.toString());
+            const status = uploaded ? uploaded.status : "Not uploaded";
+            const presignedUrl = uploaded?.file
+              ? await generatePresignedUrl(uploaded.file)
+              : null;
+            return {
+              document_id: reqItem._id,
+              name: reqItem.name,
+              description: reqItem.description || null,
+              type: reqItem.type,
+              is_required: reqItem.is_required,
+              status,
+              file: uploaded
+                ? {
+                    path: uploaded.file,
+                    file_name: uploaded.file_name || uploaded.name,
+                    url: presignedUrl,
+                  }
+                : null,
+              uploadedAt: uploaded?.updatedAt || null,
+            };
+          })
+        );
 
         return {
           ...vendor,
