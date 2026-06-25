@@ -68,6 +68,58 @@ export const sanitizeObjectId = (value) =>
     ? null
     : value;
 
+export const sanitizeObjectIdArray = (value) => {
+  if (
+    value === "" ||
+    value === null ||
+    value === undefined ||
+    value === "undefined"
+  ) {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return list.map(sanitizeObjectId).filter((id) => id != null);
+};
+
+export const sanitizeStringArray = (value) => {
+  if (
+    value === "" ||
+    value === null ||
+    value === undefined ||
+    value === "undefined"
+  ) {
+    return [];
+  }
+  const list = Array.isArray(value) ? value : [value];
+  return list
+    .map((item) =>
+      typeof item === "string" ? item.trim() : String(item ?? "").trim(),
+    )
+    .filter(Boolean);
+};
+
+/** Normalize user.service whether populated, lean, legacy single id, or array. */
+export const getServiceIds = (service) => {
+  if (!service) return [];
+  if (Array.isArray(service)) {
+    return service
+      .map((item) =>
+        item && typeof item === "object" && item._id ? item._id : item,
+      )
+      .filter((id) => id != null && id !== "");
+  }
+  if (typeof service === "object" && service._id) return [service._id];
+  return [service].filter((id) => id != null && id !== "");
+};
+
+export const hasServices = (service) => getServiceIds(service).length > 0;
+
+export const vendorOwnsService = (vendorServices, categoryId) => {
+  if (!categoryId) return false;
+  const target = String(categoryId);
+  return getServiceIds(vendorServices).some((id) => id.toString() === target);
+};
+
 export const cookieOptions = {
   maxAge: 60 * 1000,
   httpOnly: true,

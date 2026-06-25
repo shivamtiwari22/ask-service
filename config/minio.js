@@ -5,7 +5,7 @@ dotenv.config();
 
 // const Minio = require('minio');
 const minioClient = new Client({
-  endPoint: process.env.MINIO_ENDPOINT ,
+  endPoint: "storage.webdesignnoida.in",
   port: 443,
   useSSL: true,
   accessKey:  process.env.MINIO_ACCESS_KEY,

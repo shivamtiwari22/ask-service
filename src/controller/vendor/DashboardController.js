@@ -12,6 +12,7 @@ import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import pushNotification from "../../../config/pushNotification.js";
+import { getServiceIds, hasServices, vendorOwnsService } from "../../../utils/helperFunction.js";
 import Stripe from "stripe";
 import notifications from "../../../config/notification.js";
 import Notification from "../../models/NotificationModel.js";
@@ -98,8 +99,8 @@ export const getDashboardStats = async (req, res) => {
     const user = await User.findById(vendorId).select("kyc_status service").lean();
     if (!user) return handleResponse(404, "User not found", {}, res);
 
-    const serviceCategoryId = user.service;
-    if (!serviceCategoryId) {
+    const serviceCategoryIds = getServiceIds(user.service);
+    if (!hasServices(user.service)) {
       return handleResponse(200, "Dashboard fetched", {
         availableLeadsCount: 0,
         purchasedLeadsCount: 0,
@@ -129,7 +130,8 @@ export const getDashboardStats = async (req, res) => {
     const availableLeadsCount = await ServiceRequest.countDocuments({
       deletedAt: null,
       status: "ACTIVE",
-      _id: { $nin: purchasedLeadIds }, // 👈 exclude purchased leads
+      service_category: { $in: serviceCategoryIds },
+      _id: { $nin: purchasedLeadIds },
     });
 
     const creditBalance = wallet?.amount ?? 0;
@@ -169,6 +171,20 @@ export const unlockLead = async (req, res) => {
       .lean();
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
+    }
+
+    const leadCategoryId = lead.service_category?._id?.toString();
+    if (
+      hasServices(user.service) &&
+      leadCategoryId &&
+      !vendorOwnsService(user.service, leadCategoryId)
+    ) {
+      return handleResponse(
+        403,
+        "This lead is not in your service categories",
+        {},
+        res,
+      );
     }
 
     if (lead.user.toString() === vendorId.toString()) {
@@ -297,6 +313,9 @@ export const getLeadById = async (req, res) => {
     const leadId = req.params.leadId;
     const BASE_URL = process.env.IMAGE_URL;
 
+    const vendor = await User.findById(vendorId).select("service").lean();
+    if (!vendor) return handleResponse(404, "User not found", {}, res);
+
     const lead = await ServiceRequest.findById(leadId)
       .populate({ path: "service_category", select: "title credit company_credit" })
       .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
@@ -310,6 +329,20 @@ export const getLeadById = async (req, res) => {
 
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
+    }
+
+    const leadCategoryId = lead.service_category?._id?.toString();
+    if (
+      hasServices(vendor.service) &&
+      leadCategoryId &&
+      !vendorOwnsService(vendor.service, leadCategoryId)
+    ) {
+      return handleResponse(
+        403,
+        "This lead is not in your service categories",
+        {},
+        res,
+      );
     }
 
     const quote = await VendorQuote.findOne({ vendor_id: vendorId, service_request_id: leadId });
@@ -387,6 +420,21 @@ export const submitQuote = async (req, res) => {
     const lead = await ServiceRequest.findById(leadId);
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
+    }
+
+    const vendor = await User.findById(vendorId).select("service").lean();
+    if (
+      vendor &&
+      hasServices(vendor.service) &&
+      lead.service_category &&
+      !vendorOwnsService(vendor.service, lead.service_category)
+    ) {
+      return handleResponse(
+        403,
+        "This lead is not in your service categories",
+        {},
+        res,
+      );
     }
 
     const existingQuote = await VendorQuote.findOne({

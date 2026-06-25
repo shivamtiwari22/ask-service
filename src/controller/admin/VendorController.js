@@ -4,6 +4,7 @@ import Role from "../../models/RoleModel.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import minioClient from "../../../config/minio.js";
+import { getServiceIds } from "../../../utils/helperFunction.js";
 
 /**
  * Admin API: Get all vendors with their verification documents
@@ -61,11 +62,13 @@ export const getAllVendorsWithDocuments = async (req, res) => {
 
     const vendorsWithDocs = await Promise.all(
       vendors.map(async (vendor) => {
+        const serviceIds = getServiceIds(vendor.service);
         const requirements = await ServiceDocumentRequirement.find({
-          service_category: vendor.service?._id || null,
+          service_category: serviceIds.length ? { $in: serviceIds } : null,
           status: "ACTIVE",
           deletedAt: null,
         })
+          .populate("service_category", "title")
           .sort({ createdAt: 1 })
           .lean();
 
@@ -86,6 +89,7 @@ export const getAllVendorsWithDocuments = async (req, res) => {
               : null;
             return {
               document_id: reqItem._id,
+              service_category: reqItem.service_category,
               name: reqItem.name,
               description: reqItem.description || null,
               type: reqItem.type,

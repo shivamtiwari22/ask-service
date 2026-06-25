@@ -1,11 +1,16 @@
 import mongoose from "mongoose";
+import { sanitizeObjectIdArray } from "../../utils/helperFunction.js";
 
 const ServiceDocumentRequirementSchema = new mongoose.Schema(
   {
     service_category: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ServiceCategory",
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "ServiceCategory" }],
       required: true,
+      set: sanitizeObjectIdArray,
+      get: (val) => {
+        if (!val) return [];
+        return Array.isArray(val) ? val : [val];
+      },
     },
     name: {
       type: String,
@@ -48,21 +53,23 @@ const ServiceDocumentRequirementSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+    toJSON: { getters: true },
+    toObject: { getters: true },
+  },
 );
 
 ServiceDocumentRequirementSchema.index(
-  { service_category: 1, name: 1, type: 1 },
+  { name: 1, type: 1 },
   {
     unique: true,
     partialFilterExpression: { deletedAt: null },
-  }
+  },
 );
 ServiceDocumentRequirementSchema.index({ service_category: 1, status: 1 });
 
 const ServiceDocumentRequirement = mongoose.model(
   "ServiceDocumentRequirement",
-  ServiceDocumentRequirementSchema
+  ServiceDocumentRequirementSchema,
 );
 
 export default ServiceDocumentRequirement;

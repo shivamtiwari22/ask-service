@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { sanitizeObjectId } from "../../utils/helperFunction.js";
+import { sanitizeObjectIdArray } from "../../utils/helperFunction.js";
 
 const UserSchema = mongoose.Schema(
   {
@@ -89,9 +89,13 @@ const UserSchema = mongoose.Schema(
       required: true,
     },
     service: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ServiceCategory",
-      set: sanitizeObjectId,
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "ServiceCategory" }],
+      default: [],
+      set: sanitizeObjectIdArray,
+      get: (val) => {
+        if (!val) return [];
+        return Array.isArray(val) ? val : [val];
+      },
     },
     password_updateAt: {
       type: Date,
@@ -148,6 +152,14 @@ const UserSchema = mongoose.Schema(
     is_vendor : {
        type : Boolean ,
        default : false
+    } ,
+    siret : {
+      type : String,
+      default : null
+    },
+    areas : {
+      type : Array,
+      default : []
     }
   },
   {
@@ -160,6 +172,7 @@ const UserSchema = mongoose.Schema(
 
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ role: 1 });
+UserSchema.index({ service: 1 });
 UserSchema.index({ status: 1 });
 UserSchema.index({ createdAt: 1 });
 UserSchema.index({ updatedAt: 1 });

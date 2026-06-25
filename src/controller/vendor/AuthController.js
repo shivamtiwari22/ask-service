@@ -19,6 +19,11 @@ import extractFiles from "../../../utils/extractNestedFiles.js";
 import {
   cookieOptions,
   documentUploadCookieOptions,
+  getServiceIds,
+  hasServices,
+  sanitizeObjectIdArray,
+  sanitizeStringArray,
+  vendorOwnsService,
 } from "../../../utils/helperFunction.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
 import BusinessInformation from "../../models/BusinessInformationModel.js";
@@ -39,12 +44,20 @@ import { ifError } from "assert";
 // register vendor
 export const registerVendor = async (req, resp) => {
   try {
-    const { first_name, last_name, email, phone, password, business_name , fcm_token} =
-      req.body;
+    const {
+      first_name,
+      last_name,
+      email,
+      phone,
+      password,
+      business_name,
+      fcm_token,
+      service,
+      siret,
+      areas,
+    } = req.body;
 
     const existingEmail = await User.findOne({ email });
-
-  
 
     if (existingEmail)
       return handleResponse(
@@ -65,11 +78,35 @@ export const registerVendor = async (req, resp) => {
         );
     }
 
+    const serviceIds = sanitizeObjectIdArray(service);
+    if (!serviceIds.length) {
+      return handleResponse(400, "At least one service is required", {}, resp);
+    }
+
+    const foundCount = await ServiceCategory.countDocuments({
+      _id: { $in: serviceIds },
+      deletedAt: null,
+    });
+    if (foundCount !== serviceIds.length) {
+      return handleResponse(404, "One or more services not found", {}, resp);
+    }
+
+    const areaList = sanitizeStringArray(areas);
+    if (!areaList.length) {
+      return handleResponse(400, "At least one area is required", {}, resp);
+    }
+
+    const siretValue =
+      siret !== undefined && siret !== null && String(siret).trim()
+        ? String(siret).trim()
+        : null;
+  
+
     const hashedPassword = await hashPassword(password);
-     let role = await Role.findOne({ name: "Vendor" });
-        if(!role){
-          role = await Role.create({ name: "Vendor" });
-        }
+    let role = await Role.findOne({ name: "Vendor" });
+    if (!role) {
+      role = await Role.create({ name: "Vendor" });
+    }
 
     const payload = {
       first_name,
@@ -87,9 +124,12 @@ export const registerVendor = async (req, resp) => {
       otp_for: "SIGNUP",
       is_phone_verified: false,
       is_email_verified: false,
-      is_vendor : true ,
-      fcm_token: fcm_token ? [fcm_token] : [] ,
+      is_vendor: true,
+      fcm_token: fcm_token ? [fcm_token] : [],
       business_name,
+      service: serviceIds,
+      siret: siretValue,
+      areas: areaList,
     };
     const user = await User.create(payload);
 
@@ -414,7 +454,7 @@ export const loginVendor = async (req, resp) => {
         return handleResponse(200, "Login Successful", fialResponse, resp);
       }
 
-      if (!user.service) {
+      if (!hasServices(user.service)) {
         const token = generate15minToken(user.toObject());
         await resp.cookie("forgot-password", token, cookieOptions);
         return handleResponse(
@@ -566,12 +606,19 @@ export const updateVendorProfile = async (req, resp) => {
       }
     }
 
-    if (service !== undefined && service) {
-      const vendor_service = await ServiceCategory.findById(service);
-      if (!vendor_service) {
-        return handleResponse(404, "Service not found", {}, resp);
+    if (service !== undefined) {
+      const serviceIds = sanitizeObjectIdArray(service);
+      if (serviceIds.length) {
+        const foundCount = await ServiceCategory.countDocuments({
+          _id: { $in: serviceIds },
+        });
+        if (foundCount !== serviceIds.length) {
+          return handleResponse(404, "One or more services not found", {}, resp);
+        }
+        user.service = serviceIds;
+      } else {
+        user.service = [];
       }
-      user.service = vendor_service._id;
     }
 
     
@@ -788,7 +835,19 @@ export const updateUserServiceData = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    user.service = service;
+    const serviceIds = sanitizeObjectIdArray(service);
+    if (!serviceIds.length) {
+      return handleResponse(400, "At least one service is required", {}, resp);
+    }
+
+    const foundCount = await ServiceCategory.countDocuments({
+      _id: { $in: serviceIds },
+    });
+    if (foundCount !== serviceIds.length) {
+      return handleResponse(404, "One or more services not found", {}, resp);
+    }
+
+    user.service = serviceIds;
     await user.save();
     return handleResponse(200, "Service data updated successfully", user, resp);
   } catch (err) {
@@ -800,18 +859,42 @@ export const updateUserServiceData = async (req, resp) => {
 export const getDocumentRequiredForService = async (req, resp) => {
   try {
     const user = req.user;
-    const service = await ServiceCategory.findById(user.service);
-    if (!service) {
-      return handleResponse(404, "Service not found", {}, resp);
+    const serviceIds = getServiceIds(user.service);
+    if (!serviceIds.length) {
+      return handleResponse(400, "Please select a service first", {}, resp);
     }
-    const documents = await ServiceDocumentRequirement.find({
-      service_category: service._id,
-      deletedAt: null
-    });
+
+    const filter = {
+      status: "ACTIVE",
+      deletedAt: null,
+    };
+
+    const { service_category } = req.query;
+    if (service_category) {
+      const allowed = serviceIds.some(
+        (id) => id.toString() === String(service_category),
+      );
+      if (!allowed) {
+        return handleResponse(
+          403,
+          "Service not assigned to your account",
+          {},
+          resp,
+        );
+      }
+      filter.service_category = service_category;
+    } else {
+      filter.service_category = { $in: serviceIds };
+    }
+
+    const documents = await ServiceDocumentRequirement.find(filter)
+      .populate("service_category", "title")
+      .sort({ createdAt: 1 });
+
     return handleResponse(
       200,
       "Documents fetched successfully",
-      documents,
+      { documents },
       resp,
     );
   } catch (err) {
@@ -825,12 +908,13 @@ export const updateDocumentRequiredForService = async (req, resp) => {
     const userId = req.user._id;
     const user = await User.findById(userId).select("service");
     if (!user) return handleResponse(404, "User not found", {}, resp);
-    if (!user.service) {
+    const serviceIds = getServiceIds(user.service);
+    if (!serviceIds.length) {
       return handleResponse(400, "Please select a service first", {}, resp);
     }
 
     const requirements = await ServiceDocumentRequirement.find({
-      service_category: user.service,
+      service_category: { $in: serviceIds },
       status: "ACTIVE",
       deletedAt: null,
     }).lean();
@@ -923,12 +1007,33 @@ export const availableLeads = async (req, resp) => {
     const skip = (page - 1) * limit;
 
     let filter = {
-      // service_category: req?.user?.service,
       deletedAt: null,
       status: "ACTIVE",
     };
 
-    if (service) filter.service_category = service;
+    const vendorServiceIds = getServiceIds(req?.user?.service);
+    if (!service && !vendorServiceIds.length) {
+      return handleResponse(
+        200,
+        "leads",
+        { items: [], total: 0, page, limit, totalPages: 0 },
+        resp,
+      );
+    }
+
+    if (service) {
+      if (vendorServiceIds.length && !vendorOwnsService(req.user.service, service)) {
+        return handleResponse(
+          403,
+          "Service not assigned to your account",
+          {},
+          resp,
+        );
+      }
+      filter.service_category = service;
+    } else if (vendorServiceIds.length) {
+      filter.service_category = { $in: vendorServiceIds };
+    }
     if (city) filter.city = city;
     if (state) filter.state = state;
     if (country) filter.country = country;
@@ -1107,6 +1212,21 @@ export const createUpdateBusinessInfo = async (req, res) => {
 
     if (!business_name || !business_address || !postcode || !city) {
       return handleResponse(400, "Required fields are missing", {}, res);
+    }
+
+    if (service_category !== undefined) {
+      const serviceIds = sanitizeObjectIdArray(service_category);
+      if (serviceIds.length) {
+        const foundCount = await ServiceCategory.countDocuments({
+          _id: { $in: serviceIds },
+        });
+        if (foundCount !== serviceIds.length) {
+          return handleResponse(404, "One or more services not found", {}, res);
+        }
+        await User.findByIdAndUpdate(userId, { service: serviceIds });
+      } else {
+        await User.findByIdAndUpdate(userId, { service: [] });
+      }
     }
 
     const business = await BusinessInformation.findOneAndUpdate(
@@ -1320,11 +1440,17 @@ export const VerificationDocument = async (req, res) => {
     const user = await User.findById(userId).select("service").lean();
     if (!user) return handleResponse(404, "User not found", {}, res);
 
+    const serviceIds = getServiceIds(user.service);
+    if (!serviceIds.length) {
+      return handleResponse(200, "Documents fetched successfully", { documents: [] }, res);
+    }
+
     const requirements = await ServiceDocumentRequirement.find({
-      service_category: user.service || null,
+      service_category: { $in: serviceIds },
       status: "ACTIVE",
       deletedAt: null,
     })
+      .populate("service_category", "title")
       .sort({ createdAt: 1 })
       .lean();
 
@@ -1339,6 +1465,7 @@ export const VerificationDocument = async (req, res) => {
       const status = uploaded ? uploaded.status : "Not uploaded";
       return {
         document_id: reqItem._id,
+        service_category: reqItem.service_category,
         name: reqItem.name,
         description: reqItem.description || null,
         allowed_formats: reqItem.allowed_formats || "PDF, JPG, PNG (Max 5MB)",

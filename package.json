@@ -6,7 +6,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "migrate:service-array": "node scripts/migrate-service-to-array.js",
+    "migrate:document-requirement-service-array": "node scripts/migrate-document-requirement-service-to-array.js"
   },
   "repository": {
     "type": "git",

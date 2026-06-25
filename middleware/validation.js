@@ -1,5 +1,26 @@
 import { body, validationResult } from "express-validator";
+import mongoose from "mongoose";
 import handleResponse from "../utils/http-response.js";
+import { sanitizeObjectIdArray } from "../utils/helperFunction.js";
+
+const validateServiceCategoryIds = (value, { optional = false } = {}) => {
+  if (optional && (value === undefined || value === null || value === "")) {
+    return true;
+  }
+
+  const ids = sanitizeObjectIdArray(value);
+  if (!ids.length) {
+    throw new Error("At least one service category is required");
+  }
+
+  for (const id of ids) {
+    if (!mongoose.Types.ObjectId.isValid(String(id))) {
+      throw new Error("Invalid service category id");
+    }
+  }
+
+  return true;
+};
 
 export const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -190,11 +211,9 @@ export const updateTestimonialMasterValidation = [
 ];
 
 export const createServiceDocumentRequirementValidation = [
-  body("service_category")
-    .notEmpty()
-    .withMessage("Service category is required")
-    .isMongoId()
-    .withMessage("Invalid service category id"),
+  body("service_category").custom((value) =>
+    validateServiceCategoryIds(value),
+  ),
   body("name").notEmpty().withMessage("Name is required"),
   body("type")
     .optional()
@@ -214,8 +233,7 @@ export const createServiceDocumentRequirementValidation = [
 export const updateServiceDocumentRequirementValidation = [
   body("service_category")
     .optional()
-    .isMongoId()
-    .withMessage("Invalid service category id"),
+    .custom((value) => validateServiceCategoryIds(value, { optional: true })),
   body("name").optional().notEmpty().withMessage("Name cannot be empty"),
   body("type")
     .optional()

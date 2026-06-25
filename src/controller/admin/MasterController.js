@@ -3,6 +3,24 @@ import ServiceCategory from "../../models/ServiceCategoryModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import CreditPackage from "../../models/CreditPackageModel.js";
+import { sanitizeObjectIdArray } from "../../../utils/helperFunction.js";
+
+const validateServiceCategories = async (serviceCategoryInput) => {
+  const serviceCategoryIds = sanitizeObjectIdArray(serviceCategoryInput);
+  if (!serviceCategoryIds.length) {
+    return { error: "At least one service category is required" };
+  }
+
+  const foundCount = await ServiceCategory.countDocuments({
+    _id: { $in: serviceCategoryIds },
+    deletedAt: null,
+  });
+  if (foundCount !== serviceCategoryIds.length) {
+    return { error: "One or more service categories not found" };
+  }
+
+  return { serviceCategoryIds };
+};
 
 const buildListQuery = ({ search, status, isDeleted }) => {
   const query = {};
@@ -317,28 +335,30 @@ export const restoreDeletedTestimonialMaster = async (req, resp) => {
 // create service document / license requirement master
 export const createServiceDocumentRequirement = async (req, resp) => {
   try {
-    const category = await ServiceCategory.findOne({
-      _id: req.body.service_category,
-      deletedAt: null,
-    });
-    if (!category) {
-      return handleResponse(404, "Service category not found", {}, resp);
+    const { serviceCategoryIds, error } = await validateServiceCategories(
+      req.body.service_category,
+    );
+    if (error) {
+      return handleResponse(400, error, {}, resp);
     }
 
     const requirement = await ServiceDocumentRequirement.create({
       ...req.body,
+      service_category: serviceCategoryIds,
       createdBy: req.user._id,
     });
+
+    const populated = await requirement.populate("service_category", "title");
 
     return handleResponse(
       201,
       "Service document requirement created successfully",
-      requirement,
+      populated,
       resp
     );
   } catch (err) {
     if (err?.code === 11000) {
-      return handleResponse(409, "Requirement already exists for this service", {}, resp);
+      return handleResponse(409, "Requirement with this name and type already exists", {}, resp);
     }
     return handleResponse(500, err.message, {}, resp);
   }
@@ -476,21 +496,23 @@ export const getServiceDocumentRequirementById = async (req, resp) => {
 // update service document / license requirement master
 export const updateServiceDocumentRequirement = async (req, resp) => {
   try {
-    if (req.body.service_category) {
-      const category = await ServiceCategory.findOne({
-        _id: req.body.service_category,
-        deletedAt: null,
-      });
-      if (!category) {
-        return handleResponse(404, "Service category not found", {}, resp);
+    const updates = { ...req.body };
+
+    if (updates.service_category !== undefined) {
+      const { serviceCategoryIds, error } = await validateServiceCategories(
+        updates.service_category,
+      );
+      if (error) {
+        return handleResponse(400, error, {}, resp);
       }
+      updates.service_category = serviceCategoryIds;
     }
 
     const requirement = await ServiceDocumentRequirement.findOneAndUpdate(
       { _id: req.params.id, deletedAt: null },
-      { $set: req.body },
-      { new: true }
-    );
+      { $set: updates },
+      { new: true },
+    ).populate("service_category", "title");
 
     if (!requirement) {
       return handleResponse(404, "Service document requirement not found", {}, resp);
@@ -504,7 +526,7 @@ export const updateServiceDocumentRequirement = async (req, resp) => {
     );
   } catch (err) {
     if (err?.code === 11000) {
-      return handleResponse(409, "Requirement already exists for this service", {}, resp);
+      return handleResponse(409, "Requirement with this name and type already exists", {}, resp);
     }
     return handleResponse(500, err.message, {}, resp);
   }
