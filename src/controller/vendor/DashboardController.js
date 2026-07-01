@@ -52,13 +52,18 @@ async function fetchVendorDashboardSummary(vendorId, user) {
         service_request_id: { $in: activeServiceRequest },
       }),
       VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
-      VendorQuote.countDocuments({ vendor_id: vendorId, status: "SENT" }),
+      VendorQuote.countDocuments({ vendor_id: vendorId  }),
     ]);
+
+  const parentGroups = await buildVendorParentCategoryGroups(serviceCategoryIds);
+  const leadCategoryFilter = parentGroups.length
+    ? buildLeadFilterForParentGroups(parentGroups)
+    : { service_category: { $in: [] } };
 
   const availableLeadsCount = await ServiceRequest.countDocuments({
     deletedAt: null,
     status: "ACTIVE",
-    service_category: { $in: serviceCategoryIds },
+    ...leadCategoryFilter,
     _id: { $nin: purchasedLeadIds },
   });
 
@@ -118,8 +123,12 @@ async function enrichLeadsForVendor(leads, vendorId) {
     const vendorQuote = vendorQuotesByLeadId.get(leadId);
     const creditsToUnlock =
       lead.contact_details?.client_type == "Individual"
-        ? lead.service_category?.credit || 3
-        : lead.service_category?.company_credit || 3;
+        ? (lead.child_category?.credit ||
+            lead.service_category?.credit ||
+            3)
+        : (lead.child_category?.company_credit ||
+            lead.service_category?.company_credit ||
+            3);
     const quotesCount = quotesCountMap.get(leadId) || 0;
     const statusMeta = buildVendorLeadStatus(unlocked, vendorQuote);
 
@@ -178,6 +187,118 @@ function buildServiceCategoryStatus(leads) {
   }
 
   return { status: null, status_label: null };
+}
+
+async function buildVendorParentCategoryGroups(vendorServiceIds) {
+  const categories = await ServiceCategory.find({
+    _id: { $in: vendorServiceIds },
+    deletedAt: null,
+  })
+    .select("title credit company_credit image description parent_category")
+    .populate({
+      path: "parent_category",
+      select: "title credit company_credit image description",
+      match: { deletedAt: null, status: "ACTIVE" },
+    })
+    .lean();
+
+  const groups = new Map();
+  const parentOrder = [];
+
+  for (const category of categories) {
+    const parentRef = category.parent_category;
+    const parentId = parentRef
+      ? (parentRef._id || parentRef).toString()
+      : category._id.toString();
+
+    if (!groups.has(parentId)) {
+      parentOrder.push(parentId);
+      groups.set(parentId, {
+        parentId,
+        parentDoc:
+          parentRef && typeof parentRef === "object" ? parentRef : category,
+        childIds: new Set(),
+      });
+    }
+
+    const group = groups.get(parentId);
+    group.childIds.add(category._id.toString());
+
+    if (parentRef && typeof parentRef === "object") {
+      group.parentDoc = parentRef;
+    }
+  }
+
+  return parentOrder.map((parentId) => {
+    const group = groups.get(parentId);
+    return {
+      parentId,
+      parentDoc: group.parentDoc,
+      childIds: [...group.childIds],
+    };
+  });
+}
+
+function buildLeadFilterForParentGroups(parentGroups) {
+  const childIds = new Set();
+  const parentIds = new Set();
+
+  for (const group of parentGroups) {
+    parentIds.add(group.parentId);
+    group.childIds.forEach((id) => childIds.add(id));
+  }
+
+  const childIdList = [...childIds];
+  const parentIdList = [...parentIds];
+
+  return {
+    $or: [
+      { child_category: { $in: childIdList } },
+      { service_category: { $in: childIdList } },
+      {
+        service_category: { $in: parentIdList },
+        $or: [
+          { child_category: { $in: childIdList } },
+          { child_category: null },
+        ],
+      },
+    ],
+  };
+}
+
+function buildChildToParentMap(parentGroups) {
+  const map = new Map();
+  for (const group of parentGroups) {
+    map.set(group.parentId, group.parentId);
+    for (const childId of group.childIds) {
+      map.set(childId, group.parentId);
+    }
+  }
+  return map;
+}
+
+function resolveLeadParentGroupId(lead, childToParentMap) {
+  const childId =
+    lead.child_category?._id?.toString() || lead.child_category?.toString();
+  if (childId && childToParentMap.has(childId)) {
+    return childToParentMap.get(childId);
+  }
+
+  const serviceCategoryId =
+    lead.service_category?._id?.toString() || lead.service_category?.toString();
+  if (serviceCategoryId && childToParentMap.has(serviceCategoryId)) {
+    return childToParentMap.get(serviceCategoryId);
+  }
+
+  return null;
+}
+
+function findParentGroup(parentGroups, categoryId) {
+  const target = String(categoryId);
+  return parentGroups.find(
+    (group) =>
+      group.parentId === target || group.childIds.includes(target),
+  );
 }
 
 function generateTransactionNumber(id, date) {
@@ -304,35 +425,40 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
       );
     }
 
-    let categoryIds = vendorServiceIds;
+    let parentGroups = await buildVendorParentCategoryGroups(vendorServiceIds);
+
     if (service) {
       if (!vendorOwnsService(user.service, service)) {
         return handleResponse(
-          200,
+          403,
           "Service not assigned to your account",
           {},
           res,
         );
       }
-      categoryIds = [service];
+      const matchedGroup = findParentGroup(parentGroups, service);
+      parentGroups = matchedGroup ? [matchedGroup] : [];
     }
 
-    const categories = await ServiceCategory.find({
-      _id: { $in: categoryIds },
-      deletedAt: null,
-    })
-      .select("title credit company_credit image description parent_category")
-      .populate({
-        path: "parent_category",
-        select: "title image description",
-        match: { deletedAt: null, status: "ACTIVE" },
-      })
-      .lean();
+    if (!parentGroups.length) {
+      const summary = await summaryPromise;
+      return handleResponse(
+        200,
+        "Leads by service category fetched",
+        {
+          summary,
+          data: [],
+          total_categories: 0,
+          total_leads: 0,
+        },
+        res,
+      );
+    }
 
     const filter = {
       deletedAt: null,
       status: "ACTIVE",
-      service_category: { $in: categoryIds },
+      ...buildLeadFilterForParentGroups(parentGroups),
     };
     if (city) filter.city = city;
     if (state) filter.state = state;
@@ -362,44 +488,43 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
         path: "service_category",
         select: "title credit company_credit",
       })
+      .populate({
+        path: "child_category",
+        select: "title credit company_credit",
+      })
       .sort(sortByCreditInMemory ? { createdAt: -1 } : sortOption)
       .lean();
 
     if (sortByCreditInMemory) {
+      const getLeadCredit = (lead) =>
+        lead.child_category?.credit ||
+        lead.service_category?.credit ||
+        0;
+
       if (sort === "high_to_low") {
-        allLeads.sort(
-          (a, b) =>
-            (b.service_category?.credit || 0) -
-            (a.service_category?.credit || 0),
-        );
+        allLeads.sort((a, b) => getLeadCredit(b) - getLeadCredit(a));
       } else {
-        allLeads.sort(
-          (a, b) =>
-            (a.service_category?.credit || 0) -
-            (b.service_category?.credit || 0),
-        );
+        allLeads.sort((a, b) => getLeadCredit(a) - getLeadCredit(b));
       }
     }
 
     const enrichedLeads = await enrichLeadsForVendor(allLeads, vendorId);
+    const childToParentMap = buildChildToParentMap(parentGroups);
 
-    const leadsByCategory = new Map();
-    for (const lead of enrichedLeads) {
-      const catId =
-        lead.service_category?._id?.toString() ||
-        lead.service_category?.toString();
-      if (!catId) continue;
-      if (!leadsByCategory.has(catId)) leadsByCategory.set(catId, []);
-      leadsByCategory.get(catId).push(lead);
+    const leadsByParent = new Map();
+    for (const group of parentGroups) {
+      leadsByParent.set(group.parentId, []);
     }
 
-    const categoryOrder = new Map(
-      categoryIds.map((id, index) => [id.toString(), index]),
-    );
+    for (const lead of enrichedLeads) {
+      const parentId = resolveLeadParentGroupId(lead, childToParentMap);
+      if (!parentId || !leadsByParent.has(parentId)) continue;
+      leadsByParent.get(parentId).push(lead);
+    }
 
-    let paginateCategoryId = paginate_service ? String(paginate_service) : null;
-    if (paginateCategoryId) {
-      if (!vendorOwnsService(user.service, paginateCategoryId)) {
+    let paginateParentId = paginate_service ? String(paginate_service) : null;
+    if (paginateParentId) {
+      if (!vendorOwnsService(user.service, paginateParentId)) {
         return handleResponse(
           403,
           "Service not assigned to your account",
@@ -407,8 +532,8 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
           res,
         );
       }
-      const visibleCategoryIds = new Set(categoryIds.map((id) => id.toString()));
-      if (!visibleCategoryIds.has(paginateCategoryId)) {
+      const matchedGroup = findParentGroup(parentGroups, paginateParentId);
+      if (!matchedGroup) {
         return handleResponse(
           400,
           "paginate_service must match a visible service category",
@@ -416,42 +541,34 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
           res,
         );
       }
+      paginateParentId = matchedGroup.parentId;
     }
 
-    const data = categories
-      .sort(
-        (a, b) =>
-          (categoryOrder.get(a._id.toString()) ?? 0) -
-          (categoryOrder.get(b._id.toString()) ?? 0),
-      )
-      .map((category) => {
-        const { parent_category, ...serviceCategory } = category;
-        const catId = category._id.toString();
-        const allCategoryLeads = leadsByCategory.get(catId) || [];
-        const categoryStatus = buildServiceCategoryStatus(allCategoryLeads);
-        const totalCategoryLeads = allCategoryLeads.length;
-        const shouldFullPaginate = paginateCategoryId === catId;
-        const leads = shouldFullPaginate
-          ? allCategoryLeads.slice(skip, skip + limit)
-          : allCategoryLeads.slice(0, limit);
+    const data = parentGroups.map((group) => {
+      const allCategoryLeads = leadsByParent.get(group.parentId) || [];
+      const categoryStatus = buildServiceCategoryStatus(allCategoryLeads);
+      const totalCategoryLeads = allCategoryLeads.length;
+      const shouldFullPaginate = paginateParentId === group.parentId;
+      const leads = shouldFullPaginate
+        ? allCategoryLeads.slice(skip, skip + limit)
+        : allCategoryLeads.slice(0, limit);
 
-        const item = {
-          service_category: serviceCategory,
-          parent_service_category: parent_category || null,
-          leads_count: totalCategoryLeads,
-          status: categoryStatus.status,
-          status_label: categoryStatus.status_label,
-          leads,
-          pagination: {
-            page: shouldFullPaginate ? page : 1,
-            limit,
-            total: totalCategoryLeads,
-            totalPages: Math.ceil(totalCategoryLeads / limit) || 0,
-          },
-        };
+      const { parent_category, ...serviceCategory } = group.parentDoc || {};
 
-        return item;
-      });
+      return {
+        parent_service_category: serviceCategory,
+        leads_count: totalCategoryLeads,
+        status: categoryStatus.status,
+        status_label: categoryStatus.status_label,
+        leads,
+        pagination: {
+          page: shouldFullPaginate ? page : 1,
+          limit,
+          total: totalCategoryLeads,
+          totalPages: Math.ceil(totalCategoryLeads / limit) || 0,
+        },
+      };
+    });
 
     const summary = await summaryPromise;
 
@@ -462,11 +579,11 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
       total_leads: enrichedLeads.length,
     };
 
-    if (paginateCategoryId) {
+    if (paginateParentId) {
       responsePayload.pagination = {
         page,
         limit,
-        paginate_service: paginateCategoryId,
+        paginate_service: paginateParentId,
       };
     }
 
