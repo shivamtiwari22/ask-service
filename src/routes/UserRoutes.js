@@ -4,6 +4,7 @@ import {
   acceptQuote,
   closeServiceRequest,
   getCreatedServiceRequests,
+  getCreatedServiceRequestById,
   getQuoteDetails,
   getQuotesForServiceRequest,
   getUserServiceCategories,
@@ -103,6 +104,17 @@ router.get(
   getCreatedServiceRequests,
 );
 
+router.get(
+  "/get-created-services/:id",
+  userAuthenticateToken,
+  checkRoleAuth(["User"]),
+  getCreatedServiceRequestById,
+);
+
+
+
+
+
 // close service request (body: reason, optional reason_comment for "Other reason")
 
 router.put(
@@ -112,6 +124,7 @@ router.put(
   closeServiceRequest,
 );
 
+
 // quotes for a service request (modal "Quotes for House Cleaning")
 router.get(
   "/service-requests/:id/quotes",
@@ -119,6 +132,8 @@ router.get(
   checkRoleAuth(["User"]),
   getQuotesForServiceRequest,
 );
+
+
 // single quote details (modal "View details")
 router.get(
   "/service-requests/:id/quotes/:quoteId",

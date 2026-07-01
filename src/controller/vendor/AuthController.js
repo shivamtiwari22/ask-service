@@ -13,7 +13,9 @@ import User from "../../models/UserModel.js";
 import ServiceRequest from "../../models/ServiceRequestModel.js";
 import normalizePath from "../../../utils/imageNormalizer.js";
 import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
-import ServiceCategory from "../../models/ServiceCategoryModel.js";
+import ServiceCategory, {
+  formatServiceCategoryImageUrl,
+} from "../../models/ServiceCategoryModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import extractFiles from "../../../utils/extractNestedFiles.js";
 import {
@@ -24,7 +26,11 @@ import {
   sanitizeObjectIdArray,
   sanitizeStringArray,
   vendorOwnsService,
+  buildVendorLeadStatus,
+  buildAvailableLeadDisplayStatus,
+  maskVendorLeadContactDetails,
 } from "../../../utils/helperFunction.js";
+import Global from "../../models/GlobalModel.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
 import BusinessInformation from "../../models/BusinessInformationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
@@ -160,6 +166,7 @@ export const registerVendor = async (req, resp) => {
   }
 };
 
+
 export const NewPassword = async (req, res) => {
   const { password, confirm_password } = req.body;
   try {
@@ -235,8 +242,8 @@ export const resendOTP = async (req, resp) => {
       user.otp_phone_expiry_at = moment().add(2, "minutes").toDate();
 
       try {
+        
         let msg = `Votre code de vérification est ${user.otp_phone}. Saisissez-le pour vérifier votre numéro de téléphone.`;
-
 
         const response = await axios.post(
           "https://rest.clicksend.com/v3/sms/send",
@@ -810,7 +817,8 @@ export const resetPassword = async (req, resp) => {
   }
 };
 
-// get all services
+
+
 export const getAllServices = async (req, resp) => {
   try {
     const services = await ServiceCategory.find({
@@ -818,9 +826,115 @@ export const getAllServices = async (req, resp) => {
       parent_category: null,
       deletedAt : null
     }).select("title image");
-
     return handleResponse(200, "Services fetched successfully", services, resp);
     
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+
+
+// get all services grouped by parent category
+export const getAllServicesGroupedByParentCategory = async (req, resp) => {
+  try {
+    const data = await ServiceCategory.aggregate([
+      {
+        $match: {
+          deletedAt: null,
+          status: "ACTIVE",
+          parent_category: null,
+        },
+      },
+      {
+        $project: {
+          title: 1,
+          description: 1,
+          image: 1,
+          options: {
+            $map: {
+              input: {
+                $filter: {
+                  input: { $ifNull: ["$options", []] },
+                  as: "opt",
+                  cond: { $eq: ["$$opt.status", "ACTIVE"] },
+                },
+              },
+              as: "opt",
+              in: {
+                _id: "$$opt._id",
+                label: "$$opt.label",
+                status: "$$opt.status",
+              },
+            },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "servicecategories",
+          let: { parentId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$parent_category", "$$parentId"] },
+                    { $eq: ["$deletedAt", null] },
+                    { $eq: ["$status", "ACTIVE"] },
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                title: 1,
+                description: 1,
+                image: 1,
+                credit: 1,
+                company_credit: 1,
+                options: {
+                  $map: {
+                    input: {
+                      $filter: {
+                        input: { $ifNull: ["$options", []] },
+                        as: "opt",
+                        cond: { $eq: ["$$opt.status", "ACTIVE"] },
+                      },
+                    },
+                    as: "opt",
+                    in: {
+                      _id: "$$opt._id",
+                      label: "$$opt.label",
+                      status: "$$opt.status",
+                    },
+                  },
+                },
+              },
+            },
+            { $sort: { title: 1 } },
+          ],
+          as: "child_categories",
+        },
+      },
+      { $sort: { title: 1 } },
+    ]);
+
+    const groupedServices = data.map((parent) => ({
+      ...parent,
+      image: formatServiceCategoryImageUrl(parent.image),
+      child_categories: (parent.child_categories || []).map((child) => ({
+        ...child,
+        image: formatServiceCategoryImageUrl(child.image),
+      })),
+    }));
+
+    return handleResponse(
+      200,
+      "Services fetched successfully",
+      groupedServices,
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -986,16 +1100,26 @@ export const updateDocumentRequiredForService = async (req, resp) => {
   }
 };
 
-function maskContactDetails(contact) {
-  if (!contact) return contact;
+function splitServiceCategoryWithParent(serviceCategory) {
+  if (!serviceCategory) {
+    return { service_category: null, parent_service_category: null };
+  }
+  const { parent_category, ...category } = serviceCategory;
   return {
-    ...contact,
-    first_name: contact.first_name ? contact.first_name[0] + "***" : "***",
-    last_name: contact.last_name ? contact.last_name[0] + "***" : "***",
-    phone: (contact.phone || "").slice(0, 3) + " *******",
-    email: (contact.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
+    service_category: category,
+    parent_service_category: parent_category || null,
   };
 }
+
+const availableLeadsServiceCategoryPopulate = {
+  path: "service_category",
+  select: "title credit company_credit image description parent_category",
+  populate: {
+    path: "parent_category",
+    select: "title image description",
+    match: { deletedAt: null, status: "ACTIVE" },
+  },
+};
 
 export const availableLeads = async (req, resp) => {
   try {
@@ -1076,10 +1200,7 @@ export const availableLeads = async (req, resp) => {
 
     if (sortByCreditInMemory) {
       const allLeads = await ServiceRequest.find(filter)
-        .populate({
-          path: "service_category",
-          select: "title credit company_credit",
-        })
+        .populate(availableLeadsServiceCategoryPopulate)
         .sort({ createdAt: -1 })
         .lean();
 
@@ -1100,10 +1221,7 @@ export const availableLeads = async (req, resp) => {
     } else {
       total = await ServiceRequest.countDocuments(filter);
       leads = await ServiceRequest.find(filter)
-        .populate({
-          path: "service_category",
-          select: "title credit company_credit",
-        })
+        .populate(availableLeadsServiceCategoryPopulate)
         .sort(sortOption)
         .skip(skip)
         .limit(limit)
@@ -1111,45 +1229,84 @@ export const availableLeads = async (req, resp) => {
     }
 
     const leadObjectIds = leads.map((l) => l._id);
-    const unlockedIds = new Set(
+    const [unlockedLeadIds, vendorQuotes, quoteCounts, prosConsultedCounts, globalSettings] =
+      await Promise.all([
       vendorId
-        ? (
-            await VendorLeadUnlock.find({
-              vendor_id: vendorId,
-              service_request_id: { $in: leadObjectIds },
-            }).distinct("service_request_id")
-          )?.map((id) => id.toString()) || []
-        : [],
+        ? VendorLeadUnlock.find({
+            vendor_id: vendorId,
+            service_request_id: { $in: leadObjectIds },
+          }).distinct("service_request_id")
+        : Promise.resolve([]),
+      vendorId
+        ? VendorQuote.find({
+            vendor_id: vendorId,
+            service_request_id: { $in: leadObjectIds },
+          })
+            .select("_id service_request_id status")
+            .lean()
+        : Promise.resolve([]),
+      VendorQuote.aggregate([
+        { $match: { service_request_id: { $in: leadObjectIds }, status: "SENT" } },
+        { $group: { _id: "$service_request_id", count: { $sum: 1 } } },
+      ]),
+      VendorLeadUnlock.aggregate([
+        { $match: { service_request_id: { $in: leadObjectIds } } },
+        { $group: { _id: "$service_request_id", count: { $sum: 1 } } },
+      ]),
+      Global.findOne().select("quote_limit").lean(),
+    ]);
+
+    const unlockedIds = new Set(
+      unlockedLeadIds?.map((id) => id.toString()) || [],
     );
-
-    const leadsWithMasking = await Promise.all(
-      leads.map(async (lead) => {
-        const unlocked = unlockedIds.has(lead._id.toString());
-        const creditsToUnlock =  lead.contact_details.client_type == "Individual"     ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3)  ;
-
-        const quotesCount = await VendorQuote.countDocuments({
-          service_request_id: lead._id,
-          status: "SENT",
-        });
-
-        if (unlocked) {
-          return {
-            ...lead,
-            unlocked: true,
-            creditsToUnlock,
-            quotes_count: quotesCount,
-          };
-        }
-
-        return {
-          ...lead,
-          contact_details: maskContactDetails(lead.contact_details),
-          unlocked: false,
-          creditsToUnlock,
-          quotes_count: quotesCount,
-        };
-      }),
+    const vendorQuotesByLeadId = new Map(
+      vendorQuotes.map((q) => [q.service_request_id.toString(), q]),
     );
+    const quotesCountMap = new Map(
+      quoteCounts.map((q) => [q._id.toString(), q.count]),
+    );
+    const prosConsultedCountMap = new Map(
+      prosConsultedCounts.map((q) => [q._id.toString(), q.count]),
+    );
+    const strongQuotesThreshold = globalSettings?.quote_limit ?? 5;
+
+    const leadsWithMasking = leads.map((lead) => {
+      const leadId = lead._id.toString();
+      const unlocked = unlockedIds.has(leadId);
+      const { service_category, parent_service_category } =
+        splitServiceCategoryWithParent(lead.service_category);
+      const creditsToUnlock =
+        lead.contact_details?.client_type == "Individual"
+          ? service_category?.credit || 3
+          : service_category?.company_credit || 3;
+      const quotesCount = quotesCountMap.get(leadId) || 0;
+      const prosConsultedCount = prosConsultedCountMap.get(leadId) || 0;
+      const leadStatusMeta = buildAvailableLeadDisplayStatus({
+        unlocked,
+        vendorQuote: vendorQuotesByLeadId.get(leadId),
+        quotesCount,
+        prosConsultedCount,
+        strongQuotesThreshold,
+      });
+
+      const baseLead = {
+        ...lead,
+        service_category,
+        parent_service_category,
+        request_status: lead.status,
+        ...leadStatusMeta,
+        unlocked,
+        creditsToUnlock,
+        quotes_count: quotesCount,
+      };
+
+      if (unlocked) return baseLead;
+
+      return {
+        ...baseLead,
+        contact_details: maskVendorLeadContactDetails(lead.contact_details),
+      };
+    });
 
     const totalPages = Math.ceil(total / limit) || 0;
 
@@ -1169,6 +1326,9 @@ export const availableLeads = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+
+
 
 export const singleService = async (req, resp) => {
   try {

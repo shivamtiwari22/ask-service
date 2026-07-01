@@ -120,6 +120,172 @@ export const vendorOwnsService = (vendorServices, categoryId) => {
   return getServiceIds(vendorServices).some((id) => id.toString() === target);
 };
 
+export function maskVendorLeadContactDetails(contact) {
+  if (!contact) return contact;
+  return {
+    ...contact,
+    first_name: contact.first_name ? contact.first_name[0] + "***" : "***",
+    last_name: contact.last_name ? contact.last_name[0] + "***" : "***",
+    phone: (contact.phone || "").slice(0, 3) + " *******",
+    email: (contact.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
+  };
+}
+
+export function buildVendorLeadStatus(unlocked, quote) {
+  if (quote) {
+    switch (quote.status) {
+      case "SENT":
+        return {
+          lead_status: "pending",
+          lead_status_label: "PENDING",
+          quote_id: quote._id,
+        };
+      case "ACCEPTED":
+        return {
+          lead_status: "accepted",
+          lead_status_label: "ACCEPTED",
+          quote_id: quote._id,
+        };
+      case "IGNORED":
+        return {
+          lead_status: "ignored",
+          lead_status_label: "IGNORED",
+          quote_id: quote._id,
+        };
+      case "WITHDRAWN":
+        return {
+          lead_status: "withdrawn",
+          lead_status_label: "WITHDRAWN",
+          quote_id: quote._id,
+        };
+    }
+  }
+
+  if (unlocked) {
+    return {
+      lead_status: "unlocked",
+      lead_status_label: "UNLOCKED",
+      quote_id: null,
+    };
+  }
+
+  return {
+    lead_status: "new",
+    lead_status_label: "NEW",
+    quote_id: null,
+  };
+}
+
+export function resolveLeadServiceCategories(lead) {
+  const serviceCategoryField = lead?.service_category || null;
+  const childCategoryField = lead?.child_category || null;
+
+  if (childCategoryField) {
+    return {
+      service_category: childCategoryField,
+      parent_service_category: serviceCategoryField || null,
+    };
+  }
+
+  if (
+    serviceCategoryField &&
+    typeof serviceCategoryField === "object" &&
+    serviceCategoryField.parent_category
+  ) {
+    const { parent_category, ...childCategory } = serviceCategoryField;
+    return {
+      service_category: childCategory,
+      parent_service_category:
+        typeof parent_category === "object" ? parent_category : null,
+    };
+  }
+
+  return {
+    service_category: serviceCategoryField,
+    parent_service_category: serviceCategoryField || null,
+  };
+}
+
+const DEFAULT_STRONG_QUOTES_THRESHOLD = 5;
+
+export function buildAvailableLeadDisplayStatus({
+  unlocked,
+  vendorQuote,
+  quotesCount = 0,
+  prosConsultedCount = 0,
+  strongQuotesThreshold = DEFAULT_STRONG_QUOTES_THRESHOLD,
+}) {
+  const professionals_interested_count = quotesCount;
+  const pros_consulted_count = prosConsultedCount;
+
+  if (vendorQuote) {
+    const quoteStatus = buildVendorLeadStatus(unlocked, vendorQuote);
+    return {
+      ...quoteStatus,
+      status: quoteStatus.lead_status,
+      status_label: quoteStatus.lead_status_label,
+      lead_status_message: null,
+      lead_status_alert_type: null,
+      pros_consulted_count,
+      professionals_interested_count,
+    };
+  }
+
+  if (unlocked) {
+    return {
+      lead_status: "unlocked",
+      lead_status_label: "UNLOCKED",
+      status: "unlocked",
+      status_label: "UNLOCKED",
+      quote_id: null,
+      lead_status_message: null,
+      lead_status_alert_type: null,
+      pros_consulted_count,
+      professionals_interested_count,
+    };
+  }
+
+  if (quotesCount >= strongQuotesThreshold) {
+    return {
+      lead_status: "strong",
+      lead_status_label: "STRONG",
+      status: "strong",
+      status_label: "STRONG",
+      quote_id: null,
+      lead_status_message: `${quotesCount} professionals interested`,
+      lead_status_alert_type: "warning",
+      pros_consulted_count,
+      professionals_interested_count,
+    };
+  }
+
+  if (prosConsultedCount > 0) {
+    return {
+      lead_status: "new",
+      lead_status_label: "NEW",
+      status: "new",
+      status_label: "NEW",
+      quote_id: null,
+      lead_status_message: `${prosConsultedCount} pros have already consulted`,
+      lead_status_alert_type: "hot",
+      pros_consulted_count,
+      professionals_interested_count,
+    };
+  }
+
+  return {
+    lead_status: "new",
+    lead_status_label: "NEW",
+    status: "new",
+    status_label: "NEW",
+    quote_id: null,
+    lead_status_message: "No competitors yet!",
+    lead_status_alert_type: "hot",
+    pros_consulted_count: 0,
+    professionals_interested_count,
+  };
+}
+
 export const cookieOptions = {
   maxAge: 60 * 1000,
   httpOnly: true,

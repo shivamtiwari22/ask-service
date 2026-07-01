@@ -378,11 +378,20 @@ export const createQuestionValidation = [
       "time"
     ])
     .withMessage("Invalid question type"),
-  body("service_id")
-    .notEmpty()
-    .withMessage("Service id is required")
-    .isMongoId()
-    .withMessage("Invalid service id"),
+  body("service_id").optional().isMongoId().withMessage("Invalid service id"),
+  body("service_ids")
+    .optional()
+    .custom((value) => validateServiceCategoryIds(value, { optional: true })),
+  body().custom((_, { req }) => {
+    const hasSingle =
+      req.body.service_id &&
+      mongoose.Types.ObjectId.isValid(String(req.body.service_id));
+    const ids = sanitizeObjectIdArray(req.body.service_ids);
+    if (!hasSingle && !ids.length) {
+      throw new Error("At least one service category is required");
+    }
+    return true;
+  }),
   body("step").notEmpty().isInt({ min: 1 }).withMessage("Step must be >= 1"),
   body("order").optional().isInt({ min: 0 }).withMessage("Order must be >= 0"),
   body("status")

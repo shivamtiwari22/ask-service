@@ -104,6 +104,30 @@ const ServiceRequestSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+
+    cityOrPostalCode : {
+      type: String,
+      default: null,
+      trim: true,
+    },
+
+    desiredDate : {
+      type: Date,
+      default: null,
+    } ,
+
+    timeSlot : {
+      type: String,
+      default: null,
+      trim: true,
+    } ,
+
+    additionalDetails : {
+      type: String,
+      default: null,
+      trim: true,
+    } ,
+
     contact_details: { type: contactSchema, required: true },
     status: {
       type: String,

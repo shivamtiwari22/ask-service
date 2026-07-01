@@ -207,6 +207,10 @@ export const initiateServiceRequest = async (req, resp) => {
       end_date,
       end_time,
       dynamic_answers,
+      cityOrPostalCode,
+      desiredDate,
+      timeSlot,
+      additionalDetails,
     } = req.body;
 
     if (!contact_details) {
@@ -290,6 +294,10 @@ export const initiateServiceRequest = async (req, resp) => {
             end_date,
             end_time,
             dynamic_answers,
+            cityOrPostalCode,
+            desiredDate,
+            timeSlot,
+            additionalDetails,
           },
         ],
         { session },
@@ -571,6 +579,10 @@ export const initiateServiceRequest = async (req, resp) => {
           end_date,
           end_time,
           dynamic_answers,
+          cityOrPostalCode,
+          desiredDate,
+          timeSlot,
+          additionalDetails,
         },
       ],
       { session },
@@ -722,7 +734,295 @@ export const verifySignupLogin = async (req, resp) => {
   }
 };
 
+const formatQuoteListItem = (
+  quote,
+  requestCreatedMs,
+  preferredTimeOfDay,
+  statsByVendor,
+  businessByVendor,
+) => {
+  const vendor = quote.vendor_id;
+  const vid =
+    vendor && typeof vendor === "object" && vendor._id
+      ? vendor._id.toString()
+      : quote.vendor_id?.toString?.() || String(quote.vendor_id || "");
+  const stats = statsByVendor.get(vid) || {};
+  const business = businessByVendor.get(vid);
+  const quoteCreated = quote.createdAt ? new Date(quote.createdAt).getTime() : 0;
+  const respondedInHours =
+    requestCreatedMs && quoteCreated
+      ? Math.max(
+          0,
+          Math.round(
+            ((quoteCreated - requestCreatedMs) / (1000 * 60 * 60)) * 10,
+          ) / 10,
+        )
+      : 0;
+
+  const baseUrl = process.env.IMAGE_URL || "";
+  const attachmentPath = quote.attachment_url;
+  const attachmentUrl = attachmentPath
+    ? baseUrl +
+      (attachmentPath.startsWith("/") ? attachmentPath : attachmentPath)
+    : null;
+
+  return {
+    _id: quote._id,
+    quote_id: quote._id,
+    vendor_id: vid,
+    service_request_id: quote.service_request_id,
+    quote_price: quote.quote_price,
+    currency: quote.currency || "EUR",
+    service_description: quote.service_description,
+    available_start_date: quote.available_start_date,
+    quote_valid_days: quote.quote_valid_days,
+    attachment_url: attachmentUrl,
+    included_items: quote.included_items || [],
+    excluded_items: quote.excluded_items || [],
+    availability_text: quote.availability_text,
+    status: quote.status,
+    createdAt: quote.createdAt,
+    updatedAt: quote.updatedAt,
+    vendor:
+      vendor && typeof vendor === "object"
+        ? {
+            _id: vendor._id,
+            first_name: vendor.first_name,
+            last_name: vendor.last_name,
+            profile_pic: vendor.profile_pic,
+            email: vendor.email,
+          }
+        : null,
+    provider_name:
+      business?.business_name ||
+      (vendor && typeof vendor === "object"
+        ? `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim()
+        : "Vendor"),
+    rating: stats.rating ? Number(stats.rating.toFixed(1)) : null,
+    reviews_count: stats.count || 0,
+    price: quote.quote_price,
+    price_display: `${quote.quote_price} € prix TTC`,
+    responded_in_hours: respondedInHours,
+    preferred_time_of_day: preferredTimeOfDay,
+  };
+};
+
+const loadQuotesByServiceRequest = async (requests) => {
+  const quotesByRequest = new Map();
+  if (!requests?.length) return quotesByRequest;
+
+  const requestIds = requests.map((r) => r._id);
+  const requestMeta = new Map(
+    requests.map((r) => [
+      r._id.toString(),
+      {
+        createdAtMs: r.createdAt ? new Date(r.createdAt).getTime() : 0,
+        preferredTimeOfDay: r.preferred_time_of_day,
+      },
+    ]),
+  );
+
+  const quotes = await VendorQuote.find({
+    service_request_id: { $in: requestIds },
+  })
+    .populate("vendor_id", "first_name last_name profile_pic email")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const vendorIds = [
+    ...new Set(
+      quotes
+        .map((q) => {
+          const v = q.vendor_id;
+          return v?._id?.toString() || v?.toString?.();
+        })
+        .filter(Boolean),
+    ),
+  ];
+
+  const [reviewStats, businessList] = await Promise.all([
+    vendorIds.length
+      ? VendorReview.aggregate([
+          {
+            $match: {
+              vendor: {
+                $in: vendorIds.map((id) => new mongoose.Types.ObjectId(id)),
+              },
+              status: "ACTIVE",
+            },
+          },
+          {
+            $group: {
+              _id: "$vendor",
+              rating: { $avg: "$rating" },
+              count: { $sum: 1 },
+            },
+          },
+        ])
+      : [],
+    vendorIds.length
+      ? BusinessInformation.find({ user_id: { $in: vendorIds } }).lean()
+      : [],
+  ]);
+
+  const statsByVendor = new Map(
+    reviewStats.map((s) => [s._id.toString(), s]),
+  );
+  const businessByVendor = new Map(
+    businessList.map((b) => [b.user_id.toString(), b]),
+  );
+
+  for (const quote of quotes) {
+    const requestId = quote.service_request_id?.toString();
+    if (!requestId) continue;
+    const meta = requestMeta.get(requestId) || {
+      createdAtMs: 0,
+      preferredTimeOfDay: null,
+    };
+    const formatted = formatQuoteListItem(
+      quote,
+      meta.createdAtMs,
+      meta.preferredTimeOfDay,
+      statsByVendor,
+      businessByVendor,
+    );
+    if (!quotesByRequest.has(requestId)) quotesByRequest.set(requestId, []);
+    quotesByRequest.get(requestId).push(formatted);
+  }
+
+  return quotesByRequest;
+};
+
+const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
+  const totalQuotesCount = quotes.length;
+  const sentQuotesCount = quotes.filter((q) => q.status === "SENT").length;
+  const acceptedQuotesCount = quotes.filter((q) => q.status === "ACCEPTED").length;
+  const ignoredQuotesCount = quotes.filter((q) => q.status === "IGNORED").length;
+  const todayStart = moment().startOf("day").toDate();
+  const newQuotesCount = quotes.filter(
+    (q) =>
+      q.status === "SENT" &&
+      q.createdAt &&
+      new Date(q.createdAt) >= todayStart,
+  ).length;
+
+  const baseCounts = {
+    quotes_count: sentQuotesCount,
+    total_quotes_count: totalQuotesCount,
+    accepted_quotes_count: acceptedQuotesCount,
+    ignored_quotes_count: ignoredQuotesCount,
+    new_quotes_count: newQuotesCount,
+    accepted_quote_message: null,
+    accepted_quote_sub_message: null,
+  };
+
+  if (serviceRequestStatus === "CANCELLED") {
+    return {
+      quotes_status: "closed",
+      quotes_status_label: "CLOSED",
+      ...baseCounts,
+    };
+  }
+
+  if (totalQuotesCount === 0) {
+    return {
+      quotes_status: "hold",
+      quotes_status_label: "ON HOLD",
+      ...baseCounts,
+      quotes_count: 0,
+      total_quotes_count: 0,
+      accepted_quotes_count: 0,
+      ignored_quotes_count: 0,
+      new_quotes_count: 0,
+    };
+  }
+
+  if (acceptedQuotesCount > 0) {
+    const acceptedQuote = quotes.find((q) => q.status === "ACCEPTED");
+    const providerName = acceptedQuote?.provider_name || "Prestataire";
+    const price = acceptedQuote?.quote_price ?? acceptedQuote?.price ?? "";
+    const startDate = acceptedQuote?.available_start_date;
+    const dateLabel = startDate
+      ? moment(startDate).locale("fr").format("D MMMM")
+      : null;
+
+    return {
+      quotes_status: "accepted",
+      quotes_status_label: "QUOTE ACCEPTED",
+      ...baseCounts,
+      accepted_quote_message: `Devis de ${providerName} accepté · ${price}€`,
+      accepted_quote_sub_message: dateLabel
+        ? `Mission confirmée pour le ${dateLabel} · Contact transmis`
+        : "Mission confirmée · Contact transmis",
+    };
+  }
+
+  if (sentQuotesCount === 0 && ignoredQuotesCount > 0) {
+    return {
+      quotes_status: "ignore",
+      quotes_status_label: "IGNORED",
+      ...baseCounts,
+    };
+  }
+
+  return {
+    quotes_status: "open",
+    quotes_status_label: "OPEN",
+    ...baseCounts,
+  };
+};
+
+const mapCreatedServiceRequestItem = (request, quotes) => {
+  const quotesMeta = buildServiceQuotesMeta(quotes, request.status);
+  return {
+    ...request,
+    request_id: request.reference_no,
+    ...quotesMeta,
+    quotes,
+    status_label:
+      quotesMeta.quotes_count > 0 ? "Quotes received" : "Waiting for quotes",
+    location:
+      [request.city, request.pincode].filter(Boolean).join(", ") ||
+      request.address_1,
+  };
+};
+
 // get created service requests (My Requests list) – filter by user, add quote count and status label
+const getUserServiceRequestSummary = async (userId) => {
+  const baseMatch = { user: userId, deletedAt: null };
+  const requestIds = await ServiceRequest.find(baseMatch).distinct("_id");
+
+  const quoteMatch = requestIds.length
+    ? { service_request_id: { $in: requestIds } }
+    : null;
+
+  const [
+    active_requests_count,
+    applications_closed_count,
+    quotes_received_count,
+    quotes_accepted_count,
+  ] = await Promise.all([
+    ServiceRequest.countDocuments({ ...baseMatch, status: "ACTIVE" }),
+    ServiceRequest.countDocuments({
+      ...baseMatch,
+      status: { $in: ["CANCELLED", "EXPIRED"] },
+    }),
+    quoteMatch
+      ? VendorQuote.countDocuments({ ...quoteMatch, status: "SENT" })
+      : 0,
+    quoteMatch
+      ? VendorQuote.countDocuments({ ...quoteMatch, status: "ACCEPTED" })
+      : 0,
+  ]);
+
+  return {
+    active_requests_count,
+    quotes_received_count,
+    quotes_accepted_count,
+    applications_closed_count,
+  };
+};
+
 export const getCreatedServiceRequests = async (req, resp) => {
   try {
     const userId = req.user?._id;
@@ -731,9 +1031,9 @@ export const getCreatedServiceRequests = async (req, resp) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const { search, service, status, fromDate, toDate } = req.query;
+    const { search, service, status, fromDate, toDate, city, sort } = req.query;
 
-    const query = { user: userId, deletedAt: null , status:"ACTIVE"};
+    const query = { user: userId, deletedAt: null, status: { $in: ["ACTIVE", "CANCELLED"] } };
 
     if (search) {
       query.$and = query.$and || [];
@@ -752,6 +1052,7 @@ export const getCreatedServiceRequests = async (req, resp) => {
       });
     }
 
+    if (city) query.city = city;
     if (status) query.status = status;
     if (fromDate || toDate) {
       query.createdAt = {};
@@ -763,36 +1064,77 @@ export const getCreatedServiceRequests = async (req, resp) => {
     const skipNum = isPaginateDisabled ? 0 : skip;
     const limitNum = isPaginateDisabled ? 0 : Math.min(100, Math.max(1, limit));
 
-    const [requests, total] = await Promise.all([
-      ServiceRequest.find(query)
-        .populate("service_category", "title description image options")
-        .populate("child_category", "title description image options")
-        .sort({ createdAt: -1 })
-        .skip(skipNum)
-        .limit(limitNum || undefined)
-        .lean(),
-      ServiceRequest.countDocuments(query),
-    ]);
+    const sortKey = String(sort || "most_recent").toLowerCase();
+    const validSorts = ["most_recent", "oldest", "most_quotes"];
+    const activeSort = validSorts.includes(sortKey) ? sortKey : "most_recent";
 
-    const requestIds = requests.map((r) => r._id);
-    const quoteCounts = await VendorQuote.aggregate([
-      { $match: { service_request_id: { $in: requestIds }, status: "SENT" } },
-      { $group: { _id: "$service_request_id", count: { $sum: 1 } } },
-    ]);
-    const countByRequest = new Map(
-      quoteCounts.map((q) => [q._id.toString(), q.count]),
-    );
+    let requests;
+    let total;
+    let summary;
+
+    const summaryPromise = getUserServiceRequestSummary(userId);
+
+    if (activeSort === "most_quotes") {
+      const pipeline = [
+        { $match: query },
+        {
+          $lookup: {
+            from: "vendorquotes",
+            let: { requestId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$service_request_id", "$$requestId"] },
+                  status: "SENT",
+                },
+              },
+            ],
+            as: "sent_quotes",
+          },
+        },
+        {
+          $addFields: {
+            quotes_count: { $size: "$sent_quotes" },
+          },
+        },
+        { $sort: { quotes_count: -1, createdAt: -1 } },
+        ...(isPaginateDisabled ? [] : [{ $skip: skipNum }, { $limit: limitNum }]),
+        { $project: { sent_quotes: 0 } },
+      ];
+
+      [requests, total, summary] = await Promise.all([
+        ServiceRequest.aggregate(pipeline),
+        ServiceRequest.countDocuments(query),
+        summaryPromise,
+      ]);
+
+      await ServiceRequest.populate(requests, [
+        { path: "service_category", select: "title description image options" },
+        { path: "child_category", select: "title description image options" },
+      ]);
+    } else {
+      const sortOption =
+        activeSort === "oldest" ? { createdAt: 1 } : { createdAt: -1 };
+
+      [requests, total, summary] = await Promise.all([
+        ServiceRequest.find(query)
+          .populate("service_category", "title description image options")
+          .populate("child_category", "title description image options")
+          .sort(sortOption)
+          .skip(skipNum)
+          .limit(limitNum || undefined)
+          .lean(),
+        ServiceRequest.countDocuments(query),
+        summaryPromise,
+      ]);
+    }
+
+    const quotesByRequest = await loadQuotesByServiceRequest(requests);
 
     const data = requests.map((r) => {
-      const quotesCount = countByRequest.get(r._id.toString()) || 0;
-      return {
-        ...r,
-        request_id: r.reference_no,
-        quotes_count: quotesCount,
-        status_label:
-          quotesCount > 0 ? "Quotes received" : "Waiting for quotes",
-        location: [r.city, r.pincode].filter(Boolean).join(", ") || r.address_1,
-      };
+      const requestId = r._id.toString();
+      const quotes = quotesByRequest.get(requestId) || [];
+      return mapCreatedServiceRequestItem(r, quotes);
     });
 
     const pagination = isPaginateDisabled
@@ -807,7 +1149,50 @@ export const getCreatedServiceRequests = async (req, resp) => {
     return handleResponse(
       200,
       "Service requests fetched successfully",
-      { data, pagination },
+      {
+        data,
+        pagination,
+        sort: activeSort,
+        summary,
+      },
+      resp,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+export const getCreatedServiceRequestById = async (req, resp) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) return handleResponse(401, "Unauthorized", {}, resp);
+
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return handleResponse(400, "Invalid service request id", {}, resp);
+    }
+
+    const request = await ServiceRequest.findOne({
+      _id: id,
+      user: userId,
+      deletedAt: null,
+    })
+      .populate("service_category", "title description image options")
+      .populate("child_category", "title description image options")
+      .lean();
+
+    if (!request) {
+      return handleResponse(404, "Service request not found", {}, resp);
+    }
+
+    const quotesByRequest = await loadQuotesByServiceRequest([request]);
+    const quotes = quotesByRequest.get(request._id.toString()) || [];
+    const data = mapCreatedServiceRequestItem(request, quotes);
+
+    return handleResponse(
+      200,
+      "Service request fetched successfully",
+      data,
       resp,
     );
   } catch (err) {
@@ -1007,7 +1392,7 @@ export const getQuoteDetails = async (req, resp) => {
     const quote = await VendorQuote.findOne({
       _id: quoteId,
       service_request_id: requestId,
-      status: "SENT",
+      // status: "SENT",
     })
       .populate("vendor_id", "first_name last_name profile_pic email")
       .lean();

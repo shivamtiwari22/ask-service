@@ -124,7 +124,9 @@ app.get("/", (req, res) => {
   res.send("API is running..");
 });
 
-const PORT = process.env.PORT || 3200;
+const PORT = process.env.PORT || process.env.port || 3200;
+
+
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

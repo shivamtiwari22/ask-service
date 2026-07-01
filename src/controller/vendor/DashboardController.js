@@ -12,7 +12,7 @@ import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import pushNotification from "../../../config/pushNotification.js";
-import { getServiceIds, hasServices, vendorOwnsService } from "../../../utils/helperFunction.js";
+import { getServiceIds, hasServices, vendorOwnsService, buildVendorLeadStatus, buildAvailableLeadDisplayStatus, maskVendorLeadContactDetails, resolveLeadServiceCategories } from "../../../utils/helperFunction.js";
 import Stripe from "stripe";
 import notifications from "../../../config/notification.js";
 import Notification from "../../models/NotificationModel.js";
@@ -23,6 +23,162 @@ import mongoose from "mongoose";
 import Global from "../../models/GlobalModel.js";
 
 const LOW_CREDIT_THRESHOLD = 10;
+
+async function fetchVendorDashboardSummary(vendorId, user) {
+  const serviceCategoryIds = getServiceIds(user.service);
+  if (!hasServices(user.service)) {
+    return {
+      availableLeadsCount: 0,
+      purchasedLeadsCount: 0,
+      creditBalance: 0,
+      quotesSentCount: 0,
+      kyc_status: "Service not updated",
+      canPurchaseLeads: false,
+    };
+  }
+
+  const activeServiceRequest = await ServiceRequest.find({
+    deletedAt: null,
+    status: "ACTIVE",
+  }).distinct("_id");
+
+  const [purchasedLeadIds, purchasedLeadsCount, wallet, quotesSentCount] =
+    await Promise.all([
+      VendorLeadUnlock.find({ vendor_id: vendorId }).distinct(
+        "service_request_id",
+      ),
+      VendorLeadUnlock.countDocuments({
+        vendor_id: vendorId,
+        service_request_id: { $in: activeServiceRequest },
+      }),
+      VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
+      VendorQuote.countDocuments({ vendor_id: vendorId, status: "SENT" }),
+    ]);
+
+  const availableLeadsCount = await ServiceRequest.countDocuments({
+    deletedAt: null,
+    status: "ACTIVE",
+    service_category: { $in: serviceCategoryIds },
+    _id: { $nin: purchasedLeadIds },
+  });
+
+  return {
+    availableLeadsCount,
+    purchasedLeadsCount,
+    creditBalance: wallet?.amount ?? 0,
+    quotesSentCount,
+    kyc_status: user.kyc_status || "PENDING",
+    canPurchaseLeads: user.kyc_status === "ACTIVE",
+  };
+}
+
+async function loadVendorQuotesForLeads(vendorId, leadObjectIds) {
+  if (!vendorId || !leadObjectIds.length) return new Map();
+
+  const quotes = await VendorQuote.find({
+    vendor_id: vendorId,
+    service_request_id: { $in: leadObjectIds },
+  })
+    .select("_id service_request_id status")
+    .lean();
+
+  return new Map(
+    quotes.map((q) => [q.service_request_id.toString(), q]),
+  );
+}
+
+async function enrichLeadsForVendor(leads, vendorId) {
+  if (!leads.length) return [];
+
+  const leadObjectIds = leads.map((l) => l._id);
+  const [unlockedIds, vendorQuotesByLeadId, quoteCounts] = await Promise.all([
+    vendorId
+      ? VendorLeadUnlock.find({
+          vendor_id: vendorId,
+          service_request_id: { $in: leadObjectIds },
+        }).distinct("service_request_id")
+      : Promise.resolve([]),
+    loadVendorQuotesForLeads(vendorId, leadObjectIds),
+    VendorQuote.aggregate([
+      { $match: { service_request_id: { $in: leadObjectIds }, status: "SENT" } },
+      { $group: { _id: "$service_request_id", count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const unlockedIdSet = new Set(
+    unlockedIds?.map((id) => id.toString()) || [],
+  );
+  const quotesCountMap = new Map(
+    quoteCounts.map((q) => [q._id.toString(), q.count]),
+  );
+
+  return leads.map((lead) => {
+    const leadId = lead._id.toString();
+    const unlocked = unlockedIdSet.has(leadId);
+    const vendorQuote = vendorQuotesByLeadId.get(leadId);
+    const creditsToUnlock =
+      lead.contact_details?.client_type == "Individual"
+        ? lead.service_category?.credit || 3
+        : lead.service_category?.company_credit || 3;
+    const quotesCount = quotesCountMap.get(leadId) || 0;
+    const statusMeta = buildVendorLeadStatus(unlocked, vendorQuote);
+
+    const baseLead = {
+      ...lead,
+      ...statusMeta,
+      unlocked,
+      creditsToUnlock,
+      quotes_count: quotesCount,
+    };
+
+    if (unlocked) return baseLead;
+
+    return {
+      ...baseLead,
+      contact_details: maskVendorLeadContactDetails(lead.contact_details),
+    };
+  });
+}
+
+function buildServiceCategoryStatus(leads) {
+  let hasPendingQuote = false;
+  let hasAcceptedQuote = false;
+  let hasNewLead = false;
+  let hasClosedQuote = false;
+
+  for (const lead of leads) {
+    switch (lead.lead_status) {
+      case "pending":
+        hasPendingQuote = true;
+        break;
+      case "new":
+        hasNewLead = true;
+        break;
+      case "accepted":
+        hasAcceptedQuote = true;
+        break;
+      case "ignored":
+      case "withdrawn":
+        hasClosedQuote = true;
+        break;
+    }
+  }
+
+  if (hasPendingQuote) {
+    return { status: "pending", status_label: "PENDING" };
+  }
+  if (hasNewLead) {
+    return { status: "new", status_label: "NEW" };
+  }
+  if (hasAcceptedQuote) {
+    return { status: "accepted", status_label: "ACCEPTED" };
+  }
+  if (hasClosedQuote) {
+    return { status: "ignored", status_label: "IGNORED" };
+  }
+
+  return { status: null, status_label: null };
+}
 
 function generateTransactionNumber(id, date) {
   const year = new Date(date || Date.now()).getFullYear();
@@ -99,53 +255,227 @@ export const getDashboardStats = async (req, res) => {
     const user = await User.findById(vendorId).select("kyc_status service").lean();
     if (!user) return handleResponse(404, "User not found", {}, res);
 
-    const serviceCategoryIds = getServiceIds(user.service);
-    if (!hasServices(user.service)) {
-      return handleResponse(200, "Dashboard fetched", {
-        availableLeadsCount: 0,
-        purchasedLeadsCount: 0,
-        creditBalance: 0,
-        quotesSentCount: 0,
-        // kyc_status: user.kyc_status || "PENDING",
-        kyc_status: "Service not updated",
-        canPurchaseLeads: false,
-      }, res);
+    const summary = await fetchVendorDashboardSummary(vendorId, user);
+
+    return handleResponse(200, "Dashboard fetched successfully", summary, res);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, res);
+  }
+};
+
+/**
+ * GET /available-leads-by-service-category
+ * Available leads grouped by vendor service category, with dashboard summary.
+ */
+export const getAvailableLeadsByServiceCategory = async (req, res) => {
+  try {
+    const vendorId = req.user._id;
+    const user = await User.findById(vendorId).select("kyc_status service").lean();
+    if (!user) return handleResponse(404, "User not found", {}, res);
+
+    const { city, state, country, sort, service, unlocked, paginate_service } =
+      req.query;
+    const DEFAULT_CATEGORY_LEADS_LIMIT = 6;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const hasLimitQuery =
+      req.query.limit !== undefined && req.query.limit !== "";
+    const limit = hasLimitQuery
+      ? Math.min(
+          100,
+          Math.max(1, parseInt(req.query.limit, 10) || DEFAULT_CATEGORY_LEADS_LIMIT),
+        )
+      : DEFAULT_CATEGORY_LEADS_LIMIT;
+    const skip = (page - 1) * limit;
+    const vendorServiceIds = getServiceIds(user.service);
+    const summaryPromise = fetchVendorDashboardSummary(vendorId, user);
+
+    if (!vendorServiceIds.length) {
+      const summary = await summaryPromise;
+      return handleResponse(
+        200,
+        "Leads by service category fetched",
+        {
+          summary,
+          data: [],
+          total_categories: 0,
+          total_leads: 0,
+        },
+        res,
+      );
     }
 
+    let categoryIds = vendorServiceIds;
+    if (service) {
+      if (!vendorOwnsService(user.service, service)) {
+        return handleResponse(
+          200,
+          "Service not assigned to your account",
+          {},
+          res,
+        );
+      }
+      categoryIds = [service];
+    }
 
+    const categories = await ServiceCategory.find({
+      _id: { $in: categoryIds },
+      deletedAt: null,
+    })
+      .select("title credit company_credit image description parent_category")
+      .populate({
+        path: "parent_category",
+        select: "title image description",
+        match: { deletedAt: null, status: "ACTIVE" },
+      })
+      .lean();
 
-    const activeServiceRequest = await ServiceRequest.find({
+    const filter = {
       deletedAt: null,
       status: "ACTIVE",
-    }).distinct("_id")
+      service_category: { $in: categoryIds },
+    };
+    if (city) filter.city = city;
+    if (state) filter.state = state;
+    if (country) filter.country = country;
 
-    const [purchasedLeadIds, purchasedLeadsCount, wallet, quotesSentCount] = await Promise.all([
-      VendorLeadUnlock.find({ vendor_id: vendorId }).distinct("service_request_id"),
-      VendorLeadUnlock.countDocuments({ vendor_id: vendorId, service_request_id: { $in: activeServiceRequest } }),
-      VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
-      VendorQuote.countDocuments({ vendor_id: vendorId, status: "SENT" }),
-    ]);
+    if (vendorId && unlocked !== undefined && unlocked !== "") {
+      const unlockedLeadIds = await VendorLeadUnlock.find({
+        vendor_id: vendorId,
+      }).distinct("service_request_id");
+      const u = String(unlocked).toLowerCase();
+      if (u === "true") {
+        filter._id = { $in: unlockedLeadIds };
+      } else if (u === "false" && unlockedLeadIds.length > 0) {
+        filter._id = { $nin: unlockedLeadIds };
+      }
+    }
 
+    let sortOption = { createdAt: -1 };
+    if (sort === "oldest") sortOption = { createdAt: 1 };
+    else if (sort === "newest") sortOption = { createdAt: -1 };
 
-    const availableLeadsCount = await ServiceRequest.countDocuments({
-      deletedAt: null,
-      status: "ACTIVE",
-      service_category: { $in: serviceCategoryIds },
-      _id: { $nin: purchasedLeadIds },
-    });
+    const sortByCreditInMemory =
+      sort === "high_to_low" || sort === "low_to_high";
 
-    const creditBalance = wallet?.amount ?? 0;
-    const canPurchaseLeads = user.kyc_status === "ACTIVE";
+    let allLeads = await ServiceRequest.find(filter)
+      .populate({
+        path: "service_category",
+        select: "title credit company_credit",
+      })
+      .sort(sortByCreditInMemory ? { createdAt: -1 } : sortOption)
+      .lean();
 
+    if (sortByCreditInMemory) {
+      if (sort === "high_to_low") {
+        allLeads.sort(
+          (a, b) =>
+            (b.service_category?.credit || 0) -
+            (a.service_category?.credit || 0),
+        );
+      } else {
+        allLeads.sort(
+          (a, b) =>
+            (a.service_category?.credit || 0) -
+            (b.service_category?.credit || 0),
+        );
+      }
+    }
 
-    return handleResponse(200, "Dashboard fetched successfully", {
-      availableLeadsCount,
-      purchasedLeadsCount,
-      creditBalance,
-      quotesSentCount,
-      kyc_status: user.kyc_status || "PENDING",
-      canPurchaseLeads,
-    }, res);
+    const enrichedLeads = await enrichLeadsForVendor(allLeads, vendorId);
+
+    const leadsByCategory = new Map();
+    for (const lead of enrichedLeads) {
+      const catId =
+        lead.service_category?._id?.toString() ||
+        lead.service_category?.toString();
+      if (!catId) continue;
+      if (!leadsByCategory.has(catId)) leadsByCategory.set(catId, []);
+      leadsByCategory.get(catId).push(lead);
+    }
+
+    const categoryOrder = new Map(
+      categoryIds.map((id, index) => [id.toString(), index]),
+    );
+
+    let paginateCategoryId = paginate_service ? String(paginate_service) : null;
+    if (paginateCategoryId) {
+      if (!vendorOwnsService(user.service, paginateCategoryId)) {
+        return handleResponse(
+          403,
+          "Service not assigned to your account",
+          {},
+          res,
+        );
+      }
+      const visibleCategoryIds = new Set(categoryIds.map((id) => id.toString()));
+      if (!visibleCategoryIds.has(paginateCategoryId)) {
+        return handleResponse(
+          400,
+          "paginate_service must match a visible service category",
+          {},
+          res,
+        );
+      }
+    }
+
+    const data = categories
+      .sort(
+        (a, b) =>
+          (categoryOrder.get(a._id.toString()) ?? 0) -
+          (categoryOrder.get(b._id.toString()) ?? 0),
+      )
+      .map((category) => {
+        const { parent_category, ...serviceCategory } = category;
+        const catId = category._id.toString();
+        const allCategoryLeads = leadsByCategory.get(catId) || [];
+        const categoryStatus = buildServiceCategoryStatus(allCategoryLeads);
+        const totalCategoryLeads = allCategoryLeads.length;
+        const shouldFullPaginate = paginateCategoryId === catId;
+        const leads = shouldFullPaginate
+          ? allCategoryLeads.slice(skip, skip + limit)
+          : allCategoryLeads.slice(0, limit);
+
+        const item = {
+          service_category: serviceCategory,
+          parent_service_category: parent_category || null,
+          leads_count: totalCategoryLeads,
+          status: categoryStatus.status,
+          status_label: categoryStatus.status_label,
+          leads,
+          pagination: {
+            page: shouldFullPaginate ? page : 1,
+            limit,
+            total: totalCategoryLeads,
+            totalPages: Math.ceil(totalCategoryLeads / limit) || 0,
+          },
+        };
+
+        return item;
+      });
+
+    const summary = await summaryPromise;
+
+    const responsePayload = {
+      summary,
+      data,
+      total_categories: data.length,
+      total_leads: enrichedLeads.length,
+    };
+
+    if (paginateCategoryId) {
+      responsePayload.pagination = {
+        page,
+        limit,
+        paginate_service: paginateCategoryId,
+      };
+    }
+
+    return handleResponse(
+      200,
+      "Leads by service category fetched successfully",
+      responsePayload,
+      res,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, res);
   }
@@ -307,6 +637,84 @@ export const unlockLead = async (req, res) => {
  * Get single lead. Full details if unlocked by this vendor, otherwise masked.
  */
 
+
+// export const getLeadById = async (req, res) => {
+//   try {
+//     const vendorId = req.user._id;
+//     const leadId = req.params.leadId;
+//     const BASE_URL = process.env.IMAGE_URL;
+
+//     const vendor = await User.findById(vendorId).select("service").lean();
+//     if (!vendor) return handleResponse(404, "User not found", {}, res);
+
+//     const lead = await ServiceRequest.findById(leadId)
+//       .populate({ path: "service_category", select: "title credit company_credit" })
+//       .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
+//       .lean();
+
+
+//     if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
+//       lead.user.profile_pic = `${BASE_URL}${lead.user.profile_pic}`;
+//     }
+
+
+//     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
+//       return handleResponse(404, "Lead not found or no longer available", {}, res);
+//     }
+
+//     const leadCategoryId = lead.service_category?._id?.toString();
+//     if (
+//       hasServices(vendor.service) &&
+//       leadCategoryId &&
+//       !vendorOwnsService(vendor.service, leadCategoryId)
+//     ) {
+//       return handleResponse(
+//         403,
+//         "This lead is not in your service categories",
+//         {},
+//         res,
+//       );
+//     }
+
+//     const quote = await VendorQuote.findOne({ vendor_id: vendorId, service_request_id: leadId });
+//     lead.canQuote = quote ? false : true;
+//     lead.quote_id = quote?._id || null;
+
+
+//     const unlocked = await VendorLeadUnlock.findOne({
+//       vendor_id: vendorId,
+//       service_request_id: leadId,
+//     });
+    
+
+//     if (!unlocked) {
+//       const masked = { ...lead };
+//       if (masked.contact_details) {
+//         masked.contact_details = {
+//           first_name: masked.contact_details.first_name?.[0] + "***" || "***",
+//           last_name: masked.contact_details.last_name?.[0] + "***" || "***",
+//           phone: (masked.contact_details.phone || "").slice(0, 3) + " *******",
+//           email: (masked.contact_details.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
+//         };
+//       }
+//       if (masked.user) {
+//         masked.user.phone = (masked.user.phone || "").slice(0, 3) + " *******";
+//         masked.user.email = (masked.user.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3");
+//       }
+//       masked.unlocked = false;
+//       masked.creditsToUnlock = lead.contact_details.client_type == "Individual" ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3);
+//       return handleResponse(200, "Lead details", masked, res);
+//     }
+
+//     const response = { ...lead, unlocked: true };
+//     return handleResponse(200, "Lead details", response, res);
+//   } catch (err) {
+//     return handleResponse(500, err.message, {}, res);
+//   }
+// };
+
+
+
 export const getLeadById = async (req, res) => {
   try {
     const vendorId = req.user._id;
@@ -317,21 +725,29 @@ export const getLeadById = async (req, res) => {
     if (!vendor) return handleResponse(404, "User not found", {}, res);
 
     const lead = await ServiceRequest.findById(leadId)
-      .populate({ path: "service_category", select: "title credit company_credit" })
+      .populate({
+        path: "service_category",
+        select: "title credit company_credit image description",
+      })
+      .populate({
+        path: "child_category",
+        select: "title credit company_credit image description parent_category",
+      })
       .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
       .lean();
-
-
-    if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
-      lead.user.profile_pic = `${BASE_URL}${lead.user.profile_pic}`;
-    }
-
 
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
     }
 
-    const leadCategoryId = lead.service_category?._id?.toString();
+    const { service_category: serviceCategory, parent_service_category } =
+      resolveLeadServiceCategories(lead);
+
+    const leadCategoryId =
+      serviceCategory?._id?.toString() ||
+      lead.child_category?._id?.toString() ||
+      lead.child_category?.toString() ||
+      lead.service_category?._id?.toString();
     if (
       hasServices(vendor.service) &&
       leadCategoryId &&
@@ -345,37 +761,68 @@ export const getLeadById = async (req, res) => {
       );
     }
 
-    const quote = await VendorQuote.findOne({ vendor_id: vendorId, service_request_id: leadId });
-    lead.canQuote = quote ? false : true;
-    lead.quote_id = quote?._id || null;
+    const [vendorQuote, unlocked, quotesCount, prosConsultedCount, globalSettings] =
+      await Promise.all([
+        VendorQuote.findOne({ vendor_id: vendorId, service_request_id: leadId })
+          .select("_id status")
+          .lean(),
+        VendorLeadUnlock.findOne({
+          vendor_id: vendorId,
+          service_request_id: leadId,
+        }).lean(),
+        VendorQuote.countDocuments({ service_request_id: leadId, status: "SENT" }),
+        VendorLeadUnlock.countDocuments({ service_request_id: leadId }),
+        Global.findOne().select("quote_limit").lean(),
+      ]);
 
+    const isUnlocked = Boolean(unlocked);
+    const strongQuotesThreshold = globalSettings?.quote_limit ?? 5;
 
-    const unlocked = await VendorLeadUnlock.findOne({
-      vendor_id: vendorId,
-      service_request_id: leadId,
+    const leadStatusMeta = buildAvailableLeadDisplayStatus({
+      unlocked: isUnlocked,
+      vendorQuote,
+      quotesCount,
+      prosConsultedCount,
+      strongQuotesThreshold,
     });
-    
 
-    if (!unlocked) {
-      const masked = { ...lead };
-      if (masked.contact_details) {
-        masked.contact_details = {
-          first_name: masked.contact_details.first_name?.[0] + "***" || "***",
-          last_name: masked.contact_details.last_name?.[0] + "***" || "***",
-          phone: (masked.contact_details.phone || "").slice(0, 3) + " *******",
-          email: (masked.contact_details.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
-        };
-      }
-      if (masked.user) {
-        masked.user.phone = (masked.user.phone || "").slice(0, 3) + " *******";
-        masked.user.email = (masked.user.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3");
-      }
-      masked.unlocked = false;
-      masked.creditsToUnlock = lead.contact_details.client_type == "Individual" ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3);
-      return handleResponse(200, "Lead details", masked, res);
+    const response = {
+      ...lead,
+      service_category: serviceCategory,
+      parent_service_category,
+      child_category: lead.child_category || null,
+      request_status: lead.status,
+      ...leadStatusMeta,
+      canQuote: !vendorQuote,
+      unlocked: isUnlocked,
+      creditsToUnlock:
+        lead.contact_details?.client_type == "Individual"
+          ? serviceCategory?.credit || 3
+          : serviceCategory?.company_credit || 3,
+      quotes_count: quotesCount,
+    };
+
+    if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
+      response.user = {
+        ...response.user,
+        profile_pic: `${BASE_URL}${lead.user.profile_pic}`,
+      };
     }
 
-    const response = { ...lead, unlocked: true };
+    if (!isUnlocked) {
+      response.contact_details = maskVendorLeadContactDetails(lead.contact_details);
+      if (response.user) {
+        response.user = {
+          ...response.user,
+          phone: (response.user.phone || "").slice(0, 3) + " *******",
+          email: (response.user.email || "").replace(
+            /(.{2})(.*)(@.*)/,
+            "$1*******$3",
+          ),
+        };
+      }
+    }
+
     return handleResponse(200, "Lead details", response, res);
   } catch (err) {
     return handleResponse(500, err.message, {}, res);

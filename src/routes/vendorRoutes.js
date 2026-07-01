@@ -4,6 +4,7 @@ import {
   changePassword,
   forgotPassword,
   getAllServices,
+  getAllServicesGroupedByParentCategory,
   getDocumentRequiredForService,
   getProfile,
   loginVendor,
@@ -33,6 +34,7 @@ import {
 } from "../controller/vendor/AuthController.js";
 import {
   getDashboardStats,
+  getAvailableLeadsByServiceCategory,
   unlockLead,
   getLeadById,
   submitQuote,
@@ -129,6 +131,7 @@ router.post("/reset-password", authenticateForgotPasswordToken("forgot-password"
 
 // get all services
 router.get("/get-all-services", getAllServices );
+router.get("/services-grouped-by-parent-category", getAllServicesGroupedByParentCategory);
 router.get("/get-global", getGlobalSetting);
 
 
@@ -146,6 +149,7 @@ router.get("/all-quotes", userAuthenticateToken, checkRoleAuth(["Vendor"]), AllQ
 router.get("/dashboard", userAuthenticateToken, checkRoleAuth(["Vendor"]), getDashboardStats);
 
 router.get("/available-leads", userAuthenticateToken , checkRoleAuth(["Vendor"]) , availableLeads);
+router.get("/available-leads-by-service-category", userAuthenticateToken, checkRoleAuth(["Vendor"]), getAvailableLeadsByServiceCategory);
 router.get("/service/:id", userAuthenticateToken , checkRoleAuth(["Vendor"]) , singleService);
 router.get("/leads/:leadId", userAuthenticateToken, checkRoleAuth(["Vendor"]), getLeadById);
 router.post("/leads/:leadId/unlock", userAuthenticateToken, checkRoleAuth(["Vendor"]), unlockLead);

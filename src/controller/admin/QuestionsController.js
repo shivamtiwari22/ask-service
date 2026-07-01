@@ -1,5 +1,33 @@
 import handleResponse from "../../../utils/http-response.js";
 import Question from "../../models/QuestionsModel.js";
+import ServiceCategory from "../../models/ServiceCategoryModel.js";
+import { sanitizeObjectIdArray } from "../../../utils/helperFunction.js";
+
+const resolveServiceIds = (body) => {
+  const fromArray = sanitizeObjectIdArray(body.service_ids);
+  if (fromArray.length) return [...new Set(fromArray.map(String))];
+
+  const single = body.service_id;
+  if (single && String(single).trim()) return [String(single)];
+
+  return [];
+};
+
+const validateServiceIds = async (serviceIds) => {
+  if (!serviceIds.length) {
+    return { error: "At least one service category is required" };
+  }
+
+  const foundCount = await ServiceCategory.countDocuments({
+    _id: { $in: serviceIds },
+    deletedAt: null,
+  });
+  if (foundCount !== serviceIds.length) {
+    return { error: "One or more service categories not found" };
+  }
+
+  return { serviceIds };
+};
 
 const getPagination = (req) => {
   const page = parseInt(req.query.page ?? "1");
@@ -11,10 +39,16 @@ const getPagination = (req) => {
 
 const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// create question
+// create question (one record per selected service category)
 export const createQuestion = async (req, resp) => {
   try {
-    const payload = {
+    const serviceIds = resolveServiceIds(req.body);
+    const { serviceIds: validServiceIds, error } = await validateServiceIds(serviceIds);
+    if (error) {
+      return handleResponse(400, error, {}, resp);
+    }
+
+    const basePayload = {
       label: req.body.label,
       key: req.body.key,
       type: req.body.type,
@@ -22,18 +56,32 @@ export const createQuestion = async (req, resp) => {
       is_multiple: req.body.is_multiple ?? false,
       is_required: req.body.is_required ?? false,
       placeholder: req.body.placeholder,
-      service_id: req.body.service_id,
       step: req.body.step,
       order: req.body.order ?? 0,
       status: req.body.status || "ACTIVE",
     };
 
-        if (payload.type === "checkbox") {
-      payload.is_multiple = true;
+    if (basePayload.type === "checkbox") {
+      basePayload.is_multiple = true;
     }
 
-    const question = await Question.create(payload);
-    return handleResponse(201, "Question created successfully", question, resp);
+    const created = [];
+    for (const service_id of validServiceIds) {
+      const question = await Question.create({ ...basePayload, service_id });
+      created.push(question);
+    }
+
+    const message =
+      created.length === 1
+        ? "Question created successfully"
+        : `Question created successfully for ${created.length} categories`;
+
+    return handleResponse(
+      201,
+      message,
+      created.length === 1 ? created[0] : { list: created, count: created.length },
+      resp,
+    );
   } catch (err) {
     if (err?.code === 11000) {
       return handleResponse(
