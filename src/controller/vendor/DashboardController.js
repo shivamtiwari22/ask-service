@@ -13,6 +13,7 @@ import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import pushNotification from "../../../config/pushNotification.js";
 import { getServiceIds, hasServices, vendorOwnsService, buildVendorLeadStatus, buildAvailableLeadDisplayStatus, maskVendorLeadContactDetails, resolveLeadServiceCategories } from "../../../utils/helperFunction.js";
+import { attachLeadStarFieldsToLead } from "../../../utils/questionPoints.js";
 import Stripe from "stripe";
 import notifications from "../../../config/notification.js";
 import Notification from "../../models/NotificationModel.js";
@@ -52,7 +53,7 @@ async function fetchVendorDashboardSummary(vendorId, user) {
         service_request_id: { $in: activeServiceRequest },
       }),
       VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
-      VendorQuote.countDocuments({ vendor_id: vendorId  }),
+      VendorQuote.countDocuments({ vendor_id: vendorId }),
     ]);
 
   const parentGroups = await buildVendorParentCategoryGroups(serviceCategoryIds);
@@ -66,6 +67,10 @@ async function fetchVendorDashboardSummary(vendorId, user) {
     ...leadCategoryFilter,
     _id: { $nin: purchasedLeadIds },
   });
+
+
+  
+
 
   return {
     availableLeadsCount,
@@ -122,19 +127,18 @@ async function enrichLeadsForVendor(leads, vendorId) {
     const unlocked = unlockedIdSet.has(leadId);
     const vendorQuote = vendorQuotesByLeadId.get(leadId);
     const creditsToUnlock =
-      lead.contact_details?.client_type == "Individual"
-        ? (lead.child_category?.credit ||
-            lead.service_category?.credit ||
-            3)
-        : (lead.child_category?.company_credit ||
-            lead.service_category?.company_credit ||
-            3);
+    lead?.computed_point == null || lead?.computed_point < 1
+    ? lead.contact_details?.client_type == "Individual"
+      ? (lead.child_category?.credit || lead.service_category?.credit || 3)
+      : (lead.child_category?.company_credit || lead.service_category?.company_credit || 3)
+    : lead?.computed_point ;
     const quotesCount = quotesCountMap.get(leadId) || 0;
     const statusMeta = buildVendorLeadStatus(unlocked, vendorQuote);
 
     const baseLead = {
       ...lead,
       ...statusMeta,
+      ...attachLeadStarFieldsToLead(lead),
       unlocked,
       creditsToUnlock,
       quotes_count: quotesCount,
@@ -648,7 +652,11 @@ export const unlockLead = async (req, res) => {
       return handleResponse(409, "You have already unlocked this lead", { unlocked: true }, res);
     }
 
-    const creditsRequired = lead.contact_details.client_type == "Individual" ? (lead.service_category?.credit || 3) : (lead.service_category?.company_credit || 3);
+    const creditsRequired = lead.computed_point == null || lead.computed_point < 1
+    ? lead.contact_details.client_type == "Individual"
+    ? (lead.service_category?.credit || 3)
+    : (lead.service_category?.company_credit || 3)
+    : lead.computed_point ;
     const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
     if (wallet.amount < creditsRequired) {
@@ -910,12 +918,15 @@ export const getLeadById = async (req, res) => {
       child_category: lead.child_category || null,
       request_status: lead.status,
       ...leadStatusMeta,
+      ...attachLeadStarFieldsToLead(lead),
       canQuote: !vendorQuote,
       unlocked: isUnlocked,
       creditsToUnlock:
-        lead.contact_details?.client_type == "Individual"
-          ? serviceCategory?.credit || 3
-          : serviceCategory?.company_credit || 3,
+      lead?.computed_point == null || lead?.computed_point < 1
+    ? lead.contact_details?.client_type === "Individual"
+      ? serviceCategory?.credit ?? 3
+      : serviceCategory?.company_credit ?? 3
+    : lead?.computed_point ,
       quotes_count: quotesCount,
     };
 

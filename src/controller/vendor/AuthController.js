@@ -30,6 +30,7 @@ import {
   buildAvailableLeadDisplayStatus,
   maskVendorLeadContactDetails,
 } from "../../../utils/helperFunction.js";
+import { attachLeadStarFieldsToLead } from "../../../utils/questionPoints.js";
 import Global from "../../models/GlobalModel.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
 import BusinessInformation from "../../models/BusinessInformationModel.js";
@@ -1121,6 +1122,10 @@ const availableLeadsServiceCategoryPopulate = {
   },
 };
 
+
+
+
+
 export const availableLeads = async (req, resp) => {
   try {
     const vendorId = req?.user?._id;
@@ -1276,9 +1281,12 @@ export const availableLeads = async (req, resp) => {
       const { service_category, parent_service_category } =
         splitServiceCategoryWithParent(lead.service_category);
       const creditsToUnlock =
-        lead.contact_details?.client_type == "Individual"
+      lead?.computed_point == null || lead?.computed_point < 1
+      ? lead.contact_details?.client_type == "Individual"
           ? service_category?.credit || 3
-          : service_category?.company_credit || 3;
+          : service_category?.company_credit || 3
+        : lead?.computed_point ;
+
       const quotesCount = quotesCountMap.get(leadId) || 0;
       const prosConsultedCount = prosConsultedCountMap.get(leadId) || 0;
       const leadStatusMeta = buildAvailableLeadDisplayStatus({
@@ -1295,6 +1303,7 @@ export const availableLeads = async (req, resp) => {
         parent_service_category,
         request_status: lead.status,
         ...leadStatusMeta,
+        ...attachLeadStarFieldsToLead(lead),
         unlocked,
         creditsToUnlock,
         quotes_count: quotesCount,

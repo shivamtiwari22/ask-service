@@ -39,6 +39,74 @@ const getPagination = (req) => {
 
 const escapeRegex = (value = "") => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const QUESTION_OPTION_TYPES = new Set(["dropdown", "radio", "checkbox"]);
+
+const normalizePoint = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0 ? num : 0;
+};
+
+const normalizeQuestionOptions = (options = []) =>
+  options.map((opt) => ({
+    label: opt.label,
+    value: opt.value,
+    point: normalizePoint(opt.point),
+  }));
+
+const buildQuestionFields = (body) => {
+  const type = body.type;
+  const hasOptions = QUESTION_OPTION_TYPES.has(type);
+
+  const fields = {
+    label: body.label,
+    key: body.key,
+    type,
+    is_multiple: body.is_multiple ?? false,
+    is_required: body.is_required ?? false,
+    placeholder: body.placeholder,
+    step: body.step,
+    order: body.order ?? 0,
+    status: body.status || "ACTIVE",
+  };
+
+  if (hasOptions) {
+    fields.options = normalizeQuestionOptions(body.options || []);
+    fields.point = 0;
+  } else {
+    fields.point = normalizePoint(body.point);
+    fields.options = [];
+  }
+
+  if (type === "checkbox") {
+    fields.is_multiple = true;
+  }
+
+  return fields;
+};
+
+const applyQuestionPointUpdates = (body, existingType) => {
+  const type = body.type ?? existingType;
+  const hasOptions = QUESTION_OPTION_TYPES.has(type);
+  const updates = {};
+
+  if (hasOptions) {
+    updates.point = 0;
+    if (body.options !== undefined) {
+      updates.options = normalizeQuestionOptions(body.options);
+    }
+    return updates;
+  }
+
+  if (body.point !== undefined) {
+    updates.point = normalizePoint(body.point);
+  }
+  if (body.type !== undefined) {
+    updates.options = [];
+  }
+
+  return updates;
+};
+
 // create question (one record per selected service category)
 export const createQuestion = async (req, resp) => {
   try {
@@ -48,22 +116,7 @@ export const createQuestion = async (req, resp) => {
       return handleResponse(400, error, {}, resp);
     }
 
-    const basePayload = {
-      label: req.body.label,
-      key: req.body.key,
-      type: req.body.type,
-      options: req.body.options || [],
-      is_multiple: req.body.is_multiple ?? false,
-      is_required: req.body.is_required ?? false,
-      placeholder: req.body.placeholder,
-      step: req.body.step,
-      order: req.body.order ?? 0,
-      status: req.body.status || "ACTIVE",
-    };
-
-    if (basePayload.type === "checkbox") {
-      basePayload.is_multiple = true;
-    }
+    const basePayload = buildQuestionFields(req.body);
 
     const created = [];
     for (const service_id of validServiceIds) {
@@ -182,6 +235,7 @@ export const updateQuestion = async (req, resp) => {
       "key",
       "type",
       "options",
+      "point",
       "is_multiple",
       "is_required",
       "placeholder",
@@ -201,6 +255,11 @@ export const updateQuestion = async (req, resp) => {
     for (const k of allowed) {
       if (req.body[k] !== undefined) payload[k] = req.body[k];
     }
+
+    Object.assign(
+      payload,
+      applyQuestionPointUpdates(req.body, question.type),
+    );
 
     const updated = await Question.findByIdAndUpdate(
       req.params.id,

@@ -9,6 +9,7 @@ import {
   createReference,
   generatePassword,
 } from "../../../utils/helperFunction.js";
+import { resolveLeadPointFieldsForServiceRequest } from "../../../utils/questionPoints.js";
 import Role from "../../models/RoleModel.js";
 import ServiceCategory from "../../models/ServiceCategoryModel.js";
 import ServiceRequest from "../../models/ServiceRequestModel.js";
@@ -265,6 +266,12 @@ export const initiateServiceRequest = async (req, resp) => {
     // ================= LOGGED-IN USER =================
 
     if (req.user) {
+      const leadPointFields = await resolveLeadPointFieldsForServiceRequest({
+        dynamic_answers,
+        child_category,
+        service_category,
+      });
+
       const [request] = await ServiceRequest.create(
         [
           {
@@ -294,6 +301,7 @@ export const initiateServiceRequest = async (req, resp) => {
             end_date,
             end_time,
             dynamic_answers,
+            ...leadPointFields,
             cityOrPostalCode,
             desiredDate,
             timeSlot,
@@ -551,6 +559,12 @@ export const initiateServiceRequest = async (req, resp) => {
       console.log(e, "mail error");
     }
 
+    const leadPointFields = await resolveLeadPointFieldsForServiceRequest({
+      dynamic_answers,
+      child_category,
+      service_category,
+    });
+
     const [request] = await ServiceRequest.create(
       [
         {
@@ -579,6 +593,7 @@ export const initiateServiceRequest = async (req, resp) => {
           end_date,
           end_time,
           dynamic_answers,
+          ...leadPointFields,
           cityOrPostalCode,
           desiredDate,
           timeSlot,
@@ -1876,7 +1891,17 @@ export const updateServiceRequest = async (req, resp) => {
     if (end_date !== undefined) updateData.end_date = end_date;
     if (end_time !== undefined) updateData.end_time = end_time;
 
-    updateData.dynamic_answers = dynamic_answers;
+    if (dynamic_answers !== undefined) {
+      updateData.dynamic_answers = dynamic_answers;
+      Object.assign(
+        updateData,
+        await resolveLeadPointFieldsForServiceRequest({
+          dynamic_answers,
+          child_category: child_category ?? request.child_category,
+          service_category: service_category ?? request.service_category,
+        }),
+      );
+    }
 
     const updatedRequest = await ServiceRequest.findByIdAndUpdate(
       id,

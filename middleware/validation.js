@@ -22,6 +22,11 @@ const validateServiceCategoryIds = (value, { optional = false } = {}) => {
   return true;
 };
 
+const QUESTION_OPTION_TYPES = ["dropdown", "radio", "checkbox"];
+
+const questionTypeHasOptions = (type) =>
+  QUESTION_OPTION_TYPES.includes(String(type || ""));
+
 export const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -418,6 +423,34 @@ export const createQuestionValidation = [
     .optional()
     .isString()
     .withMessage("Option value must be string"),
+  body("point")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("Point must be a number >= 0"),
+  body("options.*.point")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("Option point must be a number >= 0"),
+  body().custom((_, { req }) => {
+    const type = req.body.type;
+    if (questionTypeHasOptions(type)) {
+      const options = req.body.options;
+      if (!Array.isArray(options) || !options.length) {
+        throw new Error("Options are required for this question type");
+      }
+      for (const opt of options) {
+        if (opt.point === undefined || opt.point === null || opt.point === "") {
+          throw new Error("Each option must have a point value");
+        }
+      }
+      return true;
+    }
+
+    if (req.body.point === undefined || req.body.point === null || req.body.point === "") {
+      throw new Error("Point is required for this question type");
+    }
+    return true;
+  }),
   handleValidationErrors,
 ];
 
@@ -435,6 +468,8 @@ export const updateQuestionValidation = [
       "checkbox",
       "date",
       "file",
+      "datetime",
+      "time",
     ])
     .withMessage("Invalid question type"),
   body("service_id").optional().isMongoId().withMessage("Invalid service id"),
@@ -464,6 +499,38 @@ export const updateQuestionValidation = [
     .optional()
     .isString()
     .withMessage("Option value must be string"),
+  body("point")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("Point must be a number >= 0"),
+  body("options.*.point")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("Option point must be a number >= 0"),
+  body().custom((_, { req }) => {
+    const type = req.body.type;
+    if (Array.isArray(req.body.options) && req.body.options.length) {
+      for (const opt of req.body.options) {
+        if (opt.point === undefined || opt.point === null || opt.point === "") {
+          throw new Error("Each option must have a point value");
+        }
+      }
+    }
+
+    if (type && questionTypeHasOptions(type)) {
+      if (req.body.options !== undefined) {
+        if (!Array.isArray(req.body.options) || !req.body.options.length) {
+          throw new Error("Options are required for this question type");
+        }
+      }
+      return true;
+    }
+
+    if (type && req.body.point === undefined) {
+      throw new Error("Point is required for this question type");
+    }
+    return true;
+  }),
   handleValidationErrors,
 ];
 

@@ -26,8 +26,11 @@ const QuestionsSchema = new mongoose.Schema(
       {
         label: String,
         value: String,
+        point: { type: Number, default: 0 },
       },
     ],
+
+    point: { type: Number, default: 0 },
 
     is_multiple: { type: Boolean, default: false },
     is_required: { type: Boolean, default: false },

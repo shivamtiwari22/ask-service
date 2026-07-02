@@ -151,6 +151,34 @@ const ServiceRequestSchema = new mongoose.Schema(
         value: String,
       },
     ],
+
+    computed_point: {
+      type: Number,
+      default: 0,
+    },
+
+    max_possible_point: {
+      type: Number,
+      default: 0,
+    },
+
+    point_score_percent: {
+      type: Number,
+      default: 0,
+    },
+
+    lead_stars: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+
+    lead_stars_label: {
+      type: String,
+      default: "NOT RATED",
+      trim: true,
+    },
   },
   { timestamps: true },
 );
