@@ -291,6 +291,20 @@ export const contactUs = async (req, res) => {
           )
         };
 
+        if (images && images.vendor_logo) {
+          existingGlobal.vendor_logo = images.vendor_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+        if (images && images.vendor_dark_logo) {
+          existingGlobal.vendor_dark_logo = images.vendor_dark_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
 
         Object.assign(existingGlobal, globalSetting);
         await existingGlobal.save();
@@ -355,6 +369,20 @@ export const contactUs = async (req, res) => {
 
            if (images && images.footer_logo) {
           newShippingPolicy.footer_logo = images.footer_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+        if (images && images.vendor_logo) {
+          newShippingPolicy.vendor_logo = images.vendor_logo[0].path.replace(
+            /\\/g,
+            "/"
+          )
+        };
+
+        if (images && images.vendor_dark_logo) {
+          newShippingPolicy.vendor_dark_logo = images.vendor_dark_logo[0].path.replace(
             /\\/g,
             "/"
           )

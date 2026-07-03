@@ -80,6 +80,19 @@ const GlobalSchema = mongoose.Schema(
 
     quote_limit: { type: Number, default: 5 },
     quote_expired: { type: Number, default: 7 },
+    vendor_logo: { type: String, default: null ,
+      get: (val) => {
+        if (!val) return null;
+        return `${process.env.IMAGE_URL}${val}`;
+      },
+     },
+    vendor_dark_logo: { type: String, default: null ,
+      get: (val) => {
+        if (!val) return null;
+        return `${process.env.IMAGE_URL}${val}`;
+      },
+    },
+ 
   },
   {
     timestamps: {},
