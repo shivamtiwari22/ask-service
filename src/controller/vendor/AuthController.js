@@ -61,7 +61,7 @@ export const registerVendor = async (req, resp) => {
       fcm_token,
       service,
       siret,
-      areas,
+      areas
     } = req.body;
 
     const existingEmail = await User.findOne({ email });

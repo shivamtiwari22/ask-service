@@ -2,10 +2,7 @@ import handleResponse from "../../../utils/http-response.js";
 import ContactUs from "../../models/ContactUsModel.js";
 import Faqs from "../../models/FaqsModel.js";
 import Global from "../../models/GlobalModel.js";
-import User from "../../models/UserModel.js";
-import Role from "../../models/RoleModel.js";
-import ServiceRequest from "../../models/ServiceRequestModel.js";
-import VendorReview from "../../models/VendorReviewModel.js";
+import { fetchGlobalPlatformStats } from "../../../utils/globalSettingStats.js";
 
 // create FAQ
 export const createFaq = async (req, resp) => {
@@ -412,40 +409,14 @@ export const contactUs = async (req, res) => {
 
   export const getGlobalSetting =  async (req, res) => {
     try {
-      const [firstRecord, vendorRole, total_service_requests, reviewAgg] =
-        await Promise.all([
-          Global.findOne().sort({ _id: 1 }).exec(),
-          Role.findOne({ name: /^Vendor$/i }).select("_id").lean(),
-          ServiceRequest.countDocuments({ deletedAt: null }),
-          VendorReview.aggregate([
-            { $match: { status: "ACTIVE" } },
-            {
-              $group: {
-                _id: null,
-                avgRating: { $avg: "$rating" },
-                count: { $sum: 1 },
-              },
-            },
-          ]),
-        ]);
+      const [firstRecord, platformStats] = await Promise.all([
+        Global.findOne().sort({ _id: 1 }).exec(),
+        fetchGlobalPlatformStats(),
+      ]);
 
       if (!firstRecord) {
         return handleResponse(200, "Not Found", {}, res);
       }
-
-      let total_active_vendors = 0;
-      if (vendorRole?._id) {
-        total_active_vendors = await User.countDocuments({
-          role: vendorRole._id,
-          status: "ACTIVE",
-          kyc_status: "ACTIVE",
-        });
-      }
-
-      const avgRating = reviewAgg[0]?.avgRating ?? 0;
-      const satisfaction = reviewAgg[0]?.count
-        ? Math.round((avgRating / 5) * 100)
-        : 0;
 
       const globalData =
         typeof firstRecord.toJSON === "function"
@@ -457,9 +428,7 @@ export const contactUs = async (req, res) => {
         "global setting get successfully",
         {
           ...globalData,
-          total_active_vendors,
-          total_service_requests,
-          satisfaction,
+          ...platformStats,
         },
         res,
       );
