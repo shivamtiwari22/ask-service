@@ -5,6 +5,21 @@ import VendorDocument from "../../models/VendorDocumentModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import minioClient from "../../../config/minio.js";
 import { getServiceIds } from "../../../utils/helperFunction.js";
+import { sendEmail } from "../../../config/emailConfig.js";
+import documentStatusMail from "../../../config/email/documentStatusMail.js";
+import kycStatusMail from "../../../config/email/kycStatusMail.js";
+
+const DOCUMENT_STATUS_LABELS = {
+  Pending: "En attente",
+  Verified: "Vérifié",
+  Rejected: "Rejeté",
+};
+
+const KYC_STATUS_LABELS = {
+  ACTIVE: "Actif / Vérifié",
+  PENDING: "En attente",
+  REJECTED: "Rejeté",
+};
 
 /**
  * Admin API: Get all vendors with their verification documents
@@ -150,7 +165,9 @@ export const updateVendorDocumentStatus = async (req, res) => {
       { user_id: vendorId, document_id: documentId },
       { status },
       { new: true }
-    );
+    )
+      .populate("document_id", "name type")
+      .lean();
 
     if (!doc) {
       return handleResponse(
@@ -159,6 +176,34 @@ export const updateVendorDocumentStatus = async (req, res) => {
         {},
         res
       );
+    }
+
+    try {
+      const vendor = await User.findById(vendorId)
+        .select("first_name last_name email")
+        .lean();
+
+      if (vendor?.email) {
+        const documentName =
+          doc.document_id?.name || doc.name || doc.file_name || "Document";
+        const statusLabel = DOCUMENT_STATUS_LABELS[status] || status;
+        const vendorName =
+          `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim() ||
+          "Prestataire";
+
+        await sendEmail({
+          to: vendor.email,
+          subject: `Ask Service - Statut de document mis à jour (${statusLabel})`,
+          html: await documentStatusMail({
+            name: vendorName,
+            documentName,
+            status,
+            statusLabel,
+          }),
+        });
+      }
+    } catch (mailError) {
+      console.log("Document status email error:", mailError);
     }
 
     return handleResponse(
@@ -207,6 +252,27 @@ export const updateVendorKycStatus = async (req, res) => {
 
     if (!vendor) {
       return handleResponse(404, "Vendor not found", {}, res);
+    }
+
+    try {
+      if (vendor.email) {
+        const statusLabel = KYC_STATUS_LABELS[kyc_status] || kyc_status;
+        const vendorName =
+          `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim() ||
+          "Prestataire";
+
+        await sendEmail({
+          to: vendor.email,
+          subject: `Ask Service - Statut KYC mis à jour (${statusLabel})`,
+          html: await kycStatusMail({
+            name: vendorName,
+            status: kyc_status,
+            statusLabel,
+          }),
+        });
+      }
+    } catch (mailError) {
+      console.log("KYC status email error:", mailError);
     }
 
     return handleResponse(

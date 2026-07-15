@@ -77,44 +77,13 @@ router.post("/verify-otp", verifyRegistrationOTP);
 router.post("/login", loginVendor);
 
 // update vendor profile
-router.put(
-  "/update-profile",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  userProfileUpload,
-  updateVendorProfile,
-);
-
-router.get(
-  "/get-profile",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  getProfile,
-);
+router.put("/update-profile", userAuthenticateToken, checkRoleAuth(["Vendor"]), userProfileUpload, updateVendorProfile);
+router.get("/get-profile", userAuthenticateToken, checkRoleAuth(["Vendor"]), getProfile);
 
 // change password
-
-router.put(
-  "/change-password",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  changePassword,
-);
-
-router.put(
-  "/delete-account",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  deleteAccount,
-);
-
-
-router.put(
-  "/new-password",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  NewPassword,
-);
+router.put("/change-password", userAuthenticateToken, checkRoleAuth(["Vendor"]), changePassword);
+router.put("/delete-account", userAuthenticateToken, checkRoleAuth(["Vendor"]), deleteAccount);
+router.put("/new-password", userAuthenticateToken, checkRoleAuth(["Vendor"]), NewPassword);
 
 
 // forgot password
@@ -158,7 +127,7 @@ router.post("/leads/:leadId/quotes", userAuthenticateToken, checkRoleAuth(["Vend
 router.get("/credits/packages", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditPackages);
 router.get("/credits/balance", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditBalance);
 router.post("/credits/purchase", userAuthenticateToken, checkRoleAuth(["Vendor"]), purchaseCredits);
-router.get("/credits/invoice/:transactionId", getCreditPurchaseInvoice);
+router.get("/credits/invoice/:transactionId", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditPurchaseInvoice);
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);
 
@@ -181,19 +150,8 @@ router.get("/verification-documents", userAuthenticateToken , checkRoleAuth(["Ve
 router.get("/all-review", userAuthenticateToken , checkRoleAuth(["Vendor"]) , allReviews);
 router.get("/all-transaction", userAuthenticateToken , checkRoleAuth(["Vendor"]) , getTransactions);
 
-router.get(
-  "/all-transaction/export/csv",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  exportTransactionsCsv,
-);
-
-router.get(
-  "/all-transaction/export/pdf",
-  userAuthenticateToken,
-  checkRoleAuth(["Vendor"]),
-  exportTransactionsPdf,
-);
+router.get("/all-transaction/export/csv", userAuthenticateToken, checkRoleAuth(["Vendor"]), exportTransactionsCsv);
+router.get("/all-transaction/export/pdf", userAuthenticateToken, checkRoleAuth(["Vendor"]), exportTransactionsPdf);
 
 
 router.get("/fetch-chats", userAuthenticateToken , checkRoleAuth(["Vendor"])  ,ChatController.fetchChats)

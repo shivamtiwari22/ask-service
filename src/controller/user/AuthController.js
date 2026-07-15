@@ -1212,7 +1212,6 @@ export const getAllTestimonialMasters = async (req, resp) => {
 };
 
 
-
  export const getGlobalSetting = async (req, res) => {
     try {
       const [firstRecord, platformStats] = await Promise.all([

@@ -8,6 +8,7 @@ import {
 import {
   createReference,
   generatePassword,
+  resolveLeadServiceCategories,
 } from "../../../utils/helperFunction.js";
 import { resolveLeadPointFieldsForServiceRequest } from "../../../utils/questionPoints.js";
 import Role from "../../models/RoleModel.js";
@@ -987,10 +988,31 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
   };
 };
 
+const createdServiceCategoryPopulate = [
+  {
+    path: "service_category",
+    select: "title description image options parent_category",
+    populate: {
+      path: "parent_category",
+      select: "title description image",
+    },
+  },
+  {
+    path: "child_category",
+    select: "title description image options",
+  },
+];
+
 const mapCreatedServiceRequestItem = (request, quotes) => {
   const quotesMeta = buildServiceQuotesMeta(quotes, request.status);
+  const { service_category, parent_service_category } =
+    resolveLeadServiceCategories(request);
+
   return {
     ...request,
+    service_category,
+    parent_service_category,
+    child_category: request.child_category || null,
     request_id: request.reference_no,
     ...quotesMeta,
     quotes,
@@ -1123,18 +1145,14 @@ export const getCreatedServiceRequests = async (req, resp) => {
         summaryPromise,
       ]);
 
-      await ServiceRequest.populate(requests, [
-        { path: "service_category", select: "title description image options" },
-        { path: "child_category", select: "title description image options" },
-      ]);
+      await ServiceRequest.populate(requests, createdServiceCategoryPopulate);
     } else {
       const sortOption =
         activeSort === "oldest" ? { createdAt: 1 } : { createdAt: -1 };
 
       [requests, total, summary] = await Promise.all([
         ServiceRequest.find(query)
-          .populate("service_category", "title description image options")
-          .populate("child_category", "title description image options")
+          .populate(createdServiceCategoryPopulate)
           .sort(sortOption)
           .skip(skipNum)
           .limit(limitNum || undefined)
@@ -1192,8 +1210,7 @@ export const getCreatedServiceRequestById = async (req, resp) => {
       user: userId,
       deletedAt: null,
     })
-      .populate("service_category", "title description image options")
-      .populate("child_category", "title description image options")
+      .populate(createdServiceCategoryPopulate)
       .lean();
 
     if (!request) {
@@ -1299,7 +1316,7 @@ export const getQuotesForServiceRequest = async (req, resp) => {
       {
         $match: {
           vendor: {
-            $in: vendorIds.map((id) => new mongoose.Types.ObjectId(id)),
+            $in: vendorIds.map((id) => new mongoose.Types.ObjectId(id)) ,
           },
           status: "ACTIVE",
         },
@@ -1641,6 +1658,8 @@ export const submitReview = async (req, res) => {
   }
 };
 
+
+
 export const vendorDetails = async (req, resp) => {
   try {
     const userId = req.user._id;
@@ -1699,6 +1718,8 @@ export const vendorDetails = async (req, resp) => {
     return handleResponse(500, err.message, {}, resp);
   }
 };
+
+
 
 export const toggleReviewLike = async (req, res) => {
   try {
