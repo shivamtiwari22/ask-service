@@ -435,7 +435,7 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
       if (!vendorOwnsService(user.service, service)) {
         return handleResponse(
           403,
-          "Service not assigned to your account",
+          "Service non attribué à votre compte",
           {},
           res,
         );
@@ -531,7 +531,7 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
       if (!vendorOwnsService(user.service, paginateParentId)) {
         return handleResponse(
           403,
-          "Service not assigned to your account",
+          "Service non attribué à votre compte",
           {},
           res,
         );
@@ -1203,7 +1203,7 @@ export const purchaseCredits = async (req, res) => {
       reference_type: "credit_purchase",
       reference_id: pkg._id && typeof pkg._id === "object" ? pkg._id : undefined,
       plat_form: "stripe",
-      amount_paid: pkg.price,
+      amount_paid: pkg ? pkg.price * process.env.VAT_RATE/100 + pkg.price : 0,
       currency: pkg.currency || "EUR",
       payment_method: req.body.payment_method || null,
     });

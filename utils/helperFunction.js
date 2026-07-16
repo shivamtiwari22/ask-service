@@ -28,6 +28,40 @@ export function generatePassword(length = 8) {
     .join("");
 }
 
+/**
+ * Normalize French phone numbers for storage.
+ * - already +33... → keep
+ * - 0033... → +33...
+ * - 33... → +33...
+ * - 0......... → drop leading 0, add +33
+ * - otherwise → prefix +33
+ */
+export function normalizeFrenchPhone(phone) {
+  if (phone === undefined || phone === null || phone === "") return phone;
+
+  let cleaned = String(phone).trim().replace(/[\s\-().]/g, "");
+
+  if (!cleaned) return cleaned;
+
+  if (cleaned.startsWith("+33")) {
+    return cleaned;
+  }
+
+  if (cleaned.startsWith("0033")) {
+    return `+33${cleaned.slice(4)}`;
+  }
+
+  if (cleaned.startsWith("33")) {
+    return `+${cleaned}`;
+  }
+
+  if (cleaned.startsWith("0")) {
+    return `+33${cleaned.slice(1)}`;
+  }
+
+  return `+33${cleaned}`;
+}
+
 export async function generateQR(data) {
   try {
     const qrData = typeof data === "string" ? data : JSON.stringify(data);
@@ -266,7 +300,7 @@ export function buildAvailableLeadDisplayStatus({
       status: "new",
       status_label: "NEW",
       quote_id: null,
-      lead_status_message: `${prosConsultedCount} pros have already consulted`,
+      lead_status_message: `${prosConsultedCount} Des professionnels ont déjà été consultés`,
       lead_status_alert_type: "hot",
       pros_consulted_count,
       professionals_interested_count,
@@ -279,7 +313,7 @@ export function buildAvailableLeadDisplayStatus({
     status: "new",
     status_label: "NEW",
     quote_id: null,
-    lead_status_message: "No competitors yet!",
+    lead_status_message: "Aucun concurrent pour l'instant !",
     lead_status_alert_type: "hot",
     pros_consulted_count: 0,
     professionals_interested_count,

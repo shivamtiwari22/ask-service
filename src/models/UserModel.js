@@ -160,7 +160,21 @@ const UserSchema = mongoose.Schema(
     areas : {
       type : Array,
       default : []
-    }
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletion_reason: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    deletion_scheduled_at: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: {},
@@ -177,6 +191,7 @@ UserSchema.index({ status: 1 });
 UserSchema.index({ createdAt: 1 });
 UserSchema.index({ updatedAt: 1 });
 UserSchema.index({ deletedAt: 1 });
+UserSchema.index({ deletion_scheduled_at: 1 });
 
 const User = mongoose.model("User", UserSchema);
 export default User;

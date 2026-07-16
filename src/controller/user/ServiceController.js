@@ -323,8 +323,7 @@ export const initiateServiceRequest = async (req, resp) => {
         .filter((token) => token);
 
       const title = "Nouveau prospect recu";
-      const body =
-        "Vous avez recu un nouveau prospect. Consultez les details et repondez rapidement.";
+      const body = "Vous avez recu un nouveau prospect. Consultez les détails et répondez rapidement.";
 
       // Always save in-app notifications, but send push only if vendor allows it.
       const vendorIds = users.map((u) => u._id);
@@ -614,7 +613,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
     const title = "Nouveau prospect recu";
     const body =
-      "Vous avez recu un nouveau prospect. Consultez les details et repondez rapidement.";
+      "Vous avez recu un nouveau prospect. Consultez les détails et répondez rapidement.";
 
     // Always save in-app notifications, but send push only if vendor allows it.
     const vendorIds = users.map((u) => u._id);
@@ -1551,8 +1550,8 @@ export const acceptQuote = async (req, resp) => {
 
     const vendorId = quote.vendor_id?.toString?.() || quote.vendor_id;
     if (vendorId) {
-      const title = "Devis accepte";
-      const body = `Votre devis pour la demande ${serviceRequest.reference_no} a ete accepte.`;
+      const title = "Devis accepté";
+      const body = `Votre devis pour la demande ${serviceRequest.reference_no} a été accepté.`;
 
       await Notification.create({
         user_id: vendorId,

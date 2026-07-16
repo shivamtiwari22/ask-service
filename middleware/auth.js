@@ -20,6 +20,15 @@ export const authenticateToken = async (req, res, next) => {
       return handleResponse(404, "User not found", {}, res);
     }
 
+    if (user.deletedAt) {
+      return handleResponse(
+        401,
+        "Account scheduled for deletion. Please login again to restore it.",
+        {},
+        res,
+      );
+    }
+
     // if (
     //   user.status != "ACTIVE" &&
     //   !["User", "Vendor"].includes(user.role.name)
@@ -54,6 +63,15 @@ export const userAuthenticateToken = async (req, res, next) => {
       
       return handleResponse(404, "User not found", {}, res);
 
+    }
+
+    if (user.deletedAt) {
+      return handleResponse(
+        401,
+        "Account scheduled for deletion. Please login again to restore it.",
+        {},
+        res,
+      );
     }
 
     if (user.status != "ACTIVE") {
@@ -152,6 +170,10 @@ export const optionalAuthenticateToken = async (req, res, next) => {
     const user = await User.findById(decoded._id).select("-password").populate("role");
 
     if (!user) {
+      return next();
+    }
+
+    if (user.deletedAt) {
       return next();
     }
 

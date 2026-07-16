@@ -239,6 +239,18 @@ const FR_TRANSLATIONS = {
   "You must unlock this lead before submitting a quote":
     "Vous devez débloquer ce prospect avant de soumettre un devis",
   "Your account is not active": "Votre compte n'est pas actif",
+  "Deletion reason is required": "La raison de suppression est requise",
+  "Account already scheduled for deletion":
+    "Le compte est déjà programmé pour suppression",
+  "Account scheduled for deletion. Login within 15 days to restore it.":
+    "Compte programmé pour suppression. Connectez-vous dans les 15 jours pour le restaurer.",
+  "Account has been permanently deleted":
+    "Le compte a été définitivement supprimé",
+  "Account scheduled for deletion. Please login again to restore it.":
+    "Compte programmé pour suppression. Veuillez vous reconnecter pour le restaurer.",
+  "Account restored successfully": "Compte restauré avec succès",
+  "Account restored. Code sent successfully for login":
+    "Compte restauré. Code envoyé avec succès pour la connexion",
   "Your documents are under review. You cannot purchase leads at this time.":
     "Vos documents sont en cours de vérification. Vous ne pouvez pas acheter de prospects pour le moment.",
   "Your service request not found": "Votre demande de service est introuvable",

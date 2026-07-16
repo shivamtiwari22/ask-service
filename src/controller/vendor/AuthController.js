@@ -29,7 +29,13 @@ import {
   buildVendorLeadStatus,
   buildAvailableLeadDisplayStatus,
   maskVendorLeadContactDetails,
+  normalizeFrenchPhone,
 } from "../../../utils/helperFunction.js";
+import {
+  buildSoftDeletePayload,
+  handleSoftDeletedAccountOnAuth,
+  isAccountWithinDeletionGracePeriod,
+} from "../../../utils/accountDeletion.js";
 import { attachLeadStarFieldsToLead } from "../../../utils/questionPoints.js";
 import Global from "../../models/GlobalModel.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
@@ -64,6 +70,8 @@ export const registerVendor = async (req, resp) => {
       areas
     } = req.body;
 
+    const normalizedPhone = phone ? normalizeFrenchPhone(phone) : null;
+
     const existingEmail = await User.findOne({ email });
 
     if (existingEmail)
@@ -74,8 +82,8 @@ export const registerVendor = async (req, resp) => {
         resp,
       );
 
-    if (phone) {
-      const existingPhone = await User.findOne({ phone });
+    if (normalizedPhone) {
+      const existingPhone = await User.findOne({ phone: normalizedPhone });
       if (existingPhone)
         return handleResponse(
           400,
@@ -119,7 +127,7 @@ export const registerVendor = async (req, resp) => {
       first_name,
       last_name,
       email,
-      phone,
+      phone: normalizedPhone,
       password: hashedPassword,
       role: role._id,
       status: "ACTIVE",
@@ -254,7 +262,9 @@ export const resendOTP = async (req, resp) => {
                 source: "nodejs",
                 from: "AskService",
                 body: msg,
-                to: `+${user.phone}`,
+                to: user.phone?.startsWith("+")
+                  ? user.phone
+                  : `+${user.phone}`,
               },
             ],
           },
@@ -294,7 +304,9 @@ export const verifyRegistrationOTP = async (req, resp) => {
     if (email) {
       user = await User.findOne({ email }).populate("role");
     } else if (phone) {
-      user = await User.findOne({ phone }).populate("role");
+      user = await User.findOne({ phone: normalizeFrenchPhone(phone) }).populate(
+        "role",
+      );
     }
 
     if (!user) {
@@ -391,51 +403,80 @@ export const loginVendor = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
+    if (
+      user.deletedAt &&
+      !isAccountWithinDeletionGracePeriod(user)
+    ) {
+      return handleResponse(
+        403,
+        "Account has been permanently deleted",
+        {},
+        resp,
+      );
+    }
+
     let emailVerified = user.is_email_verified;
     let phoneVerified = user.is_phone_verified;
 
     if (type == "OTP") {
-      if (emailVerified && phoneVerified && user.status == "ACTIVE") {
-        user.otp = generateOTP();
-        user.otp_expires_at = moment().add(2, "minutes").toDate();
-        user.otp_for = "LOGIN";
-        await user.save();
+      const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+      if (!softDeleteCheck.ok) {
+        return handleResponse(
+          403,
+          "Account has been permanently deleted",
+          {},
+          resp,
+        );
+      }
+      const activeUser = softDeleteCheck.user;
+      emailVerified = activeUser.is_email_verified;
+      phoneVerified = activeUser.is_phone_verified;
+
+      if (emailVerified && phoneVerified && activeUser.status == "ACTIVE") {
+        activeUser.otp = generateOTP();
+        activeUser.otp_expires_at = moment().add(2, "minutes").toDate();
+        activeUser.otp_for = "LOGIN";
+        await activeUser.save();
 
         const fialResponse = {
           flow: "OTP_LOGIN",
           emailVerified,
           phoneVerified,
-          userData: user.toObject(),
+          userData: activeUser.toObject(),
+          account_restored: softDeleteCheck.restored,
         };
         return handleResponse(
           200,
-          "Code Send Successfully for login",
+          softDeleteCheck.restored
+            ? "Account restored. Code sent successfully for login"
+            : "Code Send Successfully for login",
           fialResponse,
           resp,
         );
       }
 
       if (!emailVerified) {
-        user.otp = generateOTP();
-        user.otp_expires_at = moment().add(1, "minutes").toDate();
+        activeUser.otp = generateOTP();
+        activeUser.otp_expires_at = moment().add(1, "minutes").toDate();
       }
       if (!phoneVerified) {
-        user.otp_phone = generateOTP();
-        user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
+        activeUser.otp_phone = generateOTP();
+        activeUser.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
       }
-      user.otp_for = "SIGNUP";
+      activeUser.otp_for = "SIGNUP";
 
-      if (user.status !== "ACTIVE") {
+      if (activeUser.status !== "ACTIVE") {
         return handleResponse(401, "Your account is not active", {}, resp);
       }
 
-      await user.save();
+      await activeUser.save();
 
       const fialResponse = {
         emailVerified,
         phoneVerified,
-        userData: user.toObject(),
+        userData: activeUser.toObject(),
         flow: "EMAIL_AND_PHONE_VERIFICATION_LOGIN",
+        account_restored: softDeleteCheck.restored,
       };
 
       return handleResponse(
@@ -449,21 +490,43 @@ export const loginVendor = async (req, resp) => {
       if (!isPasswordMatch) {
         return handleResponse(401, "Invalid password", {}, resp);
       }
-      if (emailVerified && phoneVerified && user.status == "ACTIVE") {
-        const token = generateToken(user.toObject());
+
+      const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+      if (!softDeleteCheck.ok) {
+        return handleResponse(
+          403,
+          "Account has been permanently deleted",
+          {},
+          resp,
+        );
+      }
+      const activeUser = softDeleteCheck.user;
+      emailVerified = activeUser.is_email_verified;
+      phoneVerified = activeUser.is_phone_verified;
+
+      if (emailVerified && phoneVerified && activeUser.status == "ACTIVE") {
+        const token = generateToken(activeUser.toObject());
 
         const fialResponse = {
           flow: "PASSWORD_LOGIN",
           emailVerified,
           phoneVerified,
-          userData: user.toObject(),
+          userData: activeUser.toObject(),
           token,
+          account_restored: softDeleteCheck.restored,
         };
-        return handleResponse(200, "Login Successful", fialResponse, resp);
+        return handleResponse(
+          200,
+          softDeleteCheck.restored
+            ? "Account restored successfully"
+            : "Login Successful",
+          fialResponse,
+          resp,
+        );
       }
 
-      if (!hasServices(user.service)) {
-        const token = generate15minToken(user.toObject());
+      if (!hasServices(activeUser.service)) {
+        const token = generate15minToken(activeUser.toObject());
         await resp.cookie("forgot-password", token, cookieOptions);
         return handleResponse(
           401,
@@ -472,26 +535,27 @@ export const loginVendor = async (req, resp) => {
           resp,
         );
       }
-      if (user.status !== "ACTIVE") {
+      if (activeUser.status !== "ACTIVE") {
         return handleResponse(401, "Your account is not active", {}, resp);
       }
 
       if (!emailVerified) {
-        user.otp = generateOTP();
-        user.otp_expires_at = moment().add(1, "minutes").toDate();
+        activeUser.otp = generateOTP();
+        activeUser.otp_expires_at = moment().add(1, "minutes").toDate();
       }
       if (!phoneVerified) {
-        user.otp_phone = generateOTP();
-        user.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
+        activeUser.otp_phone = generateOTP();
+        activeUser.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
       }
 
-      user.otp_for = "SIGNUP";
-      await user.save();
+      activeUser.otp_for = "SIGNUP";
+      await activeUser.save();
       const fialResponse = {
         emailVerified,
         phoneVerified,
-        userData: user.toObject(),
+        userData: activeUser.toObject(),
         flow: "EMAIL_AND_PHONE_VERIFICATION_LOGIN",
+        account_restored: softDeleteCheck.restored,
       };
 
       return handleResponse(
@@ -694,14 +758,42 @@ export const changePassword = async (req, resp) => {
 
 export const deleteAccount = async (req, resp) => {
   try {
+    const { reason } = req.body;
+
+    if (!reason || !String(reason).trim()) {
+      return handleResponse(400, "Deletion reason is required", {}, resp);
+    }
+
     const user = await User.findById(req.user._id);
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    await User.findByIdAndDelete(user._id);
+    if (user.deletedAt) {
+      return handleResponse(
+        200,
+        "Account already scheduled for deletion",
+        {
+          restore_until: user.deletion_scheduled_at,
+        },
+        resp,
+      );
+    }
 
-    return handleResponse(200, "Account deleted successfully", {}, resp);
+    const softDeletePayload = buildSoftDeletePayload(reason);
+    Object.assign(user, softDeletePayload);
+    // status intentionally unchanged
+    await user.save();
+
+    return handleResponse(
+      200,
+      "Account scheduled for deletion. Login within 15 days to restore it.",
+      {
+        deletedAt: softDeletePayload.deletedAt,
+        restore_until: softDeletePayload.deletion_scheduled_at,
+      },
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -992,7 +1084,7 @@ export const getDocumentRequiredForService = async (req, resp) => {
       if (!allowed) {
         return handleResponse(
           403,
-          "Service not assigned to your account",
+          "Service non attribué à votre compte",
           {},
           resp,
         );
@@ -1154,7 +1246,7 @@ export const availableLeads = async (req, resp) => {
       if (vendorServiceIds.length && !vendorOwnsService(req.user.service, service)) {
         return handleResponse(
           403,
-          "Service not assigned to your account",
+          "Service non attribué à votre compte",
           {},
           resp,
         );
@@ -1546,6 +1638,17 @@ export const GoogleLogin = async (req, res) => {
       await user.save();
     }
 
+    const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+    if (!softDeleteCheck.ok) {
+      return handleResponse(
+        403,
+        "Account has been permanently deleted",
+        {},
+        res,
+      );
+    }
+    user = softDeleteCheck.user;
+
     if (!user.is_phone_verified) {
       const otp = generateOTP();
       user.otp_phone = otp;
@@ -1569,7 +1672,14 @@ export const GoogleLogin = async (req, res) => {
       { expiresIn: "30d" },
     );
 
-    return handleResponse(200, "Login successful", token, res);
+    return handleResponse(
+      200,
+      softDeleteCheck.restored
+        ? "Account restored successfully"
+        : "Login successful",
+      { token, account_restored: softDeleteCheck.restored },
+      res,
+    );
   } catch (e) {
     console.log("e", e);
 
@@ -1721,30 +1831,23 @@ export const allReviews = async (req, res) => {
   }
 };
 
-// Format date as "DD Mon YYYY, HH:MM" for Payment History
+// Format date as "DD mois YYYY, HH:MM" for Payment History (French locale)
 function formatTransactionDateTime(date) {
   if (!date) return null;
   const d = new Date(date);
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = months[d.getMonth()];
-  const year = d.getFullYear();
+  if (Number.isNaN(d.getTime())) return null;
+
+  const datePart = d
+    .toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+    .replace(/\./g, "");
+
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${day} ${month} ${year}, ${hours}:${minutes}`;
+  return `${datePart}, ${hours}:${minutes}`;
 }
 
 // Mask payment method e.g. "Visa 4532" -> "Visa **** 4532"
@@ -1826,12 +1929,12 @@ export const getTransactions = async (req, res) => {
       transaction_id: toTransactionId(t.transaction_number, t._id, t.createdAt),
       date_time: formatTransactionDateTime(t.createdAt),
       payment_method:
-        maskPaymentMethod(t.payment_method) ||
+       t.payment_method ||
         (t.plat_form === "manual" ? null : t.plat_form),
       amount_paid: t.amount_paid != null ? t.amount_paid : null,
       currency: t.currency || "EUR",
       credit_added:
-        t.type === "credit" && t.amount != null ? `+${t.amount} credits` : null,
+        t.type === "credit" && t.amount != null ? `+${t.amount} crédits` : null,
       status: t.status
         ? t.status.charAt(0).toUpperCase() + t.status.slice(1)
         : "Pending",

@@ -11,7 +11,7 @@ import Role from "../../models/RoleModel.js";
 import moment from "moment";
 import crypto from "crypto";
 import { sendEmail } from "../../../config/emailConfig.js";
-import { cookieOptions } from "../../../utils/helperFunction.js";
+import { cookieOptions, normalizeFrenchPhone } from "../../../utils/helperFunction.js";
 import VendorCreditWallet from "../../models/VendorCreditWalletModel.js";
 import UserNotification from "../../models/userNotificationModel.js";
 import { log } from "console";
@@ -24,6 +24,10 @@ import axios from "axios";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import Global from "../../models/GlobalModel.js";
 import { fetchGlobalPlatformStats } from "../../../utils/globalSettingStats.js";
+import {
+  buildSoftDeletePayload,
+  handleSoftDeletedAccountOnAuth,
+} from "../../../utils/accountDeletion.js";
 
 // SIGNUP
 export const signup = async (req, resp) => {
@@ -33,6 +37,8 @@ export const signup = async (req, resp) => {
     if (!phone && !email) {
       return handleResponse(400, "Phone or email are required", {}, resp);
     }
+
+    const normalizedPhone = phone ? normalizeFrenchPhone(phone) : null;
 
     // const existingUser = await User.findOne({
     //   $or: [{ phone }, ...(email ? [{ email }] : [])],
@@ -46,9 +52,9 @@ export const signup = async (req, resp) => {
       });
     }
 
-    if (phone) {
+    if (normalizedPhone) {
       existingUser = await User.findOne({
-        phone: phone,
+        phone: normalizedPhone,
       });
     }
 
@@ -68,7 +74,7 @@ export const signup = async (req, resp) => {
     const user = await User.create({
       first_name,
       last_name,
-      phone,
+      phone: normalizedPhone,
       email: email || null,
       password: await hashPassword(password),
       role: role._id,
@@ -125,7 +131,8 @@ export const verifyPhone = async (req, resp) => {
       return handleResponse(400, "Phone and OTP are required", {}, resp);
     }
 
-    const user = await User.findOne({ phone });
+    const normalizedPhone = normalizeFrenchPhone(phone);
+    const user = await User.findOne({ phone: normalizedPhone });
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const role = await Role.findById(user.role).select("id name");
 
@@ -232,14 +239,42 @@ export const loginPhoneEmail = async (req, resp) => {
 
 export const deleteAccount = async (req, resp) => {
   try {
+    const { reason } = req.body;
+
+    if (!reason || !String(reason).trim()) {
+      return handleResponse(400, "Deletion reason is required", {}, resp);
+    }
+
     const user = await User.findById(req.user._id);
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    await User.findByIdAndDelete(user._id);
+    if (user.deletedAt) {
+      return handleResponse(
+        200,
+        "Account already scheduled for deletion",
+        {
+          restore_until: user.deletion_scheduled_at,
+        },
+        resp,
+      );
+    }
 
-    return handleResponse(200, "Account deleted successfully", {}, resp);
+    const softDeletePayload = buildSoftDeletePayload(reason);
+    Object.assign(user, softDeletePayload);
+    // status intentionally unchanged
+    await user.save();
+
+    return handleResponse(
+      200,
+      "Account scheduled for deletion. Login within 15 days to restore it.",
+      {
+        deletedAt: softDeletePayload.deletedAt,
+        restore_until: softDeletePayload.deletion_scheduled_at,
+      },
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
@@ -402,21 +437,40 @@ export const login = async (req, resp) => {
       return handleResponse(401, "Invalid credentials", {}, resp);
     }
 
-    if (fcm_token) {
-      if (!Array.isArray(user.fcm_token)) user.fcm_token = [];
+    const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+    if (!softDeleteCheck.ok) {
+      return handleResponse(
+        403,
+        "Account has been permanently deleted",
+        {},
+        resp,
+      );
+    }
+    const activeUser = softDeleteCheck.user;
 
-      if (!user.fcm_token.includes(fcm_token)) {
-        user.fcm_token.push(fcm_token);
+    if (fcm_token) {
+      if (!Array.isArray(activeUser.fcm_token)) activeUser.fcm_token = [];
+
+      if (!activeUser.fcm_token.includes(fcm_token)) {
+        activeUser.fcm_token.push(fcm_token);
       }
-      await user.save();
+      await activeUser.save();
     }
 
-    const token = generateToken(user.toObject());
+    const token = generateToken(activeUser.toObject());
 
     return handleResponse(
       200,
-      "Login successful",
-      { flow: "LOGIN_SUCCESS", token, user, role },
+      softDeleteCheck.restored
+        ? "Account restored successfully"
+        : "Login successful",
+      {
+        flow: "LOGIN_SUCCESS",
+        token,
+        user: activeUser,
+        role,
+        account_restored: softDeleteCheck.restored,
+      },
       resp,
     );
   } catch (err) {
@@ -619,28 +673,46 @@ export const verifyPhoneAndLogin = async (req, resp) => {
 
     await user.save();
 
+    const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+    if (!softDeleteCheck.ok) {
+      return handleResponse(
+        403,
+        "Account has been permanently deleted",
+        {},
+        resp,
+      );
+    }
+    const activeUser = softDeleteCheck.user;
+
     // resend email verification if email exists but not verified
-    if (user.email && !user.is_email_verified) {
+    if (activeUser.email && !activeUser.is_email_verified) {
       const newToken = crypto.randomBytes(32).toString("hex");
-      user.email_verification_token = newToken;
-      await user.save();
+      activeUser.email_verification_token = newToken;
+      await activeUser.save();
 
       const link = `${process.env.BASE_URL}/api/user/verify-email?token=${newToken}`;
 
       await sendEmail({
-        to: user.email,
+        to: activeUser.email,
         subject: "Verify your email",
         html: `<p>Click below to verify your email:</p>
                <a href="${link}">${link}</a>`,
       });
     }
 
-    const token = generateToken(user.toObject());
+    const token = generateToken(activeUser.toObject());
 
     return handleResponse(
       200,
-      "Phone verified and login successful",
-      { flow: "LOGIN_SUCCESS", token, user },
+      softDeleteCheck.restored
+        ? "Account restored successfully"
+        : "Phone verified and login successful",
+      {
+        flow: "LOGIN_SUCCESS",
+        token,
+        user: activeUser,
+        account_restored: softDeleteCheck.restored,
+      },
       resp,
     );
   } catch (err) {
@@ -998,6 +1070,17 @@ export const GoogleLogin = async (req, res) => {
       await user.save();
     }
 
+    const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+    if (!softDeleteCheck.ok) {
+      return handleResponse(
+        403,
+        "Account has been permanently deleted",
+        {},
+        res,
+      );
+    }
+    user = softDeleteCheck.user;
+
 
 
     if (user.role?.name == "Vendor") {
@@ -1023,8 +1106,10 @@ export const GoogleLogin = async (req, res) => {
 
     return handleResponse(
       200,
-      "Login successful",
-      { token, role: user.role },
+      softDeleteCheck.restored
+        ? "Account restored successfully"
+        : "Login successful",
+      { token, role: user.role, account_restored: softDeleteCheck.restored },
       res,
     );
   } catch (e) {
