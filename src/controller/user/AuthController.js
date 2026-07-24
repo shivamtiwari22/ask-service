@@ -357,7 +357,7 @@ export const requestEmailLoginOTP = async (req, resp) => {
 // LOGIN API
 export const login = async (req, resp) => {
   try {
-    const { identifier, password, fcm_token } = req.body;
+    const { identifier, password, fcm_token , type} = req.body;
 
     if (!identifier || !password) {
       return handleResponse(
@@ -377,6 +377,10 @@ export const login = async (req, resp) => {
     }
 
     const role = await Role.findById(user.role).select("id name");
+
+    if(type == "Vendor" && role.name != "Vendor") {
+      return handleResponse(403, "You are not authorized to access this resource", {}, resp);
+    }
 
     // Phone must exist
     // if (!user.phone) {
@@ -470,6 +474,7 @@ export const login = async (req, resp) => {
         user: activeUser,
         role,
         account_restored: softDeleteCheck.restored,
+        
       },
       resp,
     );
