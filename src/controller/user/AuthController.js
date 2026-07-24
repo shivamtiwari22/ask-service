@@ -463,6 +463,11 @@ export const login = async (req, resp) => {
 
     const token = generateToken(activeUser.toObject());
 
+      let is_client = false;
+    if(type == "User" && role.name == "Vendor") {
+         is_client = true
+    }
+
     return handleResponse(
       200,
       softDeleteCheck.restored
@@ -474,7 +479,7 @@ export const login = async (req, resp) => {
         user: activeUser,
         role,
         account_restored: softDeleteCheck.restored,
-        
+        is_client,
       },
       resp,
     );
