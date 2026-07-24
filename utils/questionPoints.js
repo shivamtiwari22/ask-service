@@ -127,7 +127,7 @@ export function pointsToStars(computedPoint, maxPossiblePoint) {
 }
 
 const LEAD_STARS_LABELS = {
-  0: "NOT RATED",
+  0: "NON ÉVALUÉ",
   1: "LOW",
   2: "BASIC",
   3: "MEDIUM",

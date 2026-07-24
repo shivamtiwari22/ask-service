@@ -305,7 +305,7 @@ export function translateNotificationText(text) {
     const reference = text
       .replace("Your quote for request ", "")
       .replace(" has been accepted.", "");
-    return `Votre devis pour la demande ${reference} a ete accepte.`;
+    return `Votre devis pour la demande ${reference} a été accepté.`;
   }
 
   if (text.startsWith("You have a new message from ") && text.endsWith("!")) {

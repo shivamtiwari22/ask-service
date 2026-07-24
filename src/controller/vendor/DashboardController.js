@@ -690,7 +690,7 @@ export const unlockLead = async (req, res) => {
 
     const balanceAfter = wallet.amount;
     const serviceTitle = lead.service_category?.title || "Lead";
-    const description = `Unlocked Lead ${serviceTitle} in ${lead.city || ""}`;
+    const description = `Prospect débloqué ${serviceTitle} in ${lead.city || ""}`;
 
     const [unlockRecord, tx] = await Promise.all([
       VendorLeadUnlock.create({

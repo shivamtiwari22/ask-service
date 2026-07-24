@@ -385,28 +385,59 @@ export const verifyRegistrationOTP = async (req, resp) => {
 // login vendor
 export const loginVendor = async (req, resp) => {
   try {
-    const { identifier, password, identifierType, type } = req.body;
-    if (!identifier || !type) {
+    const { identifier, password, fcm_token } = req.body;
+
+    if (!identifier || !password) {
       return handleResponse(
         400,
-        "Identifier, password, identifier type and type are required",
+        "Identifier and password are required",
         {},
         resp,
       );
     }
 
     const user = await User.findOne({
-      $or: [{ email: identifier }, { phone: identifier }],
+      $or: [{ phone: identifier }, { email: identifier }],
     });
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    if (
-      user.deletedAt &&
-      !isAccountWithinDeletionGracePeriod(user)
-    ) {
+    const role = await Role.findById(user.role).select("id name");
+    if (!role || role.name !== "Vendor") {
+      return handleResponse(403, "Not a vendor account", {}, resp);
+    }
+
+    const isEmailLogin = user.email === identifier;
+
+    if (isEmailLogin && !user.is_email_verified) {
+      const otp = generateOTP();
+      user.otp = otp;
+      user.otp_for = "VERIFY_EMAIL";
+      await user.save();
+
+      await sendEmail({
+        to: user.email,
+        subject: "Code de vérification",
+        html: await verificationMail(user.first_name, otp),
+      });
+
+      return handleResponse(
+        403,
+        "Email verification required",
+        { flow: "EMAIL_VERIFICATION_REQUIRED", role },
+        resp,
+      );
+    }
+
+    const isMatch = await comparePassword(password, user.password);
+    if (!isMatch) {
+      return handleResponse(401, "Invalid credentials", {}, resp);
+    }
+
+    const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
+    if (!softDeleteCheck.ok) {
       return handleResponse(
         403,
         "Account has been permanently deleted",
@@ -414,157 +445,36 @@ export const loginVendor = async (req, resp) => {
         resp,
       );
     }
+    const activeUser = softDeleteCheck.user;
 
-    let emailVerified = user.is_email_verified;
-    let phoneVerified = user.is_phone_verified;
-
-    if (type == "OTP") {
-      const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
-      if (!softDeleteCheck.ok) {
-        return handleResponse(
-          403,
-          "Account has been permanently deleted",
-          {},
-          resp,
-        );
-      }
-      const activeUser = softDeleteCheck.user;
-      emailVerified = activeUser.is_email_verified;
-      phoneVerified = activeUser.is_phone_verified;
-
-      if (emailVerified && phoneVerified && activeUser.status == "ACTIVE") {
-        activeUser.otp = generateOTP();
-        activeUser.otp_expires_at = moment().add(2, "minutes").toDate();
-        activeUser.otp_for = "LOGIN";
-        await activeUser.save();
-
-        const fialResponse = {
-          flow: "OTP_LOGIN",
-          emailVerified,
-          phoneVerified,
-          userData: activeUser.toObject(),
-          account_restored: softDeleteCheck.restored,
-        };
-        return handleResponse(
-          200,
-          softDeleteCheck.restored
-            ? "Account restored. Code sent successfully for login"
-            : "Code Send Successfully for login",
-          fialResponse,
-          resp,
-        );
-      }
-
-      if (!emailVerified) {
-        activeUser.otp = generateOTP();
-        activeUser.otp_expires_at = moment().add(1, "minutes").toDate();
-      }
-      if (!phoneVerified) {
-        activeUser.otp_phone = generateOTP();
-        activeUser.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
-      }
-      activeUser.otp_for = "SIGNUP";
-
-      if (activeUser.status !== "ACTIVE") {
-        return handleResponse(401, "Your account is not active", {}, resp);
-      }
-
-      await activeUser.save();
-
-      const fialResponse = {
-        emailVerified,
-        phoneVerified,
-        userData: activeUser.toObject(),
-        flow: "EMAIL_AND_PHONE_VERIFICATION_LOGIN",
-        account_restored: softDeleteCheck.restored,
-      };
-
-      return handleResponse(
-        200,
-        "Code Send Successfully for verification",
-        fialResponse,
-        resp,
-      );
-    } else {
-      const isPasswordMatch = await comparePassword(password, user.password);
-      if (!isPasswordMatch) {
-        return handleResponse(401, "Invalid password", {}, resp);
-      }
-
-      const softDeleteCheck = await handleSoftDeletedAccountOnAuth(user);
-      if (!softDeleteCheck.ok) {
-        return handleResponse(
-          403,
-          "Account has been permanently deleted",
-          {},
-          resp,
-        );
-      }
-      const activeUser = softDeleteCheck.user;
-      emailVerified = activeUser.is_email_verified;
-      phoneVerified = activeUser.is_phone_verified;
-
-      if (emailVerified && phoneVerified && activeUser.status == "ACTIVE") {
-        const token = generateToken(activeUser.toObject());
-
-        const fialResponse = {
-          flow: "PASSWORD_LOGIN",
-          emailVerified,
-          phoneVerified,
-          userData: activeUser.toObject(),
-          token,
-          account_restored: softDeleteCheck.restored,
-        };
-        return handleResponse(
-          200,
-          softDeleteCheck.restored
-            ? "Account restored successfully"
-            : "Login Successful",
-          fialResponse,
-          resp,
-        );
-      }
-
-      if (!hasServices(activeUser.service)) {
-        const token = generate15minToken(activeUser.toObject());
-        await resp.cookie("forgot-password", token, cookieOptions);
-        return handleResponse(
-          401,
-          "Please select a service",
-          { flow: "SERVICE_SELECTION" },
-          resp,
-        );
-      }
-      if (activeUser.status !== "ACTIVE") {
-        return handleResponse(401, "Your account is not active", {}, resp);
-      }
-
-      if (!emailVerified) {
-        activeUser.otp = generateOTP();
-        activeUser.otp_expires_at = moment().add(1, "minutes").toDate();
-      }
-      if (!phoneVerified) {
-        activeUser.otp_phone = generateOTP();
-        activeUser.otp_phone_expiry_at = moment().add(1, "minutes").toDate();
-      }
-
-      activeUser.otp_for = "SIGNUP";
-      await activeUser.save();
-      const fialResponse = {
-        emailVerified,
-        phoneVerified,
-        userData: activeUser.toObject(),
-        flow: "EMAIL_AND_PHONE_VERIFICATION_LOGIN",
-        account_restored: softDeleteCheck.restored,
-      };
-
-      return handleResponse(
-        200,
-        "Code Send Successfully for verification",
-        fialResponse,
-        resp,
-      );
+    if (activeUser.status !== "ACTIVE") {
+      return handleResponse(401, "Your account is not active", {}, resp);
     }
+
+    if (fcm_token) {
+      if (!Array.isArray(activeUser.fcm_token)) activeUser.fcm_token = [];
+      if (!activeUser.fcm_token.includes(fcm_token)) {
+        activeUser.fcm_token.push(fcm_token);
+      }
+      await activeUser.save();
+    }
+
+    const token = generateToken(activeUser.toObject());
+
+    return handleResponse(
+      200,
+      softDeleteCheck.restored
+        ? "Account restored successfully"
+        : "Login successful",
+      {
+        flow: "LOGIN_SUCCESS",
+        token,
+        user: activeUser,
+        role,
+        account_restored: softDeleteCheck.restored,
+      },
+      resp,
+    );
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }
