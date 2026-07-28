@@ -145,7 +145,9 @@ export const verifyPhone = async (req, resp) => {
     // }
 
     if (user.otp_phone !== otp) {
+
       return handleResponse(401, "Invalid OTP", {}, resp);
+      
     }
 
     user.is_phone_verified = true;
@@ -1284,8 +1286,7 @@ export const PostContactUs = async (req, res) => {
     return handleResponse(200, "Form Submit Successfully", post, res);
   } catch (e) {
     console.log(e);
-
-    return handleResponse(500, error.message, {}, res);
+    return handleResponse(500, e.message, {}, res);
   }
 };
 

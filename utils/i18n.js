@@ -256,16 +256,15 @@ const FR_TRANSLATIONS = {
   "Your service request not found": "Votre demande de service est introuvable",
   "category not found": "Catégorie introuvable",
   error: "erreur",
-  "package_id or package_key is required":
-    "package_id ou package_key est requis",
+  "package_id or package_key is required":"package_id ou package_key est requis",
   phone: "téléphone",
   "quote_price, service_description and available_start_date are required":
     "quote_price, service_description et available_start_date sont requis",
   "service not found": "service introuvable",
   "service_id is required": "service_id est requis",
-  "service_request_id, vendor and rating are required":
-    "service_request_id, vendor et rating sont requis",
+  "service_request_id, vendor and rating are required":"service_request_id, vendor et rating sont requis",
   "transactionId is required": "transactionId est requis",
+  "Not a vendor account": "Non un compte prestataire",
 };
 
 const DICTIONARIES = {
