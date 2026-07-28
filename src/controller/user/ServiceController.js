@@ -998,7 +998,11 @@ const createdServiceCategoryPopulate = [
   },
   {
     path: "child_category",
-    select: "title description image options",
+    select: "title description image options parent_category",
+    populate: {
+      path: "parent_category",
+      select: "title description image",
+    },
   },
 ];
 

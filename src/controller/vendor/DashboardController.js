@@ -852,11 +852,21 @@ export const getLeadById = async (req, res) => {
     const lead = await ServiceRequest.findById(leadId)
       .populate({
         path: "service_category",
-        select: "title credit company_credit image description",
+        select: "title credit company_credit image description parent_category",
+        populate: {
+          path: "parent_category",
+          select: "title credit company_credit image description",
+          match: { deletedAt: null, status: "ACTIVE" },
+        },
       })
       .populate({
         path: "child_category",
         select: "title credit company_credit image description parent_category",
+        populate: {
+          path: "parent_category",
+          select: "title credit company_credit image description",
+          match: { deletedAt: null, status: "ACTIVE" },
+        },
       })
       .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
       .lean();

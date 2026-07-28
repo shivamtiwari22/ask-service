@@ -210,33 +210,62 @@ export function buildVendorLeadStatus(unlocked, quote) {
   };
 }
 
+function isPopulatedCategoryDoc(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value.title !== undefined ||
+      value.credit !== undefined ||
+      value.description !== undefined ||
+      value.image !== undefined)
+  );
+}
+
+function stripParentCategoryField(category) {
+  if (!category || typeof category !== "object") return category;
+  const { parent_category, ...rest } = category;
+  return rest;
+}
+
+/**
+ * Resolve display service_category + its real parent from ServiceCategory.parent_category.
+ * Prefer child_category when present (leaf), else service_category.
+ */
 export function resolveLeadServiceCategories(lead) {
   const serviceCategoryField = lead?.service_category || null;
   const childCategoryField = lead?.child_category || null;
 
-  if (childCategoryField) {
+  const primary = childCategoryField || serviceCategoryField;
+  if (!primary) {
+    return { service_category: null, parent_service_category: null };
+  }
+
+  if (typeof primary !== "object") {
     return {
-      service_category: childCategoryField,
-      parent_service_category: serviceCategoryField || null,
+      service_category: primary,
+      parent_service_category: null,
     };
   }
 
+  // Real parent = ServiceCategory.parent_category of the displayed service_category
+  let parent = isPopulatedCategoryDoc(primary.parent_category)
+    ? stripParentCategoryField(primary.parent_category)
+    : null;
+
+  // Fallback when child is shown but its parent_category wasn't populated:
+  // stored service_category on the lead is usually the parent.
   if (
-    serviceCategoryField &&
-    typeof serviceCategoryField === "object" &&
-    serviceCategoryField.parent_category
+    !parent &&
+    childCategoryField &&
+    isPopulatedCategoryDoc(serviceCategoryField)
   ) {
-    const { parent_category, ...childCategory } = serviceCategoryField;
-    return {
-      service_category: childCategory,
-      parent_service_category:
-        typeof parent_category === "object" ? parent_category : null,
-    };
+    parent = stripParentCategoryField(serviceCategoryField);
   }
 
   return {
-    service_category: serviceCategoryField,
-    parent_service_category: serviceCategoryField || null,
+    service_category: stripParentCategoryField(primary),
+    parent_service_category: parent,
   };
 }
 
