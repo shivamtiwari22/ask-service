@@ -480,6 +480,46 @@ export const loginVendor = async (req, resp) => {
   }
 };
 
+/**
+ * ACTIVE if every required ACTIVE document for the vendor's services is Verified.
+ * Otherwise PENDING (missing upload, Pending, or Rejected).
+ */
+async function resolveVendorKycFromServiceDocuments(userId, serviceIds) {
+  const ids = getServiceIds(serviceIds);
+  if (!ids.length) return "PENDING";
+
+  const requiredDocs = await ServiceDocumentRequirement.find({
+    service_category: { $in: ids },
+    status: "ACTIVE",
+    deletedAt: null,
+    is_required: true,
+  })
+    .select("_id")
+    .lean();
+
+  // No required docs for these services → nothing pending
+  if (!requiredDocs.length) return "ACTIVE";
+
+  const vendorDocs = await VendorDocument.find({
+    user_id: userId,
+    document_id: { $in: requiredDocs.map((d) => d._id) },
+  })
+    .select("document_id status")
+    .lean();
+
+  const verifiedIds = new Set(
+    vendorDocs
+      .filter((d) => d.status === "Verified")
+      .map((d) => d.document_id.toString()),
+  );
+
+  const allVerified = requiredDocs.every((req) =>
+    verifiedIds.has(req._id.toString()),
+  );
+
+  return allVerified ? "ACTIVE" : "PENDING";
+}
+
 // update Vendor Profile
 export const updateVendorProfile = async (req, resp) => {
   try {
@@ -601,6 +641,16 @@ export const updateVendorProfile = async (req, resp) => {
       } else {
         user.service = [];
       }
+
+      // Recalculate KYC from verified required docs for the updated services
+      const nextKycStatus = await resolveVendorKycFromServiceDocuments(
+        userId,
+        user.service,
+      );
+      user.kyc_status = nextKycStatus;
+      if (nextKycStatus === "ACTIVE") {
+        user.verified_at = new Date();
+      }
     }
 
     
@@ -631,6 +681,7 @@ export const updateVendorProfile = async (req, resp) => {
         flow: "PROFILE_UPDATED",
         email_verified: user.is_email_verified,
         phone_verified: user.is_phone_verified,
+        kyc_status: user.kyc_status,
       },
       resp,
     );
