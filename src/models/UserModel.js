@@ -175,6 +175,14 @@ const UserSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    deletion_reminder_sent_at: {
+      type: Date,
+      default: null,
+    },
+    show_welcome_msg: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: {},

@@ -35,6 +35,7 @@ import {
   buildSoftDeletePayload,
   handleSoftDeletedAccountOnAuth,
   isAccountWithinDeletionGracePeriod,
+  consumeShowWelcomeMsg,
 } from "../../../utils/accountDeletion.js";
 import { attachLeadStarFieldsToLead } from "../../../utils/questionPoints.js";
 import Global from "../../models/GlobalModel.js";
@@ -769,7 +770,11 @@ export const getProfile = async (req, resp) => {
 
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
-    return handleResponse(200, "Profile fetched successfully", user, resp);
+    const show_welcome_msg = await consumeShowWelcomeMsg(user._id);
+    const profile = user.toObject();
+    profile.show_welcome_msg = show_welcome_msg;
+
+    return handleResponse(200, "Profile fetched successfully", profile, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

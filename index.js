@@ -16,6 +16,7 @@ import UserRoutes from "./src/routes/UserRoutes.js";
 import VendorRoutes from "./src/routes/vendorRoutes.js";
 import "./cron/serviceRequestExpiryCron.js";
 import "./cron/accountPermanentDeleteCron.js";
+import "./cron/accountDeletionReminderCron.js";
 import { Server } from "socket.io";
 import http from "http";
 import Message from "./src/models/MessageModel.js";

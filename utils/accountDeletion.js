@@ -2,6 +2,7 @@ import moment from "moment";
 import User from "../src/models/UserModel.js";
 
 export const ACCOUNT_DELETION_GRACE_DAYS = 15;
+export const ACCOUNT_DELETION_REMINDER_DAYS = 7;
 
 export function getAccountDeletionScheduleDate(fromDate = new Date()) {
   return moment(fromDate).add(ACCOUNT_DELETION_GRACE_DAYS, "days").toDate();
@@ -24,6 +25,8 @@ export function buildSoftDeletePayload(reason) {
     deletedAt,
     deletion_reason: String(reason).trim(),
     deletion_scheduled_at: getAccountDeletionScheduleDate(deletedAt),
+    deletion_reminder_sent_at: null,
+    show_welcome_msg: false,
   };
 }
 
@@ -44,6 +47,8 @@ export async function restoreSoftDeletedAccount(user) {
     user.deletedAt = null;
     user.deletion_reason = null;
     user.deletion_scheduled_at = null;
+    user.deletion_reminder_sent_at = null;
+    user.show_welcome_msg = true;
     await user.save();
     return { restored: true, user };
   }
@@ -55,12 +60,29 @@ export async function restoreSoftDeletedAccount(user) {
         deletedAt: null,
         deletion_reason: null,
         deletion_scheduled_at: null,
+        deletion_reminder_sent_at: null,
+        show_welcome_msg: true,
       },
     },
     { new: true },
   );
 
   return { restored: true, user: updated };
+}
+
+/**
+ * Read show_welcome_msg once, then clear it so later profile calls return false.
+ */
+export async function consumeShowWelcomeMsg(userId) {
+  const user = await User.findById(userId).select("show_welcome_msg");
+  if (!user) return false;
+
+  const showWelcome = Boolean(user.show_welcome_msg);
+  if (showWelcome) {
+    user.show_welcome_msg = false;
+    await user.save();
+  }
+  return showWelcome;
 }
 
 /**
