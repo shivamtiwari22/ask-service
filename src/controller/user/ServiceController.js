@@ -8,6 +8,7 @@ import {
 import {
   createReference,
   generatePassword,
+  normalizeFrenchPhone,
   resolveLeadServiceCategories,
 } from "../../../utils/helperFunction.js";
 import { resolveLeadPointFieldsForServiceRequest } from "../../../utils/questionPoints.js";
@@ -220,7 +221,10 @@ export const initiateServiceRequest = async (req, resp) => {
       return handleResponse(400, "Contact details are required", {}, resp);
     }
 
-    const { phone, email, first_name, last_name } = contact_details;
+    let { phone, email, first_name, last_name } = contact_details;
+
+    phone = phone ? normalizeFrenchPhone(phone) : null;
+
 
     // ================= REQUIRED VALIDATION =================
     if (!phone || !first_name || !last_name) {
