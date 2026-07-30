@@ -846,6 +846,10 @@ export const getLeadById = async (req, res) => {
     const leadId = req.params.leadId;
     const BASE_URL = process.env.IMAGE_URL;
 
+    if (!mongoose.Types.ObjectId.isValid(leadId)) {
+      return handleResponse(404, "Lead not found or no longer available", {}, res);
+    }
+
     const vendor = await User.findById(vendorId).select("service").lean();
     if (!vendor) return handleResponse(404, "User not found", {}, res);
 
@@ -870,6 +874,8 @@ export const getLeadById = async (req, res) => {
       })
       .populate({ path: "user", select: "first_name last_name email phone createdAt profile_pic" })
       .lean();
+
+   
 
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);

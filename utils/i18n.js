@@ -20,6 +20,7 @@ const FR_TRANSLATIONS = {
   "Too many requests. You are blocked for 4 minutes.":
     "Trop de requêtes. Vous êtes bloqué pendant 4 minutes.",
   "User not found": "Utilisateur introuvable",
+  "Phone number already in use": "Numéro de téléphone déjà utilisé",
   Unauthorized: "Non autorisé",
   "Invalid credentials": "Identifiants invalides",
   "Login successful": "Connexion réussie",

@@ -57,6 +57,10 @@ export const signup = async (req, resp) => {
       existingUser = await User.findOne({
         phone: normalizedPhone,
       });
+
+      if (existingUser) {
+        return handleResponse(409, "Phone number already in use", {}, resp);
+      }
     }
 
     if (existingUser) {
