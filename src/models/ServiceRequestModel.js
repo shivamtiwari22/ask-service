@@ -146,10 +146,11 @@ const ServiceRequestSchema = new mongoose.Schema(
           type: mongoose.Schema.Types.ObjectId,
           ref: "questions",
         },
-        key: String,
-        label: String,
-        value: String,
-        type: String,
+        key: { type: String },
+        label: { type: String },
+        value: { type: String },
+        // `type` is reserved in Mongoose — must nest as { type: String }
+        type: { type: String, default: null },
       },
     ],
 
