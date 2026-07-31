@@ -552,8 +552,14 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
       const allCategoryLeads = leadsByParent.get(group.parentId) || [];
       const categoryStatus = buildServiceCategoryStatus(allCategoryLeads);
       const totalCategoryLeads = allCategoryLeads.length;
-      const shouldFullPaginate = paginateParentId === group.parentId;
-      const leads = shouldFullPaginate
+
+      // Apply page/limit when:
+      // - paginate_service targets this parent, OR
+      // - no paginate_service (paginate each category's leads with page/limit)
+      const shouldPaginate =
+        !paginateParentId || paginateParentId === group.parentId;
+
+      const leads = shouldPaginate
         ? allCategoryLeads.slice(skip, skip + limit)
         : allCategoryLeads.slice(0, limit);
 
@@ -566,7 +572,7 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
         status_label: categoryStatus.status_label,
         leads,
         pagination: {
-          page: shouldFullPaginate ? page : 1,
+          page: shouldPaginate ? page : 1,
           limit,
           total: totalCategoryLeads,
           totalPages: Math.ceil(totalCategoryLeads / limit) || 0,
@@ -581,15 +587,12 @@ export const getAvailableLeadsByServiceCategory = async (req, res) => {
       data,
       total_categories: data.length,
       total_leads: enrichedLeads.length,
-    };
-
-    if (paginateParentId) {
-      responsePayload.pagination = {
+      pagination: {
         page,
         limit,
-        paginate_service: paginateParentId,
-      };
-    }
+        ...(paginateParentId ? { paginate_service: paginateParentId } : {}),
+      },
+    };
 
     return handleResponse(
       200,
