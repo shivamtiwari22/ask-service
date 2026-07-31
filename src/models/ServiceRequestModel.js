@@ -149,6 +149,7 @@ const ServiceRequestSchema = new mongoose.Schema(
         key: String,
         label: String,
         value: String,
+        type: String,
       },
     ],
 
