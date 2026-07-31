@@ -1970,7 +1970,7 @@ export const exportTransactionsCsv = async (req, res) => {
       transaction_id: toTransactionId(t.transaction_number, t._id, t.createdAt),
       date_time: formatTransactionDateTime(t.createdAt),
       payment_method:
-        maskPaymentMethod(t.payment_method) ||
+       t.payment_method ||
         (t.plat_form === "manual" ? null : t.plat_form),
       amount_paid: t.amount_paid != null ? t.amount_paid : "",
       currency: t.currency || "EUR",
@@ -2117,7 +2117,7 @@ export const exportTransactionsPdf = async (req, res) => {
     const rows = transactions.map((t) => [
       toTransactionId(t.transaction_number, t._id, t.createdAt) || "",
       formatTransactionDateTime(t.createdAt) || "",
-      maskPaymentMethod(t.payment_method) ||
+      t.payment_method ||
         (t.plat_form === "manual" ? "" : t.plat_form) ||
         "",
       t.amount_paid != null ? String(t.amount_paid) : "",

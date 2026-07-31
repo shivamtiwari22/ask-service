@@ -1077,8 +1077,8 @@ export const submitQuote = async (req, res) => {
     const user = await User.findById(lead.user);
 
     if (user) {
-      const title = "Devis recu 💰";
-      const body = "Vous avez recu un nouveau devis d'un prestataire. Consultez-le maintenant.";
+      const title = "Devis reçu 💰";
+      const body = "Vous avez reçu un nouveau devis d'un prestataire. Consultez-le maintenant.";
 
       const prefs = await UserNotification.findOne({
         user_id: user._id,

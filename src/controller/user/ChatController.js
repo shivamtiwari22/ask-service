@@ -8,6 +8,7 @@ import User from "../../models/UserModel.js";
 import Chat from "../../models/ChatModel.js";
 import VendorReview from "../../models/VendorReviewModel.js";
 import pushNotification from "../../../config/pushNotification.js";
+import Notification from "../../models/NotificationModel.js";
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -500,11 +501,35 @@ class ChatController {
       );
 
       // send push
-      await pushNotification(
-        users.fcm_token,
-        "Nouveau message",
-        content || "📎 Message media",
-      );
+      if (users?.fcm_token) {
+        await pushNotification(
+          users.fcm_token,
+          "Nouveau message",
+          content || "📎 Message media",
+        );
+      }
+
+      // In-app notification for each receiver (User ↔ Vendor)
+      if (receiverIds.length) {
+        const receivers = await User.find({ _id: { $in: receiverIds } })
+          .select("_id role")
+          .populate({ path: "role", select: "name" })
+          .lean();
+
+        const notificationDocs = receivers.map((receiver) => {
+          const roleName = receiver.role?.name;
+          return {
+            user_id: receiver._id,
+            title: "Nouveau message",
+            body: content || "📎 Message media",
+            for: roleName === "Vendor" ? "Vendor" : "User",
+          };
+        });
+
+        if (notificationDocs.length) {
+          await Notification.insertMany(notificationDocs);
+        }
+      }
 
       return handleResponse(200, "msg sent", message, res);
     } catch (e) {

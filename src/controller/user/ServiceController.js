@@ -326,8 +326,8 @@ export const initiateServiceRequest = async (req, resp) => {
         .map((user) => user.fcm_token)
         .filter((token) => token);
 
-      const title = "Nouveau prospect recu";
-      const body = "Vous avez recu un nouveau prospect. Consultez les détails et répondez rapidement.";
+      const title = "Nouveau prospect reçu";
+      const body = "Vous avez reçu un nouveau prospect. Consultez les détails et répondez rapidement.";
 
       // Always save in-app notifications, but send push only if vendor allows it.
       const vendorIds = users.map((u) => u._id);
@@ -615,9 +615,9 @@ export const initiateServiceRequest = async (req, resp) => {
 
     const tokens = users.map((user) => user.fcm_token).filter((token) => token);
 
-    const title = "Nouveau prospect recu";
+    const title = "Nouveau prospect reçu";
     const body =
-      "Vous avez recu un nouveau prospect. Consultez les détails et répondez rapidement.";
+      "Vous avez reçu un nouveau prospect. Consultez les détails et répondez rapidement.";
 
     // Always save in-app notifications, but send push only if vendor allows it.
     const vendorIds = users.map((u) => u._id);
@@ -1079,14 +1079,31 @@ export const getCreatedServiceRequests = async (req, resp) => {
 
     const query = { user: userId, deletedAt: null, status: { $in: ["ACTIVE", "CANCELLED"] } };
 
+    let matchingCategoryIds = [];
     if (search) {
+      const escapedSearch = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(escapedSearch, "i");
+
+      // service_category is an ObjectId on ServiceRequest — search titles via ServiceCategory
+      matchingCategoryIds = await ServiceCategory.find({
+        title: searchRegex,
+        deletedAt: null,
+      }).distinct("_id");
+
+      const searchOr = [
+        { reference_no: searchRegex },
+        { note: searchRegex },
+      ];
+
+      if (matchingCategoryIds.length) {
+        searchOr.push(
+          { service_category: { $in: matchingCategoryIds } },
+          { child_category: { $in: matchingCategoryIds } },
+        );
+      }
+
       query.$and = query.$and || [];
-      query.$and.push({
-        $or: [
-          { reference_no: { $regex: search, $options: "i" } },
-          { note: { $regex: search, $options: "i" } },
-        ],
-      });
+      query.$and.push({ $or: searchOr });
     }
 
     if (service) {
@@ -1119,31 +1136,95 @@ export const getCreatedServiceRequests = async (req, resp) => {
     const summaryPromise = getUserServiceRequestSummary(userId);
 
     if (activeSort === "most_quotes") {
+      // Aggregate does not auto-cast ObjectIds like find() — build an explicit match.
+      const aggregateMatch = {
+        user: new mongoose.Types.ObjectId(String(userId)),
+        deletedAt: null,
+        status: status
+          ? status
+          : { $in: ["ACTIVE", "CANCELLED"] },
+      };
+
+      if (city) aggregateMatch.city = city;
+
+      if (fromDate || toDate) {
+        aggregateMatch.createdAt = {};
+        if (fromDate) aggregateMatch.createdAt.$gte = new Date(fromDate);
+        if (toDate) aggregateMatch.createdAt.$lte = new Date(toDate);
+      }
+
+      const andClauses = [];
+
+      if (search) {
+        const escapedSearch = String(search).replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&",
+        );
+        const searchRegex = new RegExp(escapedSearch, "i");
+        const searchOr = [
+          { reference_no: searchRegex },
+          { note: searchRegex },
+        ];
+
+        if (matchingCategoryIds.length) {
+          searchOr.push(
+            { service_category: { $in: matchingCategoryIds } },
+            { child_category: { $in: matchingCategoryIds } },
+          );
+        }
+
+        andClauses.push({ $or: searchOr });
+      }
+
+      if (service && mongoose.Types.ObjectId.isValid(service)) {
+        const serviceOid = new mongoose.Types.ObjectId(String(service));
+        andClauses.push({
+          $or: [
+            { service_category: serviceOid },
+            { child_category: serviceOid },
+          ],
+        });
+      }
+
+      if (andClauses.length) aggregateMatch.$and = andClauses;
+
       const pipeline = [
-        { $match: query },
+        { $match: aggregateMatch },
         {
           $lookup: {
-            from: "vendorquotes",
+            from: VendorQuote.collection.name,
             let: { requestId: "$_id" },
             pipeline: [
               {
                 $match: {
-                  $expr: { $eq: ["$service_request_id", "$$requestId"] },
-                  status: "SENT",
+                  $expr: {
+                    $and: [
+                      { $eq: ["$service_request_id", "$$requestId"] },
+                      // Count received quotes (accepted/ignored still count for "most quotes")
+                      {
+                        $in: [
+                          "$status",
+                          ["SENT", "ACCEPTED", "IGNORED"],
+                        ],
+                      },
+                    ],
+                  },
                 },
               },
             ],
-            as: "sent_quotes",
+            as: "matched_quotes",
           },
         },
         {
           $addFields: {
-            quotes_count: { $size: "$sent_quotes" },
+            sort_quotes_count: { $size: "$matched_quotes" },
           },
         },
-        { $sort: { quotes_count: -1, createdAt: -1 } },
-        ...(isPaginateDisabled ? [] : [{ $skip: skipNum }, { $limit: limitNum }]),
-        { $project: { sent_quotes: 0 } },
+        { $sort: { sort_quotes_count: -1, createdAt: -1 } },
+        ...(isPaginateDisabled
+          ? []
+          : [{ $skip: skipNum }, { $limit: limitNum }]),
+        { $project: { matched_quotes: 0, sort_quotes_count: 0 } },
       ];
 
       [requests, total, summary] = await Promise.all([
