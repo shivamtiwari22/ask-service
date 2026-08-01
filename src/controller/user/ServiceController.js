@@ -935,7 +935,7 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
     accepted_quote_sub_message: null,
   };
 
-  if (serviceRequestStatus === "CANCELLED") {
+  if (serviceRequestStatus === "CANCELLED" || serviceRequestStatus === "EXPIRED") {
     return {
       quotes_status: "closed",
       quotes_status_label: "CLOSED",
@@ -1032,6 +1032,89 @@ const mapCreatedServiceRequestItem = (request, quotes) => {
 };
 
 // get created service requests (My Requests list) – filter by user, add quote count and status label
+const CLOSED_REQUEST_STATUSES = ["CANCELLED", "EXPIRED"];
+const DEFAULT_LIST_STATUSES = ["ACTIVE", "CANCELLED", "EXPIRED"];
+
+const normalizeCreatedServicesStatus = (status) => {
+  if (!status) return null;
+  return String(status).trim().toUpperCase().replace(/\s+/g, "_");
+};
+
+/**
+ * Map FE status filters (CLOSED / ACCEPTED / OPEN / ...) to ServiceRequest query bits.
+ * ServiceRequest.status is only ACTIVE | CANCELLED | EXPIRED.
+ * ACCEPTED/OPEN/HOLD/IGNORED are derived from VendorQuote.
+ */
+const buildCreatedServicesStatusQuery = async (userId, status) => {
+  const listStatus = normalizeCreatedServicesStatus(status);
+  if (!listStatus) {
+    return { status: { $in: DEFAULT_LIST_STATUSES } };
+  }
+
+  if (listStatus === "CLOSED" || listStatus === "CANCELLED") {
+    return { status: { $in: CLOSED_REQUEST_STATUSES } };
+  }
+
+  if (listStatus === "EXPIRED") {
+    return { status: "EXPIRED" };
+  }
+
+  if (listStatus === "ACTIVE") {
+    return { status: "ACTIVE" };
+  }
+
+  // Quote-derived statuses — only ACTIVE requests can be in these states
+  const userActiveRequestIds = await ServiceRequest.find({
+    user: userId,
+    deletedAt: null,
+    status: "ACTIVE",
+  }).distinct("_id");
+
+  if (!userActiveRequestIds.length) {
+    return { status: "ACTIVE", _id: { $in: [] } };
+  }
+
+  const quotes = await VendorQuote.find({
+    service_request_id: { $in: userActiveRequestIds },
+  })
+    .select("service_request_id status")
+    .lean();
+
+  const quotesByRequest = new Map();
+  for (const quote of quotes) {
+    const rid = quote.service_request_id.toString();
+    if (!quotesByRequest.has(rid)) quotesByRequest.set(rid, []);
+    quotesByRequest.get(rid).push(quote.status);
+  }
+
+  const matchedIds = userActiveRequestIds.filter((id) => {
+    const statuses = quotesByRequest.get(id.toString()) || [];
+    const hasAccepted = statuses.includes("ACCEPTED");
+    const hasSent = statuses.includes("SENT");
+    const hasIgnored = statuses.includes("IGNORED");
+    const total = statuses.length;
+
+    if (listStatus === "ACCEPTED") return hasAccepted;
+    if (listStatus === "OPEN") return total > 0 && !hasAccepted && hasSent;
+    if (listStatus === "IGNORED") {
+      return total > 0 && !hasAccepted && !hasSent && hasIgnored;
+    }
+    if (
+      listStatus === "ON_HOLD" ||
+      listStatus === "HOLD" ||
+      listStatus === "ONHOLD"
+    ) {
+      return total === 0;
+    }
+    return false;
+  });
+
+  return {
+    status: "ACTIVE",
+    _id: { $in: matchedIds },
+  };
+};
+
 const getUserServiceRequestSummary = async (userId) => {
   const baseMatch = { user: userId, deletedAt: null };
   const requestIds = await ServiceRequest.find(baseMatch).distinct("_id");
@@ -1047,15 +1130,20 @@ const getUserServiceRequestSummary = async (userId) => {
     quotes_accepted_count,
   ] = await Promise.all([
     ServiceRequest.countDocuments({ ...baseMatch, status: "ACTIVE" }),
+    // CLOSED tab = CANCELLED + EXPIRED (same as status=CLOSED filter)
     ServiceRequest.countDocuments({
       ...baseMatch,
-      status: { $in: ["CANCELLED", "EXPIRED"] },
+      status: { $in: CLOSED_REQUEST_STATUSES },
     }),
     quoteMatch
       ? VendorQuote.countDocuments({ ...quoteMatch, status: "SENT" })
       : 0,
+    // Count requests that have an accepted quote (not raw quote rows)
     quoteMatch
-      ? VendorQuote.countDocuments({ ...quoteMatch, status: "ACCEPTED" })
+      ? VendorQuote.distinct("service_request_id", {
+          ...quoteMatch,
+          status: "ACCEPTED",
+        }).then((ids) => ids.length)
       : 0,
   ]);
 
@@ -1077,7 +1165,8 @@ export const getCreatedServiceRequests = async (req, resp) => {
     const skip = (page - 1) * limit;
     const { search, service, status, fromDate, toDate, city, sort } = req.query;
 
-    const query = { user: userId, deletedAt: null, status: { $in: ["ACTIVE", "CANCELLED"] } };
+    const statusQuery = await buildCreatedServicesStatusQuery(userId, status);
+    const query = { user: userId, deletedAt: null, ...statusQuery };
 
     let matchingCategoryIds = [];
     if (search) {
@@ -1114,7 +1203,6 @@ export const getCreatedServiceRequests = async (req, resp) => {
     }
 
     if (city) query.city = city;
-    if (status) query.status = status;
     if (fromDate || toDate) {
       query.createdAt = {};
       if (fromDate) query.createdAt.$gte = new Date(fromDate);
@@ -1140,10 +1228,16 @@ export const getCreatedServiceRequests = async (req, resp) => {
       const aggregateMatch = {
         user: new mongoose.Types.ObjectId(String(userId)),
         deletedAt: null,
-        status: status
-          ? status
-          : { $in: ["ACTIVE", "CANCELLED"] },
+        ...statusQuery,
       };
+
+      if (statusQuery._id?.$in) {
+        aggregateMatch._id = {
+          $in: statusQuery._id.$in.map(
+            (id) => new mongoose.Types.ObjectId(String(id)),
+          ),
+        };
+      }
 
       if (city) aggregateMatch.city = city;
 
