@@ -131,6 +131,13 @@ router.get("/credits/invoice/:transactionId", userAuthenticateToken, checkRoleAu
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);
 
+router.get(
+  "/transactions/:id/receipt",
+  userAuthenticateToken,
+  checkRoleAuth(["Vendor"]),
+  getCreditPurchaseInvoice,
+);
+
 router.get("/transactions/export/csv",userAuthenticateToken, checkRoleAuth(["Vendor"]),exportTransactionsListCsv);
 
 router.get("/transactions/export/pdf",userAuthenticateToken, checkRoleAuth(["Vendor"]),exportTransactionsListPdf);

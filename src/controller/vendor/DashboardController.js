@@ -1253,16 +1253,25 @@ export const purchaseCredits = async (req, res) => {
  */
 export const getCreditPurchaseInvoice = async (req, res) => {
   try {
-    const { transactionId } = req.params;
+    const transactionId = req.params.transactionId || req.params.id;
+    const vendorAuthId = req.user?._id;
+
+    if (!vendorAuthId) {
+      return handleResponse(401, "Unauthorized", {}, res);
+    }
 
     if (!transactionId) {
       return handleResponse(400, "transactionId is required", {}, res);
     }
 
-    const txFilter = {
-      _id: transactionId
-    };
+    if (!mongoose.Types.ObjectId.isValid(transactionId)) {
+      return handleResponse(404, "Invoice transaction not found", {}, res);
+    }
 
+    const txFilter = {
+      _id: transactionId,
+      user_id: vendorAuthId,
+    };
 
     const tx = await Transaction.findOne(txFilter).lean();
     if (!tx) {
@@ -1276,7 +1285,9 @@ export const getCreditPurchaseInvoice = async (req, res) => {
       tx?.reference_id ? CreditPackage.findById(tx.reference_id).lean() : null,
     ]);
 
-    const totalHt = Number(creditPackage.price || 0);
+    const totalHt = Number(
+      creditPackage?.price ?? tx.amount_paid ?? tx.amount ?? 0,
+    );
     const tvaRate = Number(global?.tva_rate || 0.2);
     const tvaAmount = Number((totalHt * tvaRate).toFixed(2));
     const totalTtc = Number((totalHt + tvaAmount).toFixed(2));
@@ -1285,7 +1296,7 @@ export const getCreditPurchaseInvoice = async (req, res) => {
     const invoiceNumber = buildInvoiceNumber(tx);
     const issueDate = formatFrenchInvoiceDate(tx.createdAt) || "-";
     const currency = tx.currency || "EUR";
-    const packageName = creditPackage?.name || "Credits";
+    const packageName = creditPackage?.name || tx.description || "Credits";
     const paymentMethod = tx.plat_form || "card";
     const paymentStatus = tx.status || "completed";
     const clientName = vendor?.business_name || "Vendor";
