@@ -158,10 +158,10 @@ export function maskVendorLeadContactDetails(contact) {
   if (!contact) return contact;
   return {
     ...contact,
-    first_name: contact.first_name ? contact.first_name[0] + "***" : "***",
-    last_name: contact.last_name ? contact.last_name[0] + "***" : "***",
+    first_name: "***",
+    last_name: "***",
     phone: (contact.phone || "").slice(0, 3) + " *******",
-    email: (contact.email || "").replace(/(.{2})(.*)(@.*)/, "$1*******$3"),
+    email: contact.email ? "***@***" : "",
   };
 }
 
