@@ -791,15 +791,18 @@ export const updateUserProfile = async (req, resp) => {
     }
 
     if (phone !== undefined && phone !== user.phone) {
+
+    const normalizedPhone = phone ? normalizeFrenchPhone(phone) : null;
+
       const existingPhone = await User.findOne({
-        phone,
+        phone: normalizedPhone,
         _id: { $ne: userId },
       });
       if (existingPhone) {
         return handleResponse(409, "Phone already in use", {}, resp);
       }
 
-      user.phone = phone;
+      user.phone = normalizedPhone;
       user.is_phone_verified = false;
 
       const otp = generateOTP();
@@ -819,7 +822,7 @@ export const updateUserProfile = async (req, resp) => {
                 source: "nodejs",
                 from: "AskService",
                 body: msg,
-                to: `+${phone}`,
+                to: `+${normalizedPhone}`,
               },
             ],
           },
