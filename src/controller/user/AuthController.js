@@ -53,6 +53,13 @@ export const signup = async (req, resp) => {
       });
     }
 
+    if (existingUser) {
+      return handleResponse(409, "User already exists", {}, resp);
+    }
+    console.log(existingUser,"email");
+    
+
+
     if (normalizedPhone) {
       existingUser = await User.findOne({
         phone: normalizedPhone,
@@ -63,9 +70,9 @@ export const signup = async (req, resp) => {
       }
     }
 
-    if (existingUser) {
-      return handleResponse(409, "User already exists", {}, resp);
-    }
+
+
+  
 
     let role = await Role.findOne({ name: "User" });
     if(!role){
