@@ -57,7 +57,7 @@ export const signup = async (req, resp) => {
       return handleResponse(409, "User already exists", {}, resp);
     }
     console.log(existingUser,"email");
-    
+
 
 
     if (normalizedPhone) {
@@ -69,8 +69,6 @@ export const signup = async (req, resp) => {
         return handleResponse(409, "Phone number already in use", {}, resp);
       }
     }
-
-
 
   
 
@@ -158,7 +156,7 @@ export const verifyPhone = async (req, resp) => {
 
     if (user.otp_phone !== otp) {
 
-      return handleResponse(401, "Invalid OTP", {}, resp);
+      return handleResponse(401, "Invalid Code", {}, resp);
       
     }
 
@@ -186,7 +184,7 @@ export const verifyEmail = async (req, resp) => {
     const role = await Role.findById(user.role).select("id name");
 
     if (user.otp !== otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp);
+      return handleResponse(401, "Invalid Code", {}, resp);
     }
 
     user.is_email_verified = true;
