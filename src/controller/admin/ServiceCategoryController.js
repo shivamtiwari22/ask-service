@@ -19,6 +19,19 @@ const normalizeOptions = (options = []) => {
     .filter((option) => option.label);
 };
 
+/**
+ * Parse display order from body (display_order or displayOrder).
+ * Missing/empty → 999. Invalid → null (caller returns 400).
+ */
+export const parseDisplayOrder = (raw, { required = false } = {}) => {
+  if (raw === undefined || raw === null || raw === "") {
+    return required ? null : 999;
+  }
+  const num = Number(raw);
+  if (!Number.isInteger(num) || num < 1) return null;
+  return num;
+};
+
 // create service category
 export const createServiceCategory = async (req, resp) => {
   try {
@@ -40,6 +53,8 @@ export const createServiceCategory = async (req, resp) => {
       is_tasks_required_visible ,
       company_credit ,
       individual_credit ,
+      display_order,
+      displayOrder,
     } = parseNestedBody(req.body);
 
     const file = req.files;
@@ -49,6 +64,18 @@ export const createServiceCategory = async (req, resp) => {
       frequencyArray = Array.isArray(frequency)
         ? frequency
         : frequency.split(",").map((f) => f.trim());
+    }
+
+    const resolvedDisplayOrder = parseDisplayOrder(
+      display_order !== undefined ? display_order : displayOrder,
+    );
+    if (resolvedDisplayOrder === null) {
+      return handleResponse(
+        400,
+        "display_order must be an integer >= 1",
+        {},
+        resp,
+      );
     }
 
     if (parent_category) {
@@ -92,7 +119,8 @@ export const createServiceCategory = async (req, resp) => {
       is_preferred_date_visible,
       is_tasks_required_visible ,
       credit : individual_credit ,
-      company_credit
+      company_credit,
+      display_order: resolvedDisplayOrder,
     });
 
     return handleResponse(
@@ -136,7 +164,9 @@ export const updateServiceCategory = async (req, resp) => {
       is_preferred_date_visible,
       is_tasks_required_visible ,
       individual_credit ,
-      company_credit
+      company_credit,
+      display_order,
+      displayOrder,
     } = req.body;
     const files = req.files;
 
@@ -188,6 +218,22 @@ export const updateServiceCategory = async (req, resp) => {
       }
     }
 
+    const rawDisplayOrder =
+      display_order !== undefined ? display_order : displayOrder;
+    let resolvedDisplayOrder;
+    if (rawDisplayOrder !== undefined) {
+      resolvedDisplayOrder = parseDisplayOrder(rawDisplayOrder, {
+        required: true,
+      });
+      if (resolvedDisplayOrder === null) {
+        return handleResponse(
+          400,
+          "display_order must be an integer >= 1",
+          {},
+          resp,
+        );
+      }
+    }
 
     const payload = {
       ...(title !== undefined ? { title } : {}),
@@ -212,6 +258,9 @@ export const updateServiceCategory = async (req, resp) => {
         : {}),
       ...(is_preferred_date_visible !== undefined
         ? { is_preferred_date_visible }
+        : {}),
+      ...(resolvedDisplayOrder !== undefined
+        ? { display_order: resolvedDisplayOrder }
         : {}),
       image:
         Array.isArray(files?.image) && files?.image?.length > 0
@@ -282,8 +331,8 @@ export const getAllServiceCategories = async (req, resp) => {
     }
 
     let query = ServiceCategory.find(filter)
-      .populate("parent_category", "title")
-      .sort({ createdAt: -1 });
+      .populate("parent_category", "title display_order")
+      .sort({ display_order: 1, createdAt: -1 });
 
     if (!isPaginationDisabled) {
       query = query.skip(skip).limit(limit);

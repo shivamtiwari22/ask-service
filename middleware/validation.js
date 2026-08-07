@@ -93,6 +93,14 @@ export const createServiceCategoryValidation = [
     .optional({ values: "falsy" })
     .isMongoId()
     .withMessage("Invalid parent category id"),
+  body("display_order")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("display_order must be an integer >= 1"),
+  body("displayOrder")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("displayOrder must be an integer >= 1"),
   body("options")
     .optional()
     .isArray()
@@ -118,6 +126,14 @@ export const updateServiceCategoryValidation = [
     .optional({ values: "falsy" })
     .isMongoId()
     .withMessage("Invalid parent category id"),
+  body("display_order")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("display_order must be an integer >= 1"),
+  body("displayOrder")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("displayOrder must be an integer >= 1"),
   body("options")
     .optional()
     .isArray()

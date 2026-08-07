@@ -140,6 +140,13 @@ const ServiceCategorySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    /** Manual display order. Parents ordered among parents; children among siblings. */
+    display_order: {
+      type: Number,
+      default: 999,
+      min: 1,
+    },
   },
   {
     timestamps: true,
@@ -168,6 +175,7 @@ ServiceCategorySchema.index(
 );
 ServiceCategorySchema.index({ parent_category: 1 });
 ServiceCategorySchema.index({ status: 1 });
+ServiceCategorySchema.index({ display_order: 1, parent_category: 1 });
 
 const ServiceCategory = mongoose.model(
   "ServiceCategory",

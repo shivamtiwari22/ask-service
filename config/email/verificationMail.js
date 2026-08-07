@@ -1,5 +1,8 @@
 import Global from "../../src/models/GlobalModel.js";
 
+const CLIENT_BLUE = "#1B4FFF";
+const VENDOR_ORANGE = "#F5A623";
+
 const resolveLogoUrl = (logo) => {
   if (!logo) return null;
   const value = String(logo);
@@ -8,7 +11,7 @@ const resolveLogoUrl = (logo) => {
   return `${base}${value.startsWith("/") ? value : `/${value}`}`;
 };
 
-/** White logo for blue (#1B4FFF) email headers — served from public/white-logo.png */
+/** White logo — served from public/white-logo.png */
 const getClientHeaderLogoUrl = () => {
   const base = (process.env.BASE_URL || process.env.IMAGE_URL || "").replace(
     /\/$/,
@@ -18,7 +21,19 @@ const getClientHeaderLogoUrl = () => {
   return `${base}/white-logo.png`;
 };
 
-const verificationMail = async (name, otp) => {
+/**
+ * @param {string} name
+ * @param {string|number} otp
+ * @param {{ forVendor?: boolean }} [options] - vendor mail uses orange header only
+ */
+const verificationMail = async (name, otp, options = {}) => {
+  const forVendor = Boolean(options?.forVendor);
+  const headerColor = forVendor ? VENDOR_ORANGE : CLIENT_BLUE;
+  // Body accents stay the same; only header is orange for vendor
+  const accent = CLIENT_BLUE;
+  const pageBg = "#E8EEF8";
+  const shadow = "rgba(27,79,255,0.12)";
+
   const global = await Global.findOne().select(
     "logo platformName marketplace_name email",
   );
@@ -36,7 +51,7 @@ const verificationMail = async (name, otp) => {
 
   const footerLogo = footerLogoUrl
     ? `<img src="${footerLogoUrl}" alt="${brandName}" width="100" style="max-height:32px;max-width:120px;width:auto;height:auto;display:inline-block;border:0;outline:none;text-decoration:none;vertical-align:middle;" />`
-    : `<span style="color:#1B4FFF;font-size:14px;font-weight:700;vertical-align:middle;">${brandName}</span>`;
+    : `<span style="color:${accent};font-size:14px;font-weight:700;vertical-align:middle;">${brandName}</span>`;
 
   return `
 <!DOCTYPE html>
@@ -46,29 +61,29 @@ const verificationMail = async (name, otp) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Code de vérification</title>
 </head>
-<body style="margin:0;padding:0;background:#E8EEF8;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<body style="margin:0;padding:0;background:${pageBg};font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
 <!-- Preheader (hidden) -->
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
 Votre code de vérification ${brandName} : ${otp}
 </div>
 
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#E8EEF8;padding:40px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${pageBg};padding:40px 16px;">
 <tr>
 <td align="center">
 
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(27,79,255,0.12);">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 12px 40px ${shadow};">
 
 <!-- ========== HEADER ========== -->
 <tr>
-<td align="center" style="background:#1B4FFF;padding:40px 28px 32px 28px;">
+<td align="center" style="background:${headerColor};padding:40px 28px 32px 28px;">
   ${headerLogo}
 </td>
 </tr>
 
 <!-- Soft curve under header -->
 <tr>
-<td style="background:#1B4FFF;line-height:0;font-size:0;height:18px;">
+<td style="background:${headerColor};line-height:0;font-size:0;height:18px;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
       <td style="background:#ffffff;border-radius:22px 22px 0 0;height:18px;line-height:18px;font-size:0;">&nbsp;</td>
@@ -82,8 +97,8 @@ Votre code de vérification ${brandName} : ${otp}
 <td align="center" style="background:#ffffff;padding:8px 28px 0 28px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
     <tr>
-      <td align="center" width="72" height="72" style="width:72px;height:72px;background:#F0F5FF;border:2px solid #1B4FFF;border-radius:50%;text-align:center;vertical-align:middle;">
-        <span style="display:inline-block;font-size:28px;line-height:72px;color:#1B4FFF;">✉️</span>
+      <td align="center" width="72" height="72" style="width:72px;height:72px;background:#F0F5FF;border:2px solid ${accent};border-radius:50%;text-align:center;vertical-align:middle;">
+        <span style="display:inline-block;font-size:28px;line-height:72px;color:${accent};">✉️</span>
       </td>
     </tr>
   </table>
@@ -100,12 +115,12 @@ Votre code de vérification ${brandName} : ${otp}
 
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px auto;">
     <tr>
-      <td style="width:56px;height:4px;background:#1B4FFF;border-radius:4px;font-size:0;line-height:0;">&nbsp;</td>
+      <td style="width:56px;height:4px;background:${accent};border-radius:4px;font-size:0;line-height:0;">&nbsp;</td>
     </tr>
   </table>
 
   <p style="margin:0 0 6px 0;font-size:17px;line-height:1.5;color:#334155;">
-    Bonjour <span style="color:#1B4FFF;font-weight:700;">${displayName}</span>,
+    Bonjour <span style="color:${accent};font-weight:700;">${displayName}</span>,
   </p>
 
   <p style="margin:0 0 22px 0;font-size:15px;line-height:1.6;color:#64748B;">
@@ -116,7 +131,7 @@ Votre code de vérification ${brandName} : ${otp}
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;">
     <tr>
       <td align="center" style="background:#F0F5FF;border:1px solid #D6E2FF;border-radius:14px;padding:26px 18px;">
-        <span style="display:inline-block;font-size:40px;letter-spacing:12px;font-weight:700;color:#1B4FFF;line-height:1;font-family:Arial,Helvetica,sans-serif;">
+        <span style="display:inline-block;font-size:40px;letter-spacing:12px;font-weight:700;color:${accent};line-height:1;font-family:Arial,Helvetica,sans-serif;">
           ${otp}
         </span>
       </td>
@@ -125,7 +140,7 @@ Votre code de vérification ${brandName} : ${otp}
 
   <p style="margin:0 0 28px 0;font-size:15px;line-height:1.65;color:#475569;max-width:460px;">
     Saisissez-le pour vérifier votre e-mail et accéder à votre compte
-    <span style="color:#1B4FFF;font-weight:700;">${brandName}</span>.
+    <span style="color:${accent};font-weight:700;">${brandName}</span>.
   </p>
 
   <!-- SECURITY NOTICE -->
@@ -171,7 +186,7 @@ Votre code de vérification ${brandName} : ${otp}
             <td align="left" valign="middle" width="60%" style="padding-left:16px;font-size:13px;line-height:1.55;color:#64748B;">
               <strong style="color:#0B1B3D;">Besoin d'aide ?</strong><br />
               Contactez-nous à
-              <a href="mailto:${supportEmail}" style="color:#1B4FFF;text-decoration:none;font-weight:600;">${supportEmail}</a>
+              <a href="mailto:${supportEmail}" style="color:${accent};text-decoration:none;font-weight:600;">${supportEmail}</a>
             </td>
           </tr>
         </table>
