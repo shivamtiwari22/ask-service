@@ -3,11 +3,13 @@ import User from "../../models/UserModel.js";
 import Role from "../../models/RoleModel.js";
 import VendorDocument from "../../models/VendorDocumentModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
-import minioClient from "../../../config/minio.js";
 import { getServiceIds } from "../../../utils/helperFunction.js";
 import { sendEmail } from "../../../config/emailConfig.js";
 import documentStatusMail from "../../../config/email/documentStatusMail.js";
 import kycStatusMail from "../../../config/email/kycStatusMail.js";
+import s3 from "../../../config/s3.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const DOCUMENT_STATUS_LABELS = {
   Pending: "En attente",
@@ -26,26 +28,25 @@ const KYC_STATUS_LABELS = {
  * Similar structure to vendor's VerificationDocument but for all vendors
  */
 
-
-const generatePresignedUrl = async (
-  filePath,
-  expiry = 60 * 60 // 1 hour
-) => {
+const generatePresignedUrl = async (filePath, expiry = 30 * 60) => {
   if (!filePath) return null;
+  if (/^https?:\/\//i.test(filePath)) return filePath;
 
-  const parts = filePath.split("/");
+  const key = String(filePath).replace(/^\/+/, "").replace(/\\/g, "/");
+  const privateBucket = process.env.S3_BUCKET_PRIVATE || "private";
 
-  const bucket = parts[0];
+  // New paths have no bucket prefix (document/xxx.pdf)
+  // Legacy private/document/xxx.pdf → strip private/
+  const objectKey = key.startsWith("private/")
+    ? key.replace(/^private\//, "")
+    : key;
 
-  const objectName = parts.slice(1).join("/");
+  const command = new GetObjectCommand({
+    Bucket: privateBucket,
+    Key: objectKey,
+  });
 
-  const url = await minioClient.presignedGetObject(
-    bucket,
-    objectName,
-    expiry
-  );
-
-  return url;
+  return getSignedUrl(s3, command, { expiresIn: expiry });
 };
 
 export const getAllVendorsWithDocuments = async (req, res) => {
@@ -84,7 +85,7 @@ export const getAllVendorsWithDocuments = async (req, res) => {
           deletedAt: null,
         })
           .populate("service_category", "title")
-          .sort({ createdAt: 1 })
+          .sort({ display_order: 1, createdAt: 1 })
           .lean();
 
         const vendorDocs = await VendorDocument.find({

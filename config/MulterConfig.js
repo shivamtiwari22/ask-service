@@ -3,6 +3,8 @@ import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs";
 import  minioClient from "../config/minio.js";
+import s3 from "../config/s3.js";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 
 const resolveBucketAndKey = (folder = "") => {
   const normalizedFolder = String(folder).replace(/\\/g, "/").replace(/^\/+/, "");
@@ -39,6 +41,31 @@ const uploadToMinio = async (file, folder) => {
 };
 
 
+const uploadToS3 = async (file, folder) => {
+  const { bucket, objectPrefix } = resolveBucketAndKey(folder);
+
+  const generatedName = `${Date.now()}-${file.filename}`;
+
+  const fileName = objectPrefix ? `${objectPrefix}/${generatedName}` : generatedName;
+
+  const fileBuffer = fs.readFileSync(file.path);
+
+  await s3.send(
+      new PutObjectCommand({
+          Bucket: bucket,
+          Key: fileName,
+          Body: fileBuffer,
+          ContentType: file.mimetype,
+      })
+  );
+
+  fs.unlinkSync(file.path);
+
+  // return `${bucket}/${fileName}`;
+  return fileName;
+};
+
+
 const storage = (uploadPath) =>
     multer.diskStorage({
         destination: function (req, file, cb) {
@@ -71,10 +98,10 @@ const fileUpload = (uploadPath) => {
             const files = req.files[key];
 
             for (let file of files) {
-              const minioPath = await uploadToMinio(file, uploadPath);
-
+              // const minioPath = await uploadToMinio(file, uploadPath);
+              const s3Path = await uploadToS3(file, uploadPath);
               // ✅ overwrite path (IMPORTANT)
-              file.path = minioPath;
+              file.path = s3Path;
             }
           }
 
@@ -91,8 +118,9 @@ const fileUpload = (uploadPath) => {
 
         try {
           for (let file of req.files) {
-            const minioPath = await uploadToMinio(file, uploadPath);
-            file.path = minioPath;
+            // const minioPath = await uploadToMinio(file, uploadPath);
+            const s3Path = await uploadToS3(file, uploadPath);
+            file.path = s3Path;
           }
 
           next();

@@ -20,18 +20,20 @@ let transporter = nodemailer.createTransport({
   },
 });
 
-export const sendEmail = async ({ to, subject, html }) => {
+export const sendEmail = async ({ to, subject, html, replyTo , from}) => {
 
   if (!shouldSendMail(to)) {
     console.log(`Email skipped for ${to}`);
     return;
   }
 
+  console.log(from);
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
+    from: from || process.env.EMAIL_FROM,
     to,
     subject,
-    html
+    html,
+    ...(replyTo ? { replyTo } : {}),
   });
 };
 

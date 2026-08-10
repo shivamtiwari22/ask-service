@@ -32,6 +32,24 @@ import Notification from "../../models/NotificationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
 import VendorLeadUnlock from "../../models/VendorLeadUnlockModel.js";
+import s3 from "../../../config/s3.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+const generatePresignedUrl = async (filePath, expiry = 60 * 60) => {
+  if (!filePath) return null;
+  if (/^https?:\/\//i.test(filePath)) return filePath;
+  const key = String(filePath).replace(/^\/+/, "").replace(/\\/g, "/");
+  const privateBucket = process.env.S3_BUCKET_PRIVATE || "private";
+  const objectKey = key.startsWith("private/")
+    ? key.replace(/^private\//, "")
+    : key;
+  return getSignedUrl(
+    s3,
+    new GetObjectCommand({ Bucket: privateBucket, Key: objectKey }),
+    { expiresIn: expiry },
+  );
+};
 
 /**
  * Distinct cities that have at least one active service request (for filters / dropdowns).
@@ -88,9 +106,16 @@ export const getUserServiceCategories = async (req, resp) => {
         },
       },
       {
+        $addFields: {
+          display_order: { $ifNull: ["$display_order", 999] },
+        },
+      },
+      { $sort: { display_order: 1, title: 1 } },
+      {
         $project: {
           title: 1,
           description: 1,
+          display_order: 1,
           options: {
             $map: {
               input: {
@@ -126,10 +151,17 @@ export const getUserServiceCategories = async (req, resp) => {
               },
             },
             {
+              $addFields: {
+                display_order: { $ifNull: ["$display_order", 999] },
+              },
+            },
+            { $sort: { display_order: 1, title: 1 } },
+            {
               $project: {
                 title: 1,
                 description: 1,
                 image: 1,
+                display_order: 1,
                 options: {
                   $map: {
                     input: {
@@ -753,7 +785,7 @@ export const verifySignupLogin = async (req, resp) => {
   }
 };
 
-const formatQuoteListItem = (
+const formatQuoteListItem = async (
   quote,
   requestCreatedMs,
   preferredTimeOfDay,
@@ -778,11 +810,8 @@ const formatQuoteListItem = (
         )
       : 0;
 
-  const baseUrl = process.env.IMAGE_URL || "";
-  const attachmentPath = quote.attachment_url;
-  const attachmentUrl = attachmentPath
-    ? baseUrl +
-      (attachmentPath.startsWith("/") ? attachmentPath : attachmentPath)
+  const attachmentUrl = quote.attachment_url
+    ? await generatePresignedUrl(quote.attachment_url)
     : null;
 
   return {
@@ -808,7 +837,11 @@ const formatQuoteListItem = (
             _id: vendor._id,
             first_name: vendor.first_name,
             last_name: vendor.last_name,
-            profile_pic: vendor.profile_pic,
+            profile_pic: vendor.profile_pic
+              ? vendor.profile_pic.startsWith("http")
+                ? vendor.profile_pic
+                : `${process.env.IMAGE_URL || ""}${vendor.profile_pic}`
+              : null,
             email: vendor.email,
           }
         : null,
@@ -898,7 +931,7 @@ const loadQuotesByServiceRequest = async (requests) => {
       createdAtMs: 0,
       preferredTimeOfDay: null,
     };
-    const formatted = formatQuoteListItem(
+    const formatted = await formatQuoteListItem(
       quote,
       meta.createdAtMs,
       meta.preferredTimeOfDay,
@@ -938,7 +971,7 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
   if (serviceRequestStatus === "CANCELLED" || serviceRequestStatus === "EXPIRED") {
     return {
       quotes_status: "closed",
-      quotes_status_label: "CLOSED",
+      quotes_status_label: "FERMÉ",
       ...baseCounts,
     };
   }
@@ -946,7 +979,7 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
   if (totalQuotesCount === 0) {
     return {
       quotes_status: "hold",
-      quotes_status_label: "ON HOLD",
+      quotes_status_label: "EN ATTENTE",
       ...baseCounts,
       quotes_count: 0,
       total_quotes_count: 0,
@@ -967,7 +1000,7 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
 
     return {
       quotes_status: "accepted",
-      quotes_status_label: "QUOTE ACCEPTED",
+      quotes_status_label: "DEVIS ACCEPTÉ",
       ...baseCounts,
       accepted_quote_message: `Devis de ${providerName} accepté · ${price}€`,
       accepted_quote_sub_message: dateLabel
@@ -979,14 +1012,14 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
   if (sentQuotesCount === 0 && ignoredQuotesCount > 0) {
     return {
       quotes_status: "ignore",
-      quotes_status_label: "IGNORED",
+      quotes_status_label: "IGNORÉ",
       ...baseCounts,
     };
   }
 
   return {
     quotes_status: "open",
-    quotes_status_label: "OPEN",
+    quotes_status_label: "OUVERT",
     ...baseCounts,
   };
 };
@@ -1637,12 +1670,8 @@ export const getQuoteDetails = async (req, resp) => {
         ? `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim()
         : "Vendor");
 
-    const baseUrl = process.env.IMAGE_URL || "";
     const attachmentUrl = quote.attachment_url
-      ? baseUrl +
-        (quote.attachment_url.startsWith("/")
-          ? quote.attachment_url
-          : quote.attachment_url)
+      ? await generatePresignedUrl(quote.attachment_url)
       : null;
 
     return handleResponse(

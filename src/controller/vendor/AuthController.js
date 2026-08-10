@@ -18,6 +18,9 @@ import ServiceCategory, {
 } from "../../models/ServiceCategoryModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import extractFiles from "../../../utils/extractNestedFiles.js";
+import s3 from "../../../config/s3.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import {
   cookieOptions,
   documentUploadCookieOptions,
@@ -162,7 +165,9 @@ export const registerVendor = async (req, resp) => {
       await sendEmail({
         to: user.email,
         subject: "Vérifiez votre adresse e-mail",
-        html: await verificationMail(user.first_name, user.otp),
+        html: await verificationMail(user.first_name, user.otp, {
+          forVendor: true,
+        }),
       });
     } catch (e) {
       console.log(e);
@@ -242,7 +247,9 @@ export const resendOTP = async (req, resp) => {
         await sendEmail({
           to: user.email,
           subject: "Vérifiez votre adresse e-mail",
-          html: await verificationMail(user.first_name, user.otp),
+          html: await verificationMail(user.first_name, user.otp, {
+          forVendor: true,
+        }),
         });
       } catch (e) {
         console.log(e);
@@ -421,7 +428,7 @@ export const loginVendor = async (req, resp) => {
       await sendEmail({
         to: user.email,
         subject: "Code de vérification",
-        html: await verificationMail(user.first_name, otp),
+        html: await verificationMail(user.first_name, otp, { forVendor: true }),
       });
 
       return handleResponse(
@@ -888,7 +895,9 @@ export const getAllServices = async (req, resp) => {
       status: "ACTIVE",
       parent_category: null,
       deletedAt : null
-    }).select("title image");
+    })
+      .select("title image display_order")
+      .sort({ display_order: 1, title: 1 });
     return handleResponse(200, "Services fetched successfully", services, resp);
     
   } catch (err) {
@@ -910,10 +919,17 @@ export const getAllServicesGroupedByParentCategory = async (req, resp) => {
         },
       },
       {
+        $addFields: {
+          display_order: { $ifNull: ["$display_order", 999] },
+        },
+      },
+      { $sort: { display_order: 1, title: 1 } },
+      {
         $project: {
           title: 1,
           description: 1,
           image: 1,
+          display_order: 1,
           options: {
             $map: {
               input: {
@@ -950,12 +966,19 @@ export const getAllServicesGroupedByParentCategory = async (req, resp) => {
               },
             },
             {
+              $addFields: {
+                display_order: { $ifNull: ["$display_order", 999] },
+              },
+            },
+            { $sort: { display_order: 1, title: 1 } },
+            {
               $project: {
                 title: 1,
                 description: 1,
                 image: 1,
                 credit: 1,
                 company_credit: 1,
+                display_order: 1,
                 options: {
                   $map: {
                     input: {
@@ -975,12 +998,10 @@ export const getAllServicesGroupedByParentCategory = async (req, resp) => {
                 },
               },
             },
-            { $sort: { title: 1 } },
           ],
           as: "child_categories",
         },
       },
-      { $sort: { title: 1 } },
     ]);
 
     const groupedServices = data.map((parent) => ({
@@ -1066,7 +1087,7 @@ export const getDocumentRequiredForService = async (req, resp) => {
 
     const documents = await ServiceDocumentRequirement.find(filter)
       .populate("service_category", "title")
-      .sort({ createdAt: 1 });
+      .sort({ display_order: 1, createdAt: 1 });
 
     return handleResponse(
       200,
@@ -1694,13 +1715,28 @@ export const VerificationDocument = async (req, res) => {
       return handleResponse(200, "Documents fetched successfully", { documents: [] }, res);
     }
 
+    const generatePresignedUrl = async (filePath, expiry = 60 * 60) => {
+      if (!filePath) return null;
+      if (/^https?:\/\//i.test(filePath)) return filePath;
+      const key = String(filePath).replace(/^\/+/, "").replace(/\\/g, "/");
+      const privateBucket = process.env.S3_BUCKET_PRIVATE || "private";
+      const objectKey = key.startsWith("private/")
+        ? key.replace(/^private\//, "")
+        : key;
+      return getSignedUrl(
+        s3,
+        new GetObjectCommand({ Bucket: privateBucket, Key: objectKey }),
+        { expiresIn: expiry },
+      );
+    };
+
     const requirements = await ServiceDocumentRequirement.find({
       service_category: { $in: serviceIds },
       status: "ACTIVE",
       deletedAt: null,
     })
       .populate("service_category", "title")
-      .sort({ createdAt: 1 })
+      .sort({ display_order: 1, createdAt: 1 })
       .lean();
 
     const vendorDocs = await VendorDocument.find({ user_id: userId }).lean();
@@ -1708,34 +1744,32 @@ export const VerificationDocument = async (req, res) => {
       vendorDocs.map((d) => [d.document_id.toString(), d]),
     );
 
-    const baseUrl = process.env.IMAGE_URL || "";
-    const documents = requirements.map((reqItem) => {
-      const uploaded = docByRequirement.get(reqItem._id.toString());
-      const status = uploaded ? uploaded.status : "Not uploaded";
-      return {
-        document_id: reqItem._id,
-        service_category: reqItem.service_category,
-        name: reqItem.name,
-        description: reqItem.description || null,
-        allowed_formats: reqItem.allowed_formats || "PDF, JPG, PNG (Max 5MB)",
-        type: reqItem.type,
-        is_required: reqItem.is_required,
-        status,
-        file: uploaded
-          ? {
-              path: uploaded.file,
-              file_name: uploaded.file_name || uploaded.name,
-              url: uploaded.file
-                ? baseUrl +
-                  (uploaded.file.startsWith("/")
-                    ? uploaded.file
-                    : uploaded.file)
-                : null,
-            }
-          : null,
-        uploadedAt: uploaded?.updatedAt || null,
-      };
-    });
+    const documents = await Promise.all(
+      requirements.map(async (reqItem) => {
+        const uploaded = docByRequirement.get(reqItem._id.toString());
+        const status = uploaded ? uploaded.status : "Not uploaded";
+        return {
+          document_id: reqItem._id,
+          service_category: reqItem.service_category,
+          name: reqItem.name,
+          description: reqItem.description || null,
+          allowed_formats: reqItem.allowed_formats || "PDF, JPG, PNG (Max 5MB)",
+          type: reqItem.type,
+          is_required: reqItem.is_required,
+          status,
+          file: uploaded
+            ? {
+                path: uploaded.file,
+                file_name: uploaded.file_name || uploaded.name,
+                url: uploaded.file
+                  ? await generatePresignedUrl(uploaded.file)
+                  : null,
+              }
+            : null,
+          uploadedAt: uploaded?.updatedAt || null,
+        };
+      }),
+    );
 
     return handleResponse(
       200,

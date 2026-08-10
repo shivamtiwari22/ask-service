@@ -847,7 +847,6 @@ export const getLeadById = async (req, res) => {
   try {
     const vendorId = req.user._id;
     const leadId = req.params.leadId;
-    const BASE_URL = process.env.IMAGE_URL;
 
     if (!mongoose.Types.ObjectId.isValid(leadId)) {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
@@ -949,10 +948,10 @@ export const getLeadById = async (req, res) => {
       quotes_count: quotesCount,
     };
 
-    if (lead?.user?.profile_pic && !lead.user.profile_pic.startsWith("http")) {
+    if (lead?.user?.profile_pic && !String(lead.user.profile_pic).startsWith("http")) {
       response.user = {
         ...response.user,
-        profile_pic: `${BASE_URL}${lead.user.profile_pic}`,
+        profile_pic: `${process.env.IMAGE_URL || ""}${lead.user.profile_pic}`,
       };
     }
 

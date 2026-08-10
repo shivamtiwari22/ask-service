@@ -10,6 +10,14 @@ import VendorReview from "../../models/VendorReviewModel.js";
 import pushNotification from "../../../config/pushNotification.js";
 import Notification from "../../models/NotificationModel.js";
 
+const toImageUrl = (path) => {
+  if (!path) return null;
+  if (String(path).startsWith("http")) return path;
+  const base = (process.env.IMAGE_URL || "").replace(/\/+$/, "");
+  const key = String(path).replace(/^\/+/, "");
+  return `${base}/${key}`;
+};
+
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const AUDIO_CONVERT_EXT = [".webm", ".m4a", ".ogg", ".opus", ".wav", ".aac"];
@@ -79,7 +87,6 @@ class ChatController {
 
   static accessChat = async (req, res) => {
     const { userId, quote_id } = req.body;
-    const base_url = process.env.IMAGE_URL;
     try {
       if (!userId) {
         return handleResponse(
@@ -107,8 +114,13 @@ class ChatController {
           );
           item.latestMessage.sender.profile_pic = item.latestMessage.sender
             .profile_pic
-            ? `${base_url}/${item.latestMessage.sender.profile_pic}`
+            ? toImageUrl(item.latestMessage.sender.profile_pic)
             : null;
+          if (item.latestMessage.media_url) {
+            item.latestMessage.media_url = toImageUrl(
+              item.latestMessage.media_url,
+            );
+          }
         }
       }
 
@@ -154,7 +166,7 @@ class ChatController {
           chat.users = chat.users.map((user) => ({
             ...user,
             profile_pic: user.profile_pic
-              ? `${base_url}/${user.profile_pic}`
+              ? toImageUrl(user.profile_pic)
               : null,
 
             itsMe: user._id.toString() === req.user._id.toString(),
@@ -202,7 +214,7 @@ class ChatController {
                   : 0;
 
               ((user.profile_pic = user.profile_pic
-                ? `${base_url}/${user.profile_pic}`
+                ? toImageUrl(user.profile_pic)
                 : null),
                 (user.itsMe = user._id.toString() === req.user._id.toString()));
             }
@@ -224,7 +236,6 @@ class ChatController {
 
   static fetchChats = async (req, res) => {
     const { search } = req.query;
-    const base_url = process.env.IMAGE_URL;
 
     let userIds = [req.user._id];
 
@@ -272,8 +283,14 @@ class ChatController {
           );
 
           if (item.latestMessage.sender) {
-            item.latestMessage.sender.profile_pic = item?.latestMessage?.sender?.profile_pic?.startsWith("http")
-              ? item?.latestMessage?.sender?.profile_pic : `${base_url}/${item.latestMessage.sender.profile_pic}`
+            item.latestMessage.sender.profile_pic = toImageUrl(
+              item?.latestMessage?.sender?.profile_pic,
+            );
+          }
+          if (item.latestMessage.media_url) {
+            item.latestMessage.media_url = toImageUrl(
+              item.latestMessage.media_url,
+            );
           }
         }
 
@@ -308,7 +325,7 @@ class ChatController {
 
         item.users = item.users.map((user) => ({
           ...user,
-          profile_pic: user?.profile_pic?.startsWith("http") ? user?.profile_pic : `${base_url}${user.profile_pic}`
+          profile_pic: toImageUrl(user?.profile_pic)
         }));
 
         item.users = item.users.map((u) => ({
@@ -346,8 +363,6 @@ class ChatController {
 
     const skip = (page - 1) * limit;
 
-    const base_url = process.env.IMAGE_URL;
-
     try {
       const messages = await Message.find({ chat: req.params.chatId })
         .lean()
@@ -362,9 +377,7 @@ class ChatController {
         );
 
         if (item.sender) {
-          item.sender.profile_pic = item.sender?.profile_pic?.startsWith("http")
-            ? item.sender.profile_pic
-            : `${base_url}/${item.sender.profile_pic}`;
+          item.sender.profile_pic = toImageUrl(item.sender?.profile_pic);
         }
 
         item.readBy = await User.find(
@@ -372,10 +385,7 @@ class ChatController {
           "id first_name last_name username profile_pic",
         ).lean();
 
-        const formatImage = (path) => {
-          if (!path) return null;
-          return path.startsWith("http") ? path : `${base_url}${path}`;
-        };
+        const formatImage = (path) => toImageUrl(path);
 
         item.readBy = item.readBy.map((user) => ({
           ...user,
@@ -383,6 +393,10 @@ class ChatController {
             ? formatImage(user?.profile_pic)
             : null,
         }));
+
+        if (item.media_url) {
+          item.media_url = toImageUrl(item.media_url);
+        }
 
         item.chat = await Chat.findById(item.chat);
 
@@ -413,7 +427,6 @@ class ChatController {
   };
 
   static sendMessage = async (req, res) => {
-    const base_url = process.env.IMAGE_URL;
     const files = req.files;
 
     const { content, chatId } = req.body;
@@ -429,7 +442,8 @@ class ChatController {
         let filePath = files.media[0].path.replace(/\\/g, "/");
         const convertedPath = await convertToMp3IfNeeded(filePath);
 
-        media = `${base_url}/${convertedPath.replace(/\\/g, "/")}`;
+        // Store storage key only; resolve URL when returning messages
+        media = convertedPath.replace(/\\/g, "/");
       }
     }
 
@@ -461,7 +475,7 @@ class ChatController {
         message.chat.users = message.chat.users.map((user) => ({
           ...user,
           profile_pic: user.profile_pic
-            ? `${base_url}/${user.profile_pic}`
+            ? toImageUrl(user.profile_pic)
             : null,
         }));
       }
@@ -623,6 +637,16 @@ class ChatController {
             chat.latestMessage.sender,
             "_id first_name last_name username profile_pic",
           ).lean();
+          if (chat.latestMessage.sender) {
+            chat.latestMessage.sender.profile_pic = toImageUrl(
+              chat.latestMessage.sender.profile_pic,
+            );
+          }
+          if (chat.latestMessage.media_url) {
+            chat.latestMessage.media_url = toImageUrl(
+              chat.latestMessage.media_url,
+            );
+          }
         }
       }
 
@@ -634,6 +658,7 @@ class ChatController {
 
       chat.users = chat.users.map((u) => ({
         ...u,
+        profile_pic: toImageUrl(u.profile_pic),
         itsMe: u._id.toString() === req.user._id.toString(),
       }));
 

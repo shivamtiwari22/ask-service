@@ -50,6 +50,11 @@ const ServiceDocumentRequirementSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    display_order: {
+      type: Number,
+      default: 999,
+      min: 1,
+    },
   },
   {
     timestamps: true,
@@ -66,6 +71,7 @@ ServiceDocumentRequirementSchema.index(
   },
 );
 ServiceDocumentRequirementSchema.index({ service_category: 1, status: 1 });
+ServiceDocumentRequirementSchema.index({ display_order: 1 });
 
 const ServiceDocumentRequirement = mongoose.model(
   "ServiceDocumentRequirement",

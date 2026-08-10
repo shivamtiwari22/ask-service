@@ -20,6 +20,7 @@ import normalizePath from "../../../utils/imageNormalizer.js";
 import TestimonialMaster from "../../models/TestimonialMasterModel.js";
 import ContactUs from "../../models/ContactUsModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
+import contactUsMail from "../../../config/email/contactUsMail.js";
 import axios from "axios";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import Global from "../../models/GlobalModel.js";
@@ -685,7 +686,7 @@ export const verifyPhoneAndLogin = async (req, resp) => {
     }
 
     if (user.otp_phone !== otp) {
-      return handleResponse(401, "Invalid OTP", {}, resp);
+      return handleResponse(401, "Invalid Code", {}, resp);
     }
 
     user.is_phone_verified = true;
@@ -1232,74 +1233,61 @@ export const PostContactUs = async (req, res) => {
   try {
     const { name, email, message } = req.body;
 
+    if (!name?.trim() || !email?.trim() || !message?.trim()) {
+      return handleResponse(
+        400,
+        "Name, email and message are required",
+        {},
+        res,
+      );
+    }
+
     const post = new ContactUs({
-      name,
-      email,
-      message,
+      name: name.trim(),
+      email: email.trim(),
+      message: message.trim(),
     });
     await post.save();
 
-    //       try {
-    //         transporter.sendMail({
-    //           from: process.env.EMAIL_FROM,
-    //           to: "st4272333@gmail.com",
-    //           subject: `New Contact Us Inquiry from ${first_name}`,
-    //           html: `<!DOCTYPE html>
-    // <html>
-    // <head>
-    //   <style>
-    //     body {
-    //       font-family: Arial, sans-serif;
-    //       background-color: #f4f4f4;
-    //       margin: 0;
-    //       padding: 0;
-    //     }
-    //     .container {
-    //       max-width: 600px;
-    //       margin: 50px auto;
-    //       background: #ffffff;
-    //       padding: 20px;
-    //       border-radius: 10px;
-    //       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    //     }
-    //     h2 {
-    //       color: #333333;
-    //     }
-    //     .info {
-    //       margin-bottom: 20px;
-    //     }
-    //     .info p {
-    //       margin: 5px 0;
-    //       line-height: 1.5;
-    //     }
-    //     .footer {
-    //       text-align: center;
-    //       color: #777777;
-    //       font-size: 12px;
-    //       margin-top: 20px;
-    //     }
-    //   </style>
-    // </head>
-    // <body>
-    //   <div class="container">
-    //     <h2>New Contact Us Message</h2>
-    //     <div class="info">
-    //       <p><strong>Name:</strong> ${first_name}</p>
-    //       <p><strong>Email:</strong> ${email}</p>
-    //       <p><strong>Message:</strong></p>
-    //       <p>${message}</p>
-    //     </div>
-    //     <div class="footer">
-    //       <p>&copy; 2025 Fill My SKip. All rights reserved.</p>
-    //     </div>
-    //   </div>
-    // </body>
-    // </html>
-    // `,
-    //         });
-    //       } catch (e) {
-    //         console.log(e);
-    //       }
+    try {
+      const global = await Global.findOne().select("email platformName marketplace_name");
+  
+
+      let adminEmail = process.env.ADMIN_EMAIL || global?.email || process.env.EMAIL_USER || process.env.EMAIL_FROM;
+      const role = await Role.findOne({ name: "Admin" });
+      if(role){
+        const admin= await User.findOne({ role: role._id }).select("email");
+        if(admin){
+         adminEmail = admin.email ;
+        }
+      }
+
+
+
+      if (adminEmail) {
+        const brandName =
+          global?.platformName || global?.marketplace_name || "Ask Service";
+         
+        await sendEmail({
+          to: adminEmail,
+          subject: `[${brandName}] Nouveau message Contact Us — ${post.name}`,
+          replyTo: post.email,
+          html: await contactUsMail({
+            name: post.name,
+            email: post.email,
+            message: post.message,
+            submittedAt: post.createdAt
+              ? new Date(post.createdAt).toLocaleString("fr-FR")
+              : new Date().toLocaleString("fr-FR"),
+          }),
+          from:process.env.CONTACT_EMAIL,
+        });
+      } else {
+        console.log("Contact Us email skipped: no admin email configured");
+      }
+    } catch (mailErr) {
+      console.log("Contact Us admin email failed:", mailErr?.message || mailErr);
+    }
 
     return handleResponse(200, "Form Submit Successfully", post, res);
   } catch (e) {

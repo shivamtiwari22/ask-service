@@ -4,15 +4,38 @@ import Faqs from "../../models/FaqsModel.js";
 import Global from "../../models/GlobalModel.js";
 import { fetchGlobalPlatformStats } from "../../../utils/globalSettingStats.js";
 
+const parseDisplayOrder = (raw, { required = false } = {}) => {
+  if (raw === undefined || raw === null || raw === "") {
+    return required ? null : 999;
+  }
+  const num = Number(raw);
+  if (!Number.isInteger(num) || num < 1) return null;
+  return num;
+};
+
 // create FAQ
 export const createFaq = async (req, resp) => {
   try {
-    const { question, type, answer, status } = req.body;
+    const { question, type, answer, status, display_order, displayOrder } = req.body;
+
+    const resolvedDisplayOrder = parseDisplayOrder(
+      display_order !== undefined ? display_order : displayOrder,
+    );
+    if (resolvedDisplayOrder === null) {
+      return handleResponse(
+        400,
+        "display_order must be an integer >= 1",
+        {},
+        resp,
+      );
+    }
 
     const faq = await Faqs.create({
       question,
       type: type || "general",
-      answer
+      answer,
+      ...(status !== undefined ? { status } : {}),
+      display_order: resolvedDisplayOrder,
     });
 
     return handleResponse(201, "FAQ created successfully", faq, resp);
@@ -54,7 +77,7 @@ export const getAllFaqs = async (req, resp) => {
       ];
     }
 
-    let query = Faqs.find(filter).sort({ createdAt: -1 });
+    let query = Faqs.find(filter).sort({ display_order: -1 });
 
     if (!isPaginationDisabled) {
       query = query.skip(skip).limit(limit);
@@ -107,7 +130,8 @@ export const getFaqById = async (req, resp) => {
 export const updateFaq = async (req, resp) => {
   try {
     const { id } = req.params;
-    const { question, type, answer, status } = req.body;
+    const { question, type, answer, status, display_order, displayOrder } =
+      req.body;
 
     const faq = await Faqs.findOne({ _id: id, deletedAt: null });
     if (!faq) {
@@ -119,6 +143,23 @@ export const updateFaq = async (req, resp) => {
     if (type !== undefined) payload.type = type;
     if (answer !== undefined) payload.answer = answer;
     if (status !== undefined) payload.status = status;
+
+    const rawDisplayOrder =
+      display_order !== undefined ? display_order : displayOrder;
+    if (rawDisplayOrder !== undefined) {
+      const resolvedDisplayOrder = parseDisplayOrder(rawDisplayOrder, {
+        required: true,
+      });
+      if (resolvedDisplayOrder === null) {
+        return handleResponse(
+          400,
+          "display_order must be an integer >= 1",
+          {},
+          resp,
+        );
+      }
+      payload.display_order = resolvedDisplayOrder;
+    }
 
     const updatedFaq = await Faqs.findByIdAndUpdate(
       id,
@@ -166,7 +207,9 @@ export const getFaqsForUser = async (req, resp) => {
       filter.type = type;
     }
 
-    const faqs = await Faqs.find(filter).sort({ createdAt: -1 }).lean();
+    const faqs = await Faqs.find(filter)
+      .sort({ display_order: 1, createdAt: -1 })
+      .lean();
 
     // Group by type
     const byType = {};

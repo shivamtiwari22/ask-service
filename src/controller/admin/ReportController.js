@@ -118,7 +118,7 @@ export const getAllReportedVendors = async (req, res) => {
             last_name: r.reporter.last_name,
             email: r.reporter.email,
             phone: r.reporter.phone,
-            profile_pic: r.reporter.profile_pic,
+            profile_pic: (r.reporter.profile_pic?.startsWith('http') ? r.reporter.profile_pic : (process.env.IMAGE_URL || '') + (r.reporter.profile_pic || '')),
           }
         : null,
       reported_vendor: r.reported_user
@@ -128,7 +128,7 @@ export const getAllReportedVendors = async (req, res) => {
             last_name: r.reported_user.last_name,
             email: r.reported_user.email,
             phone: r.reported_user.phone,
-            profile_pic: r.reported_user.profile_pic,
+            profile_pic: (r.reported_user.profile_pic?.startsWith('http') ? r.reported_user.profile_pic : (process.env.IMAGE_URL || '') + (r.reported_user.profile_pic || '')),
             business_name: r.reported_user.business_name,
             kyc_status: r.reported_user.kyc_status,
             service: r.reported_user.service,

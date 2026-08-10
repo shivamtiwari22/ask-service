@@ -248,6 +248,14 @@ export const createServiceDocumentRequirementValidation = [
     .optional()
     .isIn(["ACTIVE", "INACTIVE"])
     .withMessage("Invalid status"),
+  body("display_order")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("display_order must be an integer >= 1"),
+  body("displayOrder")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("displayOrder must be an integer >= 1"),
   handleValidationErrors,
 ];
 
@@ -268,6 +276,14 @@ export const updateServiceDocumentRequirementValidation = [
     .optional()
     .isIn(["ACTIVE", "INACTIVE"])
     .withMessage("Invalid status"),
+  body("display_order")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("display_order must be an integer >= 1"),
+  body("displayOrder")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("displayOrder must be an integer >= 1"),
   handleValidationErrors,
 ];
 
@@ -367,6 +383,14 @@ export const createFaqValidation = [
     .isIn(["general", "payments", "licensing", "support"])
     .withMessage("Invalid FAQ type"),
   body("status").optional().isBoolean().withMessage("Status must be boolean"),
+  body("display_order")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("display_order must be an integer >= 1"),
+  body("displayOrder")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("displayOrder must be an integer >= 1"),
   handleValidationErrors,
 ];
 
@@ -378,6 +402,14 @@ export const updateFaqValidation = [
     .isIn(["general", "payments", "licensing", "support"])
     .withMessage("Invalid FAQ type"),
   body("status").optional().isBoolean().withMessage("Status must be boolean"),
+  body("display_order")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("display_order must be an integer >= 1"),
+  body("displayOrder")
+    .optional({ values: "falsy" })
+    .isInt({ min: 1 })
+    .withMessage("displayOrder must be an integer >= 1"),
   handleValidationErrors,
 ];
 

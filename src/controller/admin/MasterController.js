@@ -22,6 +22,15 @@ const validateServiceCategories = async (serviceCategoryInput) => {
   return { serviceCategoryIds };
 };
 
+const parseDisplayOrder = (raw, { required = false } = {}) => {
+  if (raw === undefined || raw === null || raw === "") {
+    return required ? null : 999;
+  }
+  const num = Number(raw);
+  if (!Number.isInteger(num) || num < 1) return null;
+  return num;
+};
+
 const buildListQuery = ({ search, status, isDeleted }) => {
   const query = {};
 
@@ -342,9 +351,31 @@ export const createServiceDocumentRequirement = async (req, resp) => {
       return handleResponse(400, error, {}, resp);
     }
 
+    const resolvedDisplayOrder = parseDisplayOrder(
+      req.body.display_order !== undefined
+        ? req.body.display_order
+        : req.body.displayOrder,
+    );
+    if (resolvedDisplayOrder === null) {
+      return handleResponse(
+        400,
+        "display_order must be an integer >= 1",
+        {},
+        resp,
+      );
+    }
+
+    const {
+      display_order: _do,
+      displayOrder: _dO,
+      service_category: _sc,
+      ...rest
+    } = req.body;
+
     const requirement = await ServiceDocumentRequirement.create({
-      ...req.body,
+      ...rest,
       service_category: serviceCategoryIds,
+      display_order: resolvedDisplayOrder,
       createdBy: req.user._id,
     });
 
@@ -393,7 +424,7 @@ export const getAllServiceDocumentRequirements = async (req, resp) => {
 
     let findQuery = ServiceDocumentRequirement.find(query)
       .populate("service_category", "title")
-      .sort({ createdAt: -1 });
+      .sort({ display_order: -1 });
 
     if (!isPaginationDisabled) {
       findQuery = findQuery.skip(skip).limit(limit);
@@ -453,7 +484,7 @@ export const getAllSoftDeletedServiceDocumentRequirements = async (req, resp) =>
 
     let findQuery = ServiceDocumentRequirement.find(query)
       .populate("service_category", "title")
-      .sort({ createdAt: -1 });
+      .sort({ display_order: 1, createdAt: -1 });
 
     if (!isPaginationDisabled) {
       findQuery = findQuery.skip(skip).limit(limit);
@@ -506,6 +537,26 @@ export const updateServiceDocumentRequirement = async (req, resp) => {
         return handleResponse(400, error, {}, resp);
       }
       updates.service_category = serviceCategoryIds;
+    }
+
+    const rawDisplayOrder =
+      updates.display_order !== undefined
+        ? updates.display_order
+        : updates.displayOrder;
+    if (rawDisplayOrder !== undefined) {
+      const resolvedDisplayOrder = parseDisplayOrder(rawDisplayOrder, {
+        required: true,
+      });
+      if (resolvedDisplayOrder === null) {
+        return handleResponse(
+          400,
+          "display_order must be an integer >= 1",
+          {},
+          resp,
+        );
+      }
+      updates.display_order = resolvedDisplayOrder;
+      delete updates.displayOrder;
     }
 
     const requirement = await ServiceDocumentRequirement.findOneAndUpdate(

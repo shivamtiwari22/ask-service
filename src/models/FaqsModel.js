@@ -15,6 +15,11 @@ const FaqsSchema = mongoose.Schema(
       default: true,
     },
     deletedAt: { type: Date, default: null },
+    display_order: {
+      type: Number,
+      default: 999,
+      min: 1,
+    },
   },
   {
     timestamps: true,
@@ -34,6 +39,8 @@ FaqsSchema.path("createdAt").get(function (value) {
 FaqsSchema.path("updatedAt").get(function (value) {
   return value ? moment(value).format("DD-MM-YYYY [at] hh:mm A") : null;
 });
+
+FaqsSchema.index({ display_order: 1, type: 1 });
 
 const Faqs = mongoose.model("Faqs", FaqsSchema);
 
