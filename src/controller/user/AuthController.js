@@ -1280,7 +1280,7 @@ export const PostContactUs = async (req, res) => {
               ? new Date(post.createdAt).toLocaleString("fr-FR")
               : new Date().toLocaleString("fr-FR"),
           }),
-          from:process.env.CONTACT_EMAIL,
+          from: process.env.CONTACT_EMAIL ,
         });
       } else {
         console.log("Contact Us email skipped: no admin email configured");
