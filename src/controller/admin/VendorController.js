@@ -338,7 +338,7 @@ export const updateVendorKycStatus = async (req, res) => {
 
         await sendEmail({
           to: vendor.email,
-          subject: `Ask Service - Statut KYC mis à jour (${statusLabel})`,
+          subject: `Votre profil prestataire est vérifié - Ask Service`,
           html: await kycStatusMail({
             name: vendorName,
             status: kyc_status,

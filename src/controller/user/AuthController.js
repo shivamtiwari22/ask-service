@@ -1276,9 +1276,10 @@ export const PostContactUs = async (req, res) => {
             name: post.name,
             email: post.email,
             message: post.message,
-            submittedAt: post.createdAt
-              ? new Date(post.createdAt).toLocaleString("fr-FR")
-              : new Date().toLocaleString("fr-FR"),
+            // ContactUs model formats createdAt via getter; use raw Date to avoid "Invalid Date"
+            submittedAt: moment(
+              post.get("createdAt", null, { getters: false }) || new Date(),
+            ).format("DD/MM/YYYY HH:mm"),
           }),
           from: process.env.CONTACT_EMAIL ,
         });

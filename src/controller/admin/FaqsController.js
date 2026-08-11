@@ -207,16 +207,37 @@ export const getFaqsForUser = async (req, resp) => {
       filter.type = type;
     }
 
-    const faqs = await Faqs.find(filter)
-      .sort({ display_order: -1})
-      .lean();
+    const faqs = await Faqs.aggregate([
+      { $match: filter },
+      {
+        $addFields: {
+          display_order: {
+            $convert: {
+              input: { $ifNull: ["$display_order", 999] },
+              to: "int",
+              onError: 999,
+              onNull: 999,
+            },
+          },
+        },
+      },
+      { $sort: { display_order: 1, createdAt: 1 } },
+    ]);
 
-    // Group by type
+    // Group by type (order within each type stays display_order ASC)
     const byType = {};
     for (const faq of faqs) {
       const t = faq.type || "general";
       if (!byType[t]) byType[t] = [];
       byType[t].push(faq);
+    }
+
+    // Keep a stable sort inside each type as a safeguard
+    for (const t of Object.keys(byType)) {
+      byType[t].sort(
+        (a, b) =>
+          (Number(a.display_order) || 999) - (Number(b.display_order) || 999),
+      );
     }
 
     // Build list in fixed type order (only include types that have FAQs)
