@@ -50,7 +50,7 @@ const VendorReviewSchema = new mongoose.Schema(
 );
 
 VendorReviewSchema.index(
-  { user: 1, vendor: 1 },
+  { user: 1, vendor: 1, service_request_id: 1 },
   { unique: true, partialFilterExpression: { deletedAt: null } },
 );
 
