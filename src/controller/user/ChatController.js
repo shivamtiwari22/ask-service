@@ -316,6 +316,7 @@ class ChatController {
             }).lean();
 
             user.totalReviews = reviews.length;
+            totalReviews = reviews.length;
 
             user.averageRating =
               totalReviews > 0
