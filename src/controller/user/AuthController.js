@@ -1279,7 +1279,7 @@ export const PostContactUs = async (req, res) => {
             // ContactUs model formats createdAt via getter; use raw Date to avoid "Invalid Date"
             submittedAt: moment(
               post.get("createdAt", null, { getters: false }) || new Date(),
-            ).format("DD/MM/YYYY HH:mm"),
+            ).format("DD/MM/YYYY"),
           }),
           from: process.env.CONTACT_EMAIL ,
         });
