@@ -126,14 +126,27 @@ export function pointsToStars(computedPoint, maxPossiblePoint) {
   return 5;
 }
 
+// const LEAD_STARS_LABELS = {
+//   0: "NON ÉVALUÉ",
+//   1: "LOW",
+//   2: "BASIC",
+//   3: "MEDIUM",
+//   4: "HIGH",
+//   5: "PREMIUM",
+// };
+
 const LEAD_STARS_LABELS = {
   0: "NON ÉVALUÉ",
-  1: "LOW",
-  2: "BASIC",
-  3: "MEDIUM",
-  4: "HIGH",
+  1: "FAIBLE",
+  2: "BASIQUE",
+  3: "MOYENNE",
+  4: "ELEVÉE",
   5: "PREMIUM",
 };
+
+
+
+
 
 export function getLeadStarsLabel(leadStars) {
   const stars = Number(leadStars) || 0;

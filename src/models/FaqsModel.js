@@ -7,7 +7,8 @@ const FaqsSchema = mongoose.Schema(
     type: {
       type: String,
       default: "general",
-      enum: ["general", "payments", "licensing", "support"],
+      // enum: ["general", "payments", "licensing", "support"],
+      enum: ["general", "clients", "providers", "registration-verification", "credits-leads", "support"],
     },
     answer: { type: String, required: true },
     status: {

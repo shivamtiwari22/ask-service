@@ -13,6 +13,11 @@ import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import pushNotification from "../../../config/pushNotification.js";
 import { getServiceIds, hasServices, vendorOwnsService, buildVendorLeadStatus, buildAvailableLeadDisplayStatus, maskVendorLeadContactDetails, resolveLeadServiceCategories } from "../../../utils/helperFunction.js";
+import {
+  buildDocumentVerifiedByCategoryMap,
+  getLeadDocumentCategoryId,
+  isLeadDocumentVerified,
+} from "../../../utils/vendorDocumentVerification.js";
 import { attachLeadStarFieldsToLead } from "../../../utils/questionPoints.js";
 import Stripe from "stripe";
 import notifications from "../../../config/notification.js";
@@ -22,6 +27,8 @@ import UserNotification from "../../models/userNotificationModel.js";
 import BusinessInformation from "../../models/BusinessInformationModel.js";
 import mongoose from "mongoose";
 import Global from "../../models/GlobalModel.js";
+import { sendEmail } from "../../../config/emailConfig.js";
+import newQuoteMail from "../../../config/email/newQuoteMail.js";
 
 const LOW_CREDIT_THRESHOLD = 10;
 
@@ -101,19 +108,24 @@ async function enrichLeadsForVendor(leads, vendorId) {
   if (!leads.length) return [];
 
   const leadObjectIds = leads.map((l) => l._id);
-  const [unlockedIds, vendorQuotesByLeadId, quoteCounts] = await Promise.all([
-    vendorId
-      ? VendorLeadUnlock.find({
-          vendor_id: vendorId,
-          service_request_id: { $in: leadObjectIds },
-        }).distinct("service_request_id")
-      : Promise.resolve([]),
-    loadVendorQuotesForLeads(vendorId, leadObjectIds),
-    VendorQuote.aggregate([
-      { $match: { service_request_id: { $in: leadObjectIds }, status: "SENT" } },
-      { $group: { _id: "$service_request_id", count: { $sum: 1 } } },
-    ]),
-  ]);
+  const [unlockedIds, vendorQuotesByLeadId, quoteCounts, documentVerifiedMap] =
+    await Promise.all([
+      vendorId
+        ? VendorLeadUnlock.find({
+            vendor_id: vendorId,
+            service_request_id: { $in: leadObjectIds },
+          }).distinct("service_request_id")
+        : Promise.resolve([]),
+      loadVendorQuotesForLeads(vendorId, leadObjectIds),
+      VendorQuote.aggregate([
+        { $match: { service_request_id: { $in: leadObjectIds }, status: "SENT" } },
+        { $group: { _id: "$service_request_id", count: { $sum: 1 } } },
+      ]),
+      buildDocumentVerifiedByCategoryMap(
+        vendorId,
+        leads.map((lead) => getLeadDocumentCategoryId(lead)),
+      ),
+    ]);
 
   const unlockedIdSet = new Set(
     unlockedIds?.map((id) => id.toString()) || [],
@@ -134,6 +146,10 @@ async function enrichLeadsForVendor(leads, vendorId) {
     : lead?.computed_point ;
     const quotesCount = quotesCountMap.get(leadId) || 0;
     const statusMeta = buildVendorLeadStatus(unlocked, vendorQuote);
+    const categoryId = getLeadDocumentCategoryId(lead);
+    const document_verified = categoryId
+      ? (documentVerifiedMap.get(categoryId) ?? true)
+      : true;
 
     const baseLead = {
       ...lead,
@@ -142,6 +158,7 @@ async function enrichLeadsForVendor(leads, vendorId) {
       unlocked,
       creditsToUnlock,
       quotes_count: quotesCount,
+      document_verified,
     };
 
     if (unlocked) return baseLead;
@@ -622,9 +639,20 @@ export const unlockLead = async (req, res) => {
 
     const lead = await ServiceRequest.findById(leadId)
       .populate({ path: "service_category", select: "title credit" })
+      .populate({ path: "child_category", select: "title credit" })
       .lean();
     if (!lead || lead.deletedAt || lead.status !== "ACTIVE") {
       return handleResponse(404, "Lead not found or no longer available", {}, res);
+    }
+
+    const docsVerifiedForCategory = await isLeadDocumentVerified(vendorId, lead);
+    if (!docsVerifiedForCategory) {
+      return handleResponse(
+        403,
+        "Documents for this service category are not verified. Please upload and wait for validation before unlocking these leads.",
+        { document_verified: false },
+        res,
+      );
     }
 
     const leadCategoryId = lead.service_category?._id?.toString();
@@ -939,6 +967,7 @@ export const getLeadById = async (req, res) => {
       ...attachLeadStarFieldsToLead(lead),
       canQuote: !vendorQuote,
       unlocked: isUnlocked,
+      document_verified: await isLeadDocumentVerified(vendorId, lead),
       creditsToUnlock:
       lead?.computed_point == null || lead?.computed_point < 1
     ? lead.contact_details?.client_type === "Individual"
@@ -1088,6 +1117,7 @@ export const submitQuote = async (req, res) => {
 
       // Treat `email_notifications` toggle as enabling normal in-app notifications.
       const canInApp = prefs?.email_notifications?.new_quotes ?? true;
+      const canEmail = prefs?.email_notifications?.new_quotes ?? true;
       const canPush = prefs?.push_notifications?.new_quotes ?? true;
 
       if (canInApp) {
@@ -1095,12 +1125,50 @@ export const submitQuote = async (req, res) => {
           user_id: user._id,
           title,
           body,
-          for: "User"
+          for: "User",
         });
       }
 
       if (canPush && user?.fcm_token) {
         await pushNotification(user.fcm_token, title, body);
+      }
+
+      if (canEmail && user?.email) {
+        try {
+          let serviceTitle = "votre demande";
+          if (lead.service_category) {
+            const category = await ServiceCategory.findById(lead.service_category)
+              .select("title")
+              .lean();
+            if (category?.title) serviceTitle = category.title;
+          }
+
+          const clientName =
+            user.first_name ||
+            lead.contact_details?.first_name ||
+            "Client";
+
+          await sendEmail({
+            to: user.email,
+            subject: `${title} — ${lead.reference_no || serviceTitle}`,
+            html: await newQuoteMail({
+              name: clientName,
+              quotePrice: price,
+              currency: "EUR",
+              referenceNo: lead.reference_no,
+              serviceTitle,
+              serviceDescription: service_description.trim(),
+              availableStartDate: startDate,
+              quoteValidDays: parseInt(quote_valid_days, 10) || 7,
+              serviceRequestId: leadId,
+            }),
+          });
+        } catch (mailErr) {
+          console.log(
+            "New quote client email failed:",
+            mailErr?.message || mailErr,
+          );
+        }
       }
     }
 

@@ -9,6 +9,10 @@ import Chat from "../../models/ChatModel.js";
 import VendorReview from "../../models/VendorReviewModel.js";
 import pushNotification from "../../../config/pushNotification.js";
 import Notification from "../../models/NotificationModel.js";
+import UserNotification from "../../models/userNotificationModel.js";
+import VendorNotification from "../../models/vendorNotificationModel.js";
+import { sendEmail } from "../../../config/emailConfig.js";
+import newMessageMail from "../../../config/email/newMessageMail.js";
 
 const toImageUrl = (path) => {
   if (!path) return null;
@@ -523,10 +527,10 @@ class ChatController {
         );
       }
 
-      // In-app notification for each receiver (User ↔ Vendor)
+      // In-app notification + email for each receiver (User ↔ Vendor)
       if (receiverIds.length) {
         const receivers = await User.find({ _id: { $in: receiverIds } })
-          .select("_id role")
+          .select("_id role email first_name last_name")
           .populate({ path: "role", select: "name" })
           .lean();
 
@@ -543,6 +547,57 @@ class ChatController {
         if (notificationDocs.length) {
           await Notification.insertMany(notificationDocs);
         }
+
+        const senderName = [message.sender?.first_name, message.sender?.last_name]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || "Quelqu'un";
+        const isMedia = Boolean(media) || !content;
+        const messagePreview = content
+          ? String(content).slice(0, 280)
+          : "📎 Message media";
+
+        await Promise.all(
+          receivers.map(async (receiver) => {
+            if (!receiver?.email) return;
+
+            try {
+              const isVendor = receiver.role?.name === "Vendor";
+              const prefs = isVendor
+                ? await VendorNotification.findOne({
+                    user_id: receiver._id,
+                  }).lean()
+                : await UserNotification.findOne({
+                    user_id: receiver._id,
+                  }).lean();
+
+              const canEmail = prefs?.email_notifications?.messages ?? true;
+              if (!canEmail) return;
+
+              const receiverName =
+                receiver.first_name ||
+                receiver.last_name ||
+                (isVendor ? "Prestataire" : "Client");
+
+              await sendEmail({
+                to: receiver.email,
+                subject: `Nouveau message de ${senderName}`,
+                html: await newMessageMail({
+                  name: receiverName,
+                  senderName,
+                  messagePreview,
+                  isMedia,
+                  chatId,
+                }),
+              });
+            } catch (mailErr) {
+              console.log(
+                "New message email failed:",
+                mailErr?.message || mailErr,
+              );
+            }
+          }),
+        );
       }
 
       return handleResponse(200, "msg sent", message, res);

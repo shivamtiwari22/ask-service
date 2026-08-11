@@ -380,7 +380,7 @@ export const createFaqValidation = [
   body("answer").notEmpty().trim().withMessage("Answer is required"),
   body("type")
     .optional()
-    .isIn(["general", "payments", "licensing", "support"])
+    .isIn(["general", "clients", "providers", "registration-verification", "credits-leads", "support"])
     .withMessage("Invalid FAQ type"),
   body("status").optional().isBoolean().withMessage("Status must be boolean"),
   body("display_order")
@@ -399,7 +399,7 @@ export const updateFaqValidation = [
   body("answer").optional().notEmpty().trim().withMessage("Answer cannot be empty"),
   body("type")
     .optional()
-    .isIn(["general", "payments", "licensing", "support"])
+    .isIn(["general", "clients", "providers", "registration-verification", "credits-leads", "support"])
     .withMessage("Invalid FAQ type"),
   body("status").optional().isBoolean().withMessage("Status must be boolean"),
   body("display_order")

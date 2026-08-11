@@ -55,6 +55,11 @@ import { Parser as Json2CsvParser } from "json2csv";
 import PDFDocument from "pdfkit";
 import { drawPdfTable } from "../../../utils/pdfTable.js";
 import verificationMail from "../../../config/email/verificationMail.js";
+import vendorDocumentUploadedMail from "../../../config/email/vendorDocumentUploadedMail.js";
+import {
+  buildDocumentVerifiedByCategoryMap,
+  getLeadDocumentCategoryId,
+} from "../../../utils/vendorDocumentVerification.js";
 import axios from "axios";
 import { ifError } from "assert";
 
@@ -653,16 +658,8 @@ export const updateVendorProfile = async (req, resp) => {
       } else {
         user.service = [];
       }
-
-      // Recalculate KYC from verified required docs for the updated services
-      const nextKycStatus = await resolveVendorKycFromServiceDocuments(
-        userId,
-        user.service,
-      );
-      user.kyc_status = nextKycStatus;
-      if (nextKycStatus === "ACTIVE") {
-        user.verified_at = new Date();
-      }
+      // Do not recalculate / reset kyc_status when services change.
+      // Per-category document gaps are exposed on leads as document_verified.
     }
 
     
@@ -1104,7 +1101,9 @@ export const getDocumentRequiredForService = async (req, resp) => {
 export const updateDocumentRequiredForService = async (req, resp) => {
   try {
     const userId = req.user._id;
-    const user = await User.findById(userId).select("service");
+    const user = await User.findById(userId).select(
+      "service first_name last_name email",
+    );
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const serviceIds = getServiceIds(user.service);
     if (!serviceIds.length) {
@@ -1158,6 +1157,7 @@ export const updateDocumentRequiredForService = async (req, resp) => {
         name: requirement.name,
         required: requirement.is_required || false,
         status: "Pending",
+        rejection_reason: null,
       };
 
       const vendorDoc = await VendorDocument.findOneAndUpdate(
@@ -1171,6 +1171,57 @@ export const updateDocumentRequiredForService = async (req, resp) => {
         status: vendorDoc.status,
         file_name: vendorDoc.file_name,
       });
+    }
+
+    if (updated.length) {
+      try {
+        const global = await Global.findOne().select(
+          "email platformName marketplace_name",
+        );
+        let adminEmail =
+          process.env.ADMIN_EMAIL ||
+          global?.email ||
+          process.env.EMAIL_USER ||
+          process.env.EMAIL_FROM;
+
+        const adminRole = await Role.findOne({ name: "Admin" });
+        if (adminRole) {
+          const admin = await User.findOne({ role: adminRole._id }).select(
+            "email",
+          );
+          if (admin?.email) adminEmail = admin.email;
+        }
+
+        if (adminEmail) {
+          const brandName =
+            global?.platformName || global?.marketplace_name || "Ask Service";
+          const vendorName =
+            `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+            "Prestataire";
+
+          await sendEmail({
+            to: adminEmail,
+            subject: `[${brandName}] Documents prestataire à vérifier — ${vendorName}`,
+            replyTo: user.email || undefined,
+            html: await vendorDocumentUploadedMail({
+              vendorName,
+              vendorEmail: user.email,
+              documents: updated,
+              uploadedAt: new Date().toLocaleString("fr-FR"),
+            }),
+            from: process.env.CONTACT_EMAIL || process.env.EMAIL_FROM,
+          });
+        } else {
+          console.log(
+            "Vendor document upload admin email skipped: no admin email configured",
+          );
+        }
+      } catch (mailErr) {
+        console.log(
+          "Vendor document upload admin email failed:",
+          mailErr?.message || mailErr,
+        );
+      }
     }
 
     return handleResponse(
@@ -1358,6 +1409,12 @@ export const availableLeads = async (req, resp) => {
     );
     const strongQuotesThreshold = globalSettings?.quote_limit ?? 5;
 
+    const categoryIdsForDocs = leads.map((lead) => getLeadDocumentCategoryId(lead));
+    const documentVerifiedMap = await buildDocumentVerifiedByCategoryMap(
+      vendorId,
+      categoryIdsForDocs,
+    );
+
     const leadsWithMasking = leads.map((lead) => {
       const leadId = lead._id.toString();
       const unlocked = unlockedIds.has(leadId);
@@ -1380,6 +1437,11 @@ export const availableLeads = async (req, resp) => {
         strongQuotesThreshold,
       });
 
+      const categoryId = getLeadDocumentCategoryId(lead);
+      const document_verified = categoryId
+        ? (documentVerifiedMap.get(categoryId) ?? true)
+        : true;
+
       const baseLead = {
         ...lead,
         service_category,
@@ -1390,6 +1452,7 @@ export const availableLeads = async (req, resp) => {
         unlocked,
         creditsToUnlock,
         quotes_count: quotesCount,
+        document_verified,
       };
 
       if (unlocked) return baseLead;

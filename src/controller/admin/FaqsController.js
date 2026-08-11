@@ -195,7 +195,7 @@ export const deleteFaq = async (req, resp) => {
 };
 
 // FAQ type order for consistent grouping (matches model enum)
-const FAQ_TYPE_ORDER = ["general", "payments", "licensing", "support"];
+const FAQ_TYPE_ORDER = ["general", "clients", "providers", "registration-verification", "credits-leads", "support"];
 
 // get FAQs for user (only active, non-deleted) - grouped by type
 export const getFaqsForUser = async (req, resp) => {
@@ -208,7 +208,7 @@ export const getFaqsForUser = async (req, resp) => {
     }
 
     const faqs = await Faqs.find(filter)
-      .sort({ display_order: 1, createdAt: -1 })
+      .sort({ display_order: -1})
       .lean();
 
     // Group by type

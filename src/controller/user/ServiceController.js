@@ -31,6 +31,7 @@ import Question from "../../models/QuestionsModel.js";
 import Notification from "../../models/NotificationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
+import newLeadMail from "../../../config/email/newLeadMail.js";
 import VendorLeadUnlock from "../../models/VendorLeadUnlockModel.js";
 import s3 from "../../../config/s3.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
@@ -48,6 +49,92 @@ const generatePresignedUrl = async (filePath, expiry = 60 * 60) => {
     s3,
     new GetObjectCommand({ Bucket: privateBucket, Key: objectKey }),
     { expiresIn: expiry },
+  );
+};
+
+/**
+ * Notify matching vendors about a new lead (in-app + push + email).
+ */
+const notifyVendorsOfNewLead = async ({ serviceCategoryId, request }) => {
+  const users = await User.find({ service: serviceCategoryId }).select(
+    "_id fcm_token email first_name last_name",
+  );
+
+  if (!users.length) return;
+
+  const title = "Nouveau prospect reçu";
+  const body =
+    "Vous avez reçu un nouveau prospect. Consultez les détails et répondez rapidement.";
+
+  const vendorIds = users.map((u) => u._id);
+  const prefs = await VendorNotification.find({
+    user_id: { $in: vendorIds },
+  }).lean();
+  const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
+
+  const tokensToPush = users
+    .filter((u) => {
+      const pref = prefsByUserId.get(String(u._id));
+      return pref?.push_notifications?.new_leads ?? true;
+    })
+    .map((u) => u.fcm_token)
+    .filter(Boolean);
+
+  if (tokensToPush.length > 0) {
+    await pushNotification(tokensToPush, title, body);
+  }
+
+  await Notification.insertMany(
+    users.map((vendor) => ({
+      user_id: vendor._id,
+      title,
+      body,
+      for: "Vendor",
+    })),
+  );
+
+  let serviceTitle = "Nouveau service";
+  try {
+    const category = await ServiceCategory.findById(serviceCategoryId)
+      .select("title")
+      .lean();
+    if (category?.title) serviceTitle = category.title;
+  } catch (_) {
+    /* ignore */
+  }
+
+  const leadPayload = {
+    referenceNo: request?.reference_no,
+    serviceTitle,
+    city: request?.city || request?.cityOrPostalCode,
+    clientType: request?.contact_details?.client_type,
+    preferredStartDate:
+      request?.preferred_start_date || request?.desiredDate || null,
+  };
+
+  await Promise.all(
+    users.map(async (vendor) => {
+      if (!vendor?.email) return;
+      try {
+        const pref = prefsByUserId.get(String(vendor._id));
+        const canEmail = pref?.email_notifications?.new_leads_available ?? true;
+        if (!canEmail) return;
+
+        const vendorName =
+          vendor.first_name || vendor.last_name || "Prestataire";
+
+        await sendEmail({
+          to: vendor.email,
+          subject: `${title} — ${request?.reference_no || serviceTitle}`,
+          html: await newLeadMail({
+            name: vendorName,
+            ...leadPayload,
+          }),
+        });
+      } catch (mailErr) {
+        console.log("New lead vendor email failed:", mailErr?.message || mailErr);
+      }
+    }),
   );
 };
 
@@ -350,46 +437,10 @@ export const initiateServiceRequest = async (req, resp) => {
 
       await session.commitTransaction();
 
-      const users = await User.find({ service: service_category }).select(
-        "_id fcm_token",
-      );
-
-      const tokens = users
-        .map((user) => user.fcm_token)
-        .filter((token) => token);
-
-      const title = "Nouveau prospect reçu";
-      const body = "Vous avez reçu un nouveau prospect. Consultez les détails et répondez rapidement.";
-
-      // Always save in-app notifications, but send push only if vendor allows it.
-      const vendorIds = users.map((u) => u._id);
-      const prefs = await VendorNotification.find({
-        user_id: { $in: vendorIds },
-      }).lean();
-      const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
-
-      const tokensToPush = users
-        .filter((u) => {
-          const pref = prefsByUserId.get(String(u._id));
-          return pref?.push_notifications?.new_leads ?? true;
-        })
-        .map((u) => u.fcm_token)
-        .filter(Boolean);
-
-      if (tokensToPush.length > 0) {
-        await pushNotification(tokensToPush, title, body);
-      }
-
-      if (users.length > 0) {
-        await Notification.insertMany(
-          users.map((vendor) => ({
-            user_id: vendor._id,
-            title,
-            body,
-            for: "Vendor",
-          })),
-        );
-      }
+      await notifyVendorsOfNewLead({
+        serviceCategoryId: service_category,
+        request,
+      });
 
       return handleResponse(
         201,
@@ -641,45 +692,10 @@ export const initiateServiceRequest = async (req, resp) => {
 
     await session.commitTransaction();
 
-    const users = await User.find({ service: service_category }).select(
-      "_id fcm_token",
-    );
-
-    const tokens = users.map((user) => user.fcm_token).filter((token) => token);
-
-    const title = "Nouveau prospect reçu";
-    const body =
-      "Vous avez reçu un nouveau prospect. Consultez les détails et répondez rapidement.";
-
-    // Always save in-app notifications, but send push only if vendor allows it.
-    const vendorIds = users.map((u) => u._id);
-    const prefs = await VendorNotification.find({
-      user_id: { $in: vendorIds },
-    }).lean();
-    const prefsByUserId = new Map(prefs.map((p) => [String(p.user_id), p]));
-
-    const tokensToPush = users
-      .filter((u) => {
-        const pref = prefsByUserId.get(String(u._id));
-        return pref?.push_notifications?.new_leads ?? true;
-      })
-      .map((u) => u.fcm_token)
-      .filter(Boolean);
-
-    if (tokensToPush.length > 0) {
-      await pushNotification(tokensToPush, title, body);
-    }
-
-    if (users.length > 0) {
-      await Notification.insertMany(
-        users.map((vendor) => ({
-          user_id: vendor._id,
-          title,
-          body,
-          for: "Vendor",
-        })),
-      );
-    }
+    await notifyVendorsOfNewLead({
+      serviceCategoryId: service_category,
+      request,
+    });
 
     // if (email && emailToken) {
     //   setImmediate(async () => {
@@ -971,7 +987,7 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
   if (serviceRequestStatus === "CANCELLED" || serviceRequestStatus === "EXPIRED") {
     return {
       quotes_status: "closed",
-      quotes_status_label: "FERMÉ",
+      quotes_status_label: "FERMÉE",
       ...baseCounts,
     };
   }
@@ -979,7 +995,7 @@ const buildServiceQuotesMeta = (quotes, serviceRequestStatus) => {
   if (totalQuotesCount === 0) {
     return {
       quotes_status: "hold",
-      quotes_status_label: "EN ATTENTE",
+      quotes_status_label: "EN ATTENTE DE DEVIS",
       ...baseCounts,
       quotes_count: 0,
       total_quotes_count: 0,

@@ -35,7 +35,12 @@ const VendorDocumentSchema = new mongoose.Schema(
         type  : String ,
         enum : ["Pending","Verified","Rejected"] ,
         default : "Pending"
-    }
+    },
+    rejection_reason: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     timestamps: true,

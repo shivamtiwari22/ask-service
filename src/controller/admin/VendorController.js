@@ -5,23 +5,68 @@ import VendorDocument from "../../models/VendorDocumentModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import { getServiceIds } from "../../../utils/helperFunction.js";
 import { sendEmail } from "../../../config/emailConfig.js";
-import documentStatusMail from "../../../config/email/documentStatusMail.js";
+import {
+  documentsAllVerifiedMail,
+  documentsRejectedMail,
+} from "../../../config/email/documentStatusMail.js";
 import kycStatusMail from "../../../config/email/kycStatusMail.js";
 import s3 from "../../../config/s3.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-
-const DOCUMENT_STATUS_LABELS = {
-  Pending: "En attente",
-  Verified: "Vérifié",
-  Rejected: "Rejeté",
-};
 
 const KYC_STATUS_LABELS = {
   ACTIVE: "Actif / Vérifié",
   PENDING: "En attente",
   REJECTED: "Rejeté",
 };
+
+async function areAllRequiredDocumentsVerified(vendorId) {
+  const vendor = await User.findById(vendorId).select("service").lean();
+  const serviceIds = getServiceIds(vendor?.service);
+  if (!serviceIds.length) return false;
+
+  const requiredDocs = await ServiceDocumentRequirement.find({
+    service_category: { $in: serviceIds },
+    status: "ACTIVE",
+    deletedAt: null,
+    is_required: true,
+  })
+    .select("_id")
+    .lean();
+
+  if (!requiredDocs.length) return true;
+
+  const vendorDocs = await VendorDocument.find({
+    user_id: vendorId,
+    document_id: { $in: requiredDocs.map((d) => d._id) },
+  })
+    .select("document_id status")
+    .lean();
+
+  const verifiedIds = new Set(
+    vendorDocs
+      .filter((d) => d.status === "Verified")
+      .map((d) => d.document_id.toString()),
+  );
+
+  return requiredDocs.every((req) => verifiedIds.has(req._id.toString()));
+}
+
+async function getRejectedDocumentsForEmail(vendorId) {
+  const rejected = await VendorDocument.find({
+    user_id: vendorId,
+    status: "Rejected",
+  })
+    .populate("document_id", "name")
+    .lean();
+
+  return rejected.map((d) => ({
+    name: d.document_id?.name || d.name || d.file_name || "Document",
+    reason:
+      d.rejection_reason ||
+      "Document non conforme — merci de le corriger et de le renvoyer.",
+  }));
+}
 
 /**
  * Admin API: Get all vendors with their verification documents
@@ -111,6 +156,7 @@ export const getAllVendorsWithDocuments = async (req, res) => {
               type: reqItem.type,
               is_required: reqItem.is_required,
               status,
+              rejection_reason: uploaded?.rejection_reason || null,
               file: uploaded
                 ? {
                     path: uploaded.file,
@@ -146,11 +192,16 @@ export const getAllVendorsWithDocuments = async (req, res) => {
 
 /**
  * Admin API: Update vendor document status (Pending/Verified/Rejected)
+ * Emails:
+ * - Verified: send 1 email only when ALL required documents are Verified
+ * - Rejected: send 1 rejection email listing incorrect documents + issues
+ * - Pending: no email
  */
 export const updateVendorDocumentStatus = async (req, res) => {
   try {
     const { vendorId, documentId } = req.params;
-    const { status } = req.body;
+    const { status, rejection_reason, reason } = req.body;
+    const rejectionReason = (rejection_reason || reason || "").trim();
 
     const validStatuses = ["Pending", "Verified", "Rejected"];
     if (!status || !validStatuses.includes(status)) {
@@ -162,9 +213,23 @@ export const updateVendorDocumentStatus = async (req, res) => {
       );
     }
 
+    if (status === "Rejected" && !rejectionReason) {
+      return handleResponse(
+        400,
+        "rejection_reason is required when rejecting a document",
+        {},
+        res
+      );
+    }
+
+    const updatePayload = {
+      status,
+      rejection_reason: status === "Rejected" ? rejectionReason : null,
+    };
+
     const doc = await VendorDocument.findOneAndUpdate(
       { user_id: vendorId, document_id: documentId },
-      { status },
+      { $set: updatePayload },
       { new: true }
     )
       .populate("document_id", "name type")
@@ -185,23 +250,32 @@ export const updateVendorDocumentStatus = async (req, res) => {
         .lean();
 
       if (vendor?.email) {
-        const documentName =
-          doc.document_id?.name || doc.name || doc.file_name || "Document";
-        const statusLabel = DOCUMENT_STATUS_LABELS[status] || status;
         const vendorName =
           `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim() ||
           "Prestataire";
 
-        await sendEmail({
-          to: vendor.email,
-          subject: `Ask Service - Statut de document mis à jour (${statusLabel})`,
-          html: await documentStatusMail({
-            name: vendorName,
-            documentName,
-            status,
-            statusLabel,
-          }),
-        });
+        if (status === "Rejected") {
+          const rejectedDocuments = await getRejectedDocumentsForEmail(vendorId);
+          await sendEmail({
+            to: vendor.email,
+            subject: "Ask Service - Documents à corriger",
+            html: await documentsRejectedMail({
+              name: vendorName,
+              rejectedDocuments,
+            }),
+          });
+        } else if (status === "Verified") {
+          const allVerified = await areAllRequiredDocumentsVerified(vendorId);
+          if (allVerified) {
+            await sendEmail({
+              to: vendor.email,
+              subject: "Ask Service - Documents validés",
+              html: await documentsAllVerifiedMail({
+                name: vendorName,
+              }),
+            });
+          }
+        }
       }
     } catch (mailError) {
       console.log("Document status email error:", mailError);
