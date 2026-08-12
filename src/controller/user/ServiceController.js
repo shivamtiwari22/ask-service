@@ -32,6 +32,7 @@ import Notification from "../../models/NotificationModel.js";
 import VendorNotification from "../../models/vendorNotificationModel.js";
 import verificationMail from "../../../config/email/verificationMail.js";
 import newLeadMail from "../../../config/email/newLeadMail.js";
+import quoteDecisionMail from "../../../config/email/quoteDecisionMail.js";
 import VendorLeadUnlock from "../../models/VendorLeadUnlockModel.js";
 import s3 from "../../../config/s3.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
@@ -1724,6 +1725,68 @@ export const getQuoteDetails = async (req, resp) => {
   }
 };
 
+const notifyVendorQuoteDecision = async ({
+  vendorId,
+  accepted,
+  quote,
+  serviceRequest,
+}) => {
+  if (!vendorId) return;
+
+  const title = accepted ? "Devis accepté" : "Devis refusé";
+  const body = accepted
+    ? `Votre devis pour la demande ${serviceRequest.reference_no} a été accepté.`
+    : `Votre devis pour la demande ${serviceRequest.reference_no} n'a pas été retenu.`;
+
+  await Notification.create({
+    user_id: vendorId,
+    title,
+    body,
+    for: "Vendor",
+  });
+
+  try {
+    const [vendor, prefs, category] = await Promise.all([
+      User.findById(vendorId).select("first_name last_name email fcm_token").lean(),
+      VendorNotification.findOne({ user_id: vendorId }).lean(),
+      serviceRequest.service_category
+        ? ServiceCategory.findById(serviceRequest.service_category)
+            .select("title")
+            .lean()
+        : Promise.resolve(null),
+    ]);
+
+    const canPush = prefs?.push_notifications?.messages ?? true;
+    if (canPush && vendor?.fcm_token) {
+      await pushNotification(vendor.fcm_token, title, body);
+    }
+
+    const canEmail = prefs?.email_notifications?.quote_accepted ?? true;
+    if (canEmail && vendor?.email) {
+      const vendorName =
+        `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim() ||
+        "Prestataire";
+      await sendEmail({
+        to: vendor.email,
+        subject: `Ask Service - ${title} (${serviceRequest.reference_no || ""})`.trim(),
+        html: await quoteDecisionMail({
+          name: vendorName,
+          accepted,
+          quotePrice: quote.quote_price,
+          currency: quote.currency || "EUR",
+          referenceNo: serviceRequest.reference_no,
+          serviceTitle: category?.title || "votre demande",
+        }),
+      });
+    }
+  } catch (mailErr) {
+    console.log(
+      "Quote decision vendor email failed:",
+      mailErr?.message || mailErr,
+    );
+  }
+};
+
 // ignore quote (user declines / "Ignore quote" button)
 export const ignoreQuote = async (req, resp) => {
   try {
@@ -1746,6 +1809,14 @@ export const ignoreQuote = async (req, resp) => {
 
     quote.status = "IGNORED";
     await quote.save();
+
+    const vendorId = quote.vendor_id?.toString?.() || quote.vendor_id;
+    await notifyVendorQuoteDecision({
+      vendorId,
+      accepted: false,
+      quote,
+      serviceRequest,
+    });
 
     return handleResponse(200, "Quote ignored successfully", {}, resp);
   } catch (err) {
@@ -1777,6 +1848,7 @@ export const acceptQuote = async (req, resp) => {
     await quote.save();
 
     const vendorId = quote.vendor_id?.toString?.() || quote.vendor_id;
+
     if (vendorId) {
       const title = "Devis accepté";
       const body = `Votre devis pour la demande ${serviceRequest.reference_no} a été accepté.`;
@@ -1793,6 +1865,13 @@ export const acceptQuote = async (req, resp) => {
       //   await pushNotification(vendorUser.fcm_token, title, body);
       // }
     }
+
+    await notifyVendorQuoteDecision({
+      vendorId,
+      accepted: true,
+      quote,
+      serviceRequest,
+    });
 
     return handleResponse(
       200,
