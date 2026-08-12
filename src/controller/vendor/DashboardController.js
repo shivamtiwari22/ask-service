@@ -433,6 +433,129 @@ export const getDashboardStats = async (req, res) => {
   }
 };
 
+const MIXED_LEADS_POPULATE = [
+  {
+    path: "service_category",
+    select: "title credit company_credit image description parent_category",
+    populate: {
+      path: "parent_category",
+      select: "title credit company_credit image description",
+      match: { deletedAt: null, status: "ACTIVE" },
+    },
+  },
+  {
+    path: "child_category",
+    select: "title credit company_credit image description parent_category",
+    populate: {
+      path: "parent_category",
+      select: "title credit company_credit image description",
+      match: { deletedAt: null, status: "ACTIVE" },
+    },
+  },
+];
+
+/**
+ * GET /mixed-category-leads (public)
+ * Returns up to 10 available leads mixed across service categories.
+ * contact_details are always masked. No auth required.
+ */
+export const getMixedCategoryLeads = async (req, res) => {
+  try {
+    const LIMIT = Math.min(
+      20,
+      Math.max(1, parseInt(req.query.limit, 10) || 10),
+    );
+
+    // Public: mix across all active child service categories
+    const activeCategories = await ServiceCategory.find({
+      deletedAt: null,
+      status: "ACTIVE",
+      parent_category: { $ne: null },
+    })
+      .select("_id")
+      .lean();
+
+    const categoryIds = activeCategories.map((c) => c._id);
+    if (!categoryIds.length) {
+      return handleResponse(
+        200,
+        "Mixed category leads fetched successfully",
+        { items: [], total: 0, limit: LIMIT },
+        res,
+      );
+    }
+
+    const parentGroups = await buildVendorParentCategoryGroups(categoryIds);
+    if (!parentGroups.length) {
+      return handleResponse(
+        200,
+        "Mixed category leads fetched successfully",
+        { items: [], total: 0, limit: LIMIT },
+        res,
+      );
+    }
+
+    const perCategoryLimit = Math.max(
+      2,
+      Math.ceil(LIMIT / Math.min(parentGroups.length, LIMIT)),
+    );
+
+    const categoryLeadLists = await Promise.all(
+      parentGroups.map(async (group) => {
+        const filter = {
+          deletedAt: null,
+          status: "ACTIVE",
+          ...buildLeadFilterForParentGroups([group]),
+        };
+
+        return ServiceRequest.find(filter)
+          .populate(MIXED_LEADS_POPULATE)
+          .sort({ createdAt: -1 })
+          .limit(perCategoryLimit)
+          .lean();
+      }),
+    );
+
+    // Round-robin mix across categories
+    const mixed = [];
+    const seen = new Set();
+    let index = 0;
+    while (mixed.length < LIMIT) {
+      let added = false;
+      for (const list of categoryLeadLists) {
+        const lead = list[index];
+        if (!lead) continue;
+        const id = lead._id.toString();
+        if (seen.has(id)) continue;
+        seen.add(id);
+        mixed.push(lead);
+        added = true;
+        if (mixed.length >= LIMIT) break;
+      }
+      if (!added) break;
+      index += 1;
+    }
+
+    const enriched = await enrichLeadsForVendor(mixed, null);
+
+    // Always mask contact details for this public endpoint
+    const items = enriched.map((lead) => ({
+      ...lead,
+      unlocked: false,
+      contact_details: maskVendorLeadContactDetails(lead.contact_details),
+    }));
+
+    return handleResponse(
+      200,
+      "Mixed category leads fetched successfully",
+      { items, total: items.length, limit: LIMIT },
+      res,
+    );
+  } catch (err) {
+    return handleResponse(500, err.message, {}, res);
+  }
+};
+
 /**
  * GET /available-leads-by-service-category
  * Available leads grouped by vendor service category, with dashboard summary.

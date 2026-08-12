@@ -34,6 +34,7 @@ import {
 } from "../controller/vendor/AuthController.js";
 import {
   getDashboardStats,
+  getMixedCategoryLeads,
   getAvailableLeadsByServiceCategory,
   unlockLead,
   getLeadById,
@@ -116,6 +117,7 @@ router.post("/upload-service-selection-document", userAuthenticateToken, checkRo
 router.get("/all-quotes", userAuthenticateToken, checkRoleAuth(["Vendor"]), AllQuotes);
 
 router.get("/dashboard", userAuthenticateToken, checkRoleAuth(["Vendor"]), getDashboardStats);
+router.get("/mixed-category-leads", getMixedCategoryLeads);
 
 router.get("/available-leads", userAuthenticateToken , checkRoleAuth(["Vendor"]) , availableLeads);
 router.get("/available-leads-by-service-category", userAuthenticateToken, checkRoleAuth(["Vendor"]), getAvailableLeadsByServiceCategory);
