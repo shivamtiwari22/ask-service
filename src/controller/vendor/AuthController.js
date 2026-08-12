@@ -1288,7 +1288,7 @@ export const availableLeads = async (req, resp) => {
       if (vendorServiceIds.length && !vendorOwnsService(req.user.service, service)) {
         return handleResponse(
           403,
-          "Service non attribué à votre compte",
+          "Vous pouvez ajouter le service depuis votre profil dans les paramètres",
           {},
           resp,
         );
