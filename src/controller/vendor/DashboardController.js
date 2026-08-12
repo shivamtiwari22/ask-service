@@ -42,6 +42,8 @@ async function fetchVendorDashboardSummary(vendorId, user) {
       quotesSentCount: 0,
       kyc_status: "Service not updated",
       canPurchaseLeads: false,
+      document_verified: true,
+      document_verification_message: null,
     };
   }
 
@@ -50,18 +52,24 @@ async function fetchVendorDashboardSummary(vendorId, user) {
     status: "ACTIVE",
   }).distinct("_id");
 
-  const [purchasedLeadIds, purchasedLeadsCount, wallet, quotesSentCount] =
-    await Promise.all([
-      VendorLeadUnlock.find({ vendor_id: vendorId }).distinct(
-        "service_request_id",
-      ),
-      VendorLeadUnlock.countDocuments({
-        vendor_id: vendorId,
-        service_request_id: { $in: activeServiceRequest },
-      }),
-      VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
-      VendorQuote.countDocuments({ vendor_id: vendorId }),
-    ]);
+  const [
+    purchasedLeadIds,
+    purchasedLeadsCount,
+    wallet,
+    quotesSentCount,
+    documentVerifiedMap,
+  ] = await Promise.all([
+    VendorLeadUnlock.find({ vendor_id: vendorId }).distinct(
+      "service_request_id",
+    ),
+    VendorLeadUnlock.countDocuments({
+      vendor_id: vendorId,
+      service_request_id: { $in: activeServiceRequest },
+    }),
+    VendorCreditWallet.findOne({ user_id: vendorId }).lean(),
+    VendorQuote.countDocuments({ vendor_id: vendorId }),
+    buildDocumentVerifiedByCategoryMap(vendorId, serviceCategoryIds),
+  ]);
 
   const parentGroups = await buildVendorParentCategoryGroups(serviceCategoryIds);
   const leadCategoryFilter = parentGroups.length
@@ -75,9 +83,27 @@ async function fetchVendorDashboardSummary(vendorId, user) {
     _id: { $nin: purchasedLeadIds },
   });
 
+  const unverifiedCategoryIds = [...documentVerifiedMap.entries()]
+    .filter(([, verified]) => !verified)
+    .map(([id]) => id);
+  const document_verified = unverifiedCategoryIds.length === 0;
 
-  
+  let document_verification_message = null;
+  if (!document_verified) {
+    const unverifiedCategories = await ServiceCategory.find({
+      _id: { $in: unverifiedCategoryIds },
+    })
+      .select("title")
+      .lean();
+    const titles = unverifiedCategories
+      .map((c) => c.title)
+      .filter(Boolean)
+      .join(", ");
 
+    document_verification_message = titles
+      ? `Documents non vérifiés pour : ${titles}. Veuillez les soumettre et attendre la validation.`
+      : "Certains documents de service ne sont pas encore vérifiés. Veuillez les soumettre et attendre la validation.";
+  }
 
   return {
     availableLeadsCount,
@@ -86,6 +112,8 @@ async function fetchVendorDashboardSummary(vendorId, user) {
     quotesSentCount,
     kyc_status: user.kyc_status || "PENDING",
     canPurchaseLeads: user.kyc_status === "ACTIVE",
+    document_verified,
+    document_verification_message,
   };
 }
 
