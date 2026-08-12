@@ -113,30 +113,34 @@ const notifyVendorsOfNewLead = async ({ serviceCategoryId, request }) => {
       request?.preferred_start_date || request?.desiredDate || null,
   };
 
-  await Promise.all(
-    users.map(async (vendor) => {
-      if (!vendor?.email) return;
-      try {
-        const pref = prefsByUserId.get(String(vendor._id));
-        const canEmail = pref?.email_notifications?.new_leads_available ?? true;
-        if (!canEmail) return;
+  // await Promise.all(
+  //   users.map(async (vendor) => {
+  //     if (!vendor?.email) return;
+  //     try {
+  //       const pref = prefsByUserId.get(String(vendor._id));
+  //       const canEmail = pref?.email_notifications?.new_leads_available ?? true;
+  //       if (!canEmail) return;
 
-        const vendorName =
-          vendor.first_name || vendor.last_name || "Prestataire";
+  //       const vendorName =
+  //         vendor.first_name || vendor.last_name || "Prestataire";
 
-        await sendEmail({
-          to: vendor.email,
-          subject: `${title} — ${request?.reference_no || serviceTitle}`,
-          html: await newLeadMail({
-            name: vendorName,
-            ...leadPayload,
-          }),
-        });
-      } catch (mailErr) {
-        console.log("New lead vendor email failed:", mailErr?.message || mailErr);
-      }
-    }),
-  );
+  //       await sendEmail({
+  //         to: vendor.email,
+  //         subject: `${title} — ${request?.reference_no || serviceTitle}`,
+  //         html: await newLeadMail({
+  //           name: vendorName,
+  //           ...leadPayload,
+  //         }),
+  //       });
+  //     } catch (mailErr) {
+  //       console.log("New lead vendor email failed:", mailErr?.message || mailErr);
+  //     }
+  //   }),
+  // );
+
+
+
+
 };
 
 /**
