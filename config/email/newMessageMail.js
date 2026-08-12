@@ -116,17 +116,12 @@ Vous avez reçu un nouveau message de <strong>${fromName}</strong> sur ${escapeH
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px auto;">
 <tr>
 <td align="center" bgcolor="${HEADER_ORANGE}" style="background-color:${HEADER_ORANGE};border-radius:10px;mso-padding-alt:14px 28px;">
-<a href="${chatUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#ffffff !important;text-decoration:none;border-radius:10px;background-color:${HEADER_ORANGE};">
-Ouvrir la conversation →
-</a>
+
 </td>
 </tr>
 </table>
 
-<p style="margin:18px 0 0 0;font-size:13px;line-height:1.5;color:#94A3B8;">
-Si le bouton ne fonctionne pas, ouvrez ce lien :<br>
-<a href="${chatUrl}" target="_blank" rel="noopener noreferrer" style="color:${HEADER_ORANGE};word-break:break-all;">${chatUrl}</a>
-</p>
+
 
 </td>
 </tr>
