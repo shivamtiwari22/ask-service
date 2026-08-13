@@ -5,10 +5,7 @@ import VendorDocument from "../../models/VendorDocumentModel.js";
 import ServiceDocumentRequirement from "../../models/ServiceDocumentRequirementModel.js";
 import { getServiceIds } from "../../../utils/helperFunction.js";
 import { sendEmail } from "../../../config/emailConfig.js";
-import {
-  documentsAllVerifiedMail,
-  documentsRejectedMail,
-} from "../../../config/email/documentStatusMail.js";
+import { documentsRejectedMail } from "../../../config/email/documentStatusMail.js";
 import kycStatusMail from "../../../config/email/kycStatusMail.js";
 import s3 from "../../../config/s3.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
@@ -19,38 +16,6 @@ const KYC_STATUS_LABELS = {
   PENDING: "En attente",
   REJECTED: "Rejeté",
 };
-
-async function areAllRequiredDocumentsVerified(vendorId) {
-  const vendor = await User.findById(vendorId).select("service").lean();
-  const serviceIds = getServiceIds(vendor?.service);
-  if (!serviceIds.length) return false;
-
-  const requiredDocs = await ServiceDocumentRequirement.find({
-    service_category: { $in: serviceIds },
-    status: "ACTIVE",
-    deletedAt: null,
-    is_required: true,
-  })
-    .select("_id")
-    .lean();
-
-  if (!requiredDocs.length) return true;
-
-  const vendorDocs = await VendorDocument.find({
-    user_id: vendorId,
-    document_id: { $in: requiredDocs.map((d) => d._id) },
-  })
-    .select("document_id status")
-    .lean();
-
-  const verifiedIds = new Set(
-    vendorDocs
-      .filter((d) => d.status === "Verified")
-      .map((d) => d.document_id.toString()),
-  );
-
-  return requiredDocs.every((req) => verifiedIds.has(req._id.toString()));
-}
 
 async function getRejectedDocumentsForEmail(vendorId) {
   const rejected = await VendorDocument.find({
@@ -193,9 +158,8 @@ export const getAllVendorsWithDocuments = async (req, res) => {
 /**
  * Admin API: Update vendor document status (Pending/Verified/Rejected)
  * Emails:
- * - Verified: send 1 email only when ALL required documents are Verified
  * - Rejected: send 1 rejection email listing incorrect documents + issues
- * - Pending: no email
+ * - Verified / Pending: no email
  */
 export const updateVendorDocumentStatus = async (req, res) => {
   try {
@@ -245,16 +209,15 @@ export const updateVendorDocumentStatus = async (req, res) => {
     }
 
     try {
-      const vendor = await User.findById(vendorId)
-        .select("first_name last_name email")
-        .lean();
+      if (status === "Rejected") {
+        const vendor = await User.findById(vendorId)
+          .select("first_name last_name email")
+          .lean();
 
-      if (vendor?.email) {
-        const vendorName =
-          `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim() ||
-          "Prestataire";
-
-        if (status === "Rejected") {
+        if (vendor?.email) {
+          const vendorName =
+            `${vendor.first_name || ""} ${vendor.last_name || ""}`.trim() ||
+            "Prestataire";
           const rejectedDocuments = await getRejectedDocumentsForEmail(vendorId);
           await sendEmail({
             to: vendor.email,
@@ -264,17 +227,6 @@ export const updateVendorDocumentStatus = async (req, res) => {
               rejectedDocuments,
             }),
           });
-        } else if (status === "Verified") {
-          const allVerified = await areAllRequiredDocumentsVerified(vendorId);
-          if (allVerified) {
-            await sendEmail({
-              to: vendor.email,
-              subject: "Ask Service - Documents validés",
-              html: await documentsAllVerifiedMail({
-                name: vendorName,
-              }),
-            });
-          }
         }
       }
     } catch (mailError) {

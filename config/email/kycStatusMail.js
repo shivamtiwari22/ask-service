@@ -64,7 +64,7 @@ const kycStatusMail = async ({ name, status, statusLabel }) => {
       : "Votre dossier est en cours d'examen";
 
   const subtitle = isActive
-    ? `Votre compte prestataire est désormais <strong style="color:${HEADER_ORANGE};">vérifié.</strong>`
+    ? `Bonjour <strong>${displayName}</strong>,<br><br>Tous vos documents ont été vérifiés avec succès. Votre compte prestataire est désormais <strong style="color:${HEADER_ORANGE};">vérifié</strong> et pleinement activé.`
     : isRejected
       ? `Bonjour <strong>${displayName}</strong>, votre vérification n'a malheureusement pas pu être validée pour le moment.`
       : `Bonjour <strong>${displayName}</strong>, votre dossier KYC est actuellement en cours d'examen.`;
@@ -79,6 +79,23 @@ const kycStatusMail = async ({ name, status, statusLabel }) => {
     : isRejected
       ? "Mettre à jour mes documents"
       : "Voir mon espace prestataire";
+
+  const documentsVerifiedBlock = isActive
+    ? `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px 0;">
+  <tr>
+    <td style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;padding:16px 18px;text-align:left;">
+      <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:#065F46;">
+        Documents validés
+      </p>
+      <p style="margin:0;font-size:14px;line-height:1.6;color:#047857;">
+        Tous vos documents requis ont été examinés et approuvés. Vous pouvez maintenant consulter les prospects, débloquer des leads et envoyer des devis.
+      </p>
+    </td>
+  </tr>
+</table>
+`
+    : "";
 
   const featuresBlock = isActive
     ? `
@@ -152,6 +169,8 @@ const kycStatusMail = async ({ name, status, statusLabel }) => {
       </td>
     </tr>
   </table>
+
+  ${documentsVerifiedBlock}
 
   ${featuresBlock}
 
