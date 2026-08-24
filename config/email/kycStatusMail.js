@@ -32,7 +32,7 @@ const getVendorHeaderLogoUrl = () => {
 
 const getDashboardUrl = () => {
   const frontend = (process.env.FRONTEND_URL || "").trim().replace(/\/$/, "");
-  return frontend ? `${frontend}/vendor/dashboard` : "#";
+  return frontend ? `${frontend}/auth/login?role=vendor` : "#";
 };
 
 const kycStatusMail = async ({ name, status, statusLabel }) => {
