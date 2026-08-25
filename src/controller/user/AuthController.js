@@ -6,6 +6,7 @@ import {
   generateOneMinToken,
   generateToken,
   hashPassword,
+  verifyToken,
 } from "../../../utils/auth.js";
 import Role from "../../models/RoleModel.js";
 import moment from "moment";
@@ -1180,6 +1181,68 @@ export const resetPassword = async (req, resp) => {
     user.password = await hashPassword(password);
     await user.save();
     return handleResponse(200, "Password reset successfully", {}, resp);
+  } catch (err) {
+    return handleResponse(500, err.message, {}, resp);
+  }
+};
+
+// set password from email link token
+export const setPassword = async (req, resp) => {
+  try {
+    const { token, password, confirm_password } = req.body;
+
+    if (!token || !password) {
+      return handleResponse(
+        400,
+        "Token and password are required",
+        {},
+        resp,
+      );
+    }
+
+    if (password.length < 8) {
+      return handleResponse(
+        400,
+        "Password must be at least 8 characters",
+        {},
+        resp,
+      );
+    }
+
+    if (
+      confirm_password !== undefined &&
+      confirm_password !== null &&
+      password !== confirm_password
+    ) {
+      return handleResponse(
+        400,
+        "New password & confirm password does not match",
+        {},
+        resp,
+      );
+    }
+
+    let decoded;
+    try {
+      decoded = verifyToken(token);
+    } catch (error) {
+      if (error.name === "TokenExpiredError") {
+        return handleResponse(401, "Token has expired", {}, resp);
+      }
+      return handleResponse(401, "Invalid token", {}, resp);
+    }
+
+    if (decoded.purpose !== "SET_PASSWORD" || !decoded._id) {
+      return handleResponse(401, "Invalid token", {}, resp);
+    }
+
+    const user = await User.findById(decoded._id);
+    if (!user) return handleResponse(404, "User not found", {}, resp);
+
+    user.password = await hashPassword(password);
+    await user.save();
+
+    return handleResponse(200, "Password set successfully", {}, resp);
   } catch (err) {
     return handleResponse(500, err.message, {}, resp);
   }

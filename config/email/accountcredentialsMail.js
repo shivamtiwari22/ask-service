@@ -1,10 +1,14 @@
-const accountCredentialsMail = async (name, email, password) => {
+const accountCredentialsMail = async (name, email, setPasswordLink) => {
+  const safeName = String(name ?? "").replace(/</g, "&lt;");
+  const safeEmail = String(email ?? "").replace(/</g, "&lt;");
+  const link = setPasswordLink || "#";
+
   return `
       <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Vos identifiants de compte</title>
+<title>Créez votre mot de passe</title>
 </head>
 
 <body style="margin:0;padding:0;background:#f2f4f7;font-family:Arial,Helvetica,sans-serif;">
@@ -25,9 +29,9 @@ const accountCredentialsMail = async (name, email, password) => {
 <!-- Hero Section -->
 <tr>
 <td style="padding:35px 40px;text-align:center;">
-<h2 style="margin:0;color:#111;font-size:24px;">Bienvenue, ${name} 👋</h2>
+<h2 style="margin:0;color:#111;font-size:24px;">Bienvenue, ${safeName}</h2>
 <p style="color:#666;font-size:15px;margin-top:10px;">
-Votre compte a ete cree avec succes. Voici vos identifiants de connexion.
+Votre compte a ete cree avec succes. Cliquez sur le bouton ci-dessous pour creer votre mot de passe.
 </p>
 </td>
 </tr>
@@ -40,15 +44,8 @@ Votre compte a ete cree avec succes. Voici vos identifiants de connexion.
 
 <tr style="background:#fafafa;">
 <td style="padding:14px 16px;font-weight:600;color:#333;width:140px;">Email</td>
-<td style="padding:14px 16px;color:#555;">${email}</td>
+<td style="padding:14px 16px;color:#555;">${safeEmail}</td>
 </tr>
-
-<tr>
-<td style="padding:14px 16px;font-weight:600;color:#333;">Mot de passe</td>
-<td style="padding:14px 16px;color:#555;">${password}</td>
-</tr>
-
-
 
 </table>
 
@@ -58,9 +55,9 @@ Votre compte a ete cree avec succes. Voici vos identifiants de connexion.
 <!-- Button -->
 <tr>
 <td style="text-align:center;padding:35px 40px;">
-<a href="https://ask-service.vercel.app/"
+<a href="${link}"
 style="background:#4f46e5;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-weight:600;font-size:15px;display:inline-block;">
-Se connecter a votre compte
+Creer mon mot de passe
 </a>
 </td>
 </tr>
@@ -68,8 +65,7 @@ Se connecter a votre compte
 <!-- Security Note -->
 <tr>
 <td style="padding:0 40px 30px 40px;color:#666;font-size:14px;line-height:1.6;text-align:center;">
-Pour des raisons de securite, nous vous recommandons de changer votre mot de passe apres votre premiere connexion.
-Si vous n'avez pas demande ce compte, veuillez contacter notre equipe support.
+Ce lien est valide pendant 24 heures. Si vous n'avez pas demande ce compte, veuillez ignorer cet email ou contacter notre equipe support.
 </td>
 </tr>
 

@@ -2,6 +2,7 @@ import { sendEmail } from "../../../config/emailConfig.js";
 import handleResponse from "../../../utils/http-response.js";
 import {
   generateOTP,
+  generateSetPasswordToken,
   generateToken,
   hashPassword,
 } from "../../../utils/auth.js";
@@ -642,11 +643,25 @@ export const initiateServiceRequest = async (req, resp) => {
     }
 
     try {
-      await sendEmail({
-        to: email,
-        subject: "Account Credentials",
-        html: await accountCredentialsMail(first_name, email, password),
-      });
+      if (email) {
+        const setPasswordToken = generateSetPasswordToken(newUser._id);
+        const frontend = (process.env.FRONTEND_URL || "")
+          .trim()
+          .replace(/\/$/, "");
+        const setPasswordLink = frontend
+          ? `${frontend}/reset-password?token=${setPasswordToken}`
+          : "#";
+
+        await sendEmail({
+          to: email,
+          subject: "Creez votre mot de passe - Ask Service",
+          html: await accountCredentialsMail(
+            first_name,
+            email,
+            setPasswordLink,
+          ),
+        });
+      }
     } catch (e) {
       console.log(e, "mail error");
     }

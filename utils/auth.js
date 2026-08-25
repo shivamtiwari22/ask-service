@@ -15,6 +15,14 @@ export const generate15minToken = (payload) => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
 };
 
+export const generateSetPasswordToken = (userId) => {
+  return jwt.sign(
+    { _id: String(userId), purpose: "SET_PASSWORD" },
+    JWT_SECRET,
+    { expiresIn: "24h" },
+  );
+};
+
 // Verify JWT token
 export const verifyToken = (token) => {
   return jwt.verify(token, JWT_SECRET);

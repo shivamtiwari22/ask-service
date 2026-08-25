@@ -36,6 +36,7 @@ import {
   resendPhoneEmailOTP,
   resendPhoneOTP,
   resetPassword,
+  setPassword,
   signup,
   updateUserProfile,
   verifyEmail,
@@ -286,6 +287,9 @@ router.post(
   authenticateForgotPasswordToken("forgot-password"),
   resetPassword,
 );
+
+// set password from email invite link
+router.post("/set-password", setPassword);
 
 router.get("/test", (req, res) => {
   return handleResponse(200, "User route is working fine", {}, res);
