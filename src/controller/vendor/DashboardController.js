@@ -1925,7 +1925,7 @@ export const createCheckoutSession = async (req, res) => {
             product_data: {
               name: "Service Payment",
             },
-            unit_amount: amount * 100,
+            unit_amount: Math.round(Number(amount) * 100),
           },
           quantity: 1,
         },
