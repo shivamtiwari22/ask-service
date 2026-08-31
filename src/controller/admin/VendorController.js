@@ -38,7 +38,7 @@ async function getRejectedDocumentsForEmail(vendorId) {
  * Similar structure to vendor's VerificationDocument but for all vendors
  */
 
-const generatePresignedUrl = async (filePath, expiry = 30 * 60) => {
+const generatePresignedUrl = async (filePath, expiry = 10 * 60) => {
   if (!filePath) return null;
   if (/^https?:\/\//i.test(filePath)) return filePath;
 

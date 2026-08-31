@@ -349,6 +349,7 @@ export const initiateServiceRequest = async (req, resp) => {
     let { phone, email, first_name, last_name } = contact_details;
 
     phone = phone ? normalizeFrenchPhone(phone) : null;
+    contact_details.phone = phone;
 
 
     // ================= REQUIRED VALIDATION =================
