@@ -101,6 +101,10 @@ import {
   restoreQuestion,
   updateQuestion,
 } from "../controller/admin/QuestionsController.js";
+import {
+  getAdminCreditPurchaseInvoice,
+  getCreditPurchases,
+} from "../controller/admin/CreditPurchaseController.js";
 
 const router = express.Router();
 
@@ -439,8 +443,18 @@ router.get(
   getGlobalSetting,
 );
 
-
-
-
+// vendor credit point purchases
+router.get(
+  "/credit-purchases",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getCreditPurchases,
+);
+router.get(
+  "/credit-purchases/:transactionId/invoice",
+  authenticateToken,
+  checkRoleAuth(["Admin"]),
+  getAdminCreditPurchaseInvoice,
+);
 
 export default router;

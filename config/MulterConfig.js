@@ -9,7 +9,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 const resolveBucketAndKey = (folder = "") => {
   const normalizedFolder = String(folder).replace(/\\/g, "/").replace(/^\/+/, "");
   const isPrivate = normalizedFolder.startsWith("private");
-  const bucket = isPrivate ? "private" : "public";
+  const bucket = isPrivate ?  process.env.S3_BUCKET_PRIVATE : process.env.S3_BUCKET_PUBLIC;
   const objectPrefix = normalizedFolder
     .replace(/^public\/?/, "")
     .replace(/^private\/?/, "")
