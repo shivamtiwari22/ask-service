@@ -1,4 +1,4 @@
-import {comparePassword,generateOTP,generateOneMinToken,generateToken,hashPassword,} from "../../../utils/auth.js";
+import {comparePassword,generateOTP,generateOneMinToken,generateToken,hashPassword,otpMatches,isOtpExpired,} from "../../../utils/auth.js";
 import handleResponse from "../../../utils/http-response.js";
 import User from "../../models/UserModel.js";
 import Role from "../../models/RoleModel.js";
@@ -11,14 +11,13 @@ export const adminLogin = async (req, resp) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).populate("role");
-    if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
+    if (typeof email !== "string" || !email.trim() || typeof password !== "string") {
+      return handleResponse(400, "Email and password are required", {}, resp);
     }
-    const isPasswordCorrect = await comparePassword(password, user.password);
 
-    if (!isPasswordCorrect) {
-      return handleResponse(401, "Invalid password", {}, resp);
+    const user = await User.findOne({ email: email.trim() }).populate("role");
+    if (!user || !(await comparePassword(password, user.password))) {
+      return handleResponse(401, "Invalid credentials", {}, resp);
     }
 
     if (["User", "Vendor"].includes(user.role.name)) {
@@ -58,14 +57,25 @@ export const updateAdminProfile = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    const payload = {
-      ...body,
-      profile_pic:Array.isArray(profile_pic) && profile_pic?.length > 0
-          ? profile_pic[0].path
-          : body.profile_pic
+    const allowedFields = [
+      "first_name",
+      "last_name",
+      "phone",
+      "address",
+      "city",
+      "postal_code",
+      "profile_pic",
+    ];
+    const payload = {};
+    for (const key of allowedFields) {
+      if (body[key] !== undefined) payload[key] = body[key];
+    }
+    payload.profile_pic =
+      Array.isArray(profile_pic) && profile_pic?.length > 0
+        ? profile_pic[0].path
+        : body.profile_pic
           ? normalizePath(body.profile_pic)
-          : null,
-    };
+          : user.profile_pic;
     const updateUser = await User.findByIdAndUpdate(
       user?._id,
       {
@@ -120,7 +130,7 @@ export const changeAdminPassword = async (req, resp) => {
       const hashedPassword = await hashPassword(new_password);
       const updateUser = await User.findByIdAndUpdate(
         user?._id,
-        { password: hashedPassword },
+        { password: hashedPassword, token_invalid_before: new Date() },
         { new: true }
       );
 
@@ -131,7 +141,7 @@ export const changeAdminPassword = async (req, resp) => {
     const hashedPassword = await hashPassword(new_password);
       const updateUser = await User.findByIdAndUpdate(
         user?._id,
-        { password: hashedPassword },
+        { password: hashedPassword, token_invalid_before: new Date() },
         { new: true }
       );
   
@@ -184,9 +194,9 @@ export const verifyOTP = async (req, resp) => {
     const user = await User.findOne({ email });
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
-    if (user.otp != otp) return handleResponse(401, "Invalid OTP", {}, resp);
+    if (!otpMatches(user.otp, otp)) return handleResponse(401, "Invalid OTP", {}, resp);
 
-    if (moment(user.otp_expires_at).isBefore(moment()))
+    if (isOtpExpired(user.otp_expires_at))
       return handleResponse(401, "OTP expired", {}, resp);
 
     if (user.otp_for !== otp_for)
@@ -216,7 +226,7 @@ export const resetPassword = async (req, resp) => {
     const hashedPassword = await hashPassword(password);
     const updateUser = await User.findByIdAndUpdate(
       user._id,
-      { password: hashedPassword },
+      { password: hashedPassword, token_invalid_before: new Date() },
       { new: true }
     );
     if (!updateUser)

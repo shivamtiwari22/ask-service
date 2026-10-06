@@ -79,11 +79,16 @@ export const getAllVendorsWithDocuments = async (req, res) => {
      }
 
 
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const total = await User.countDocuments(filter);
     const vendors = await User.find(filter)
       .select("-password -otp -otp_phone -otp_expires_at -otp_phone_expiry_at -otp_for")
       .populate("service", "title")
       .populate("role", "name")
       .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
       .lean();
 
     const vendorsWithDocs = await Promise.all(
@@ -146,7 +151,9 @@ export const getAllVendorsWithDocuments = async (req, res) => {
       "Vendors with documents fetched successfully",
       {
         list: vendorsWithDocs,
-        total: vendorsWithDocs.length,
+        total,
+        page,
+        limit,
       },
       res
     );

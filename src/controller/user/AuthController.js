@@ -7,6 +7,12 @@ import {
   generateToken,
   hashPassword,
   verifyToken,
+  authPayloadFromUser,
+  otpMatches,
+  isOtpExpired,
+  toPublicUser,
+  contactQuery,
+  recordFailedOtp,
 } from "../../../utils/auth.js";
 import Role from "../../models/RoleModel.js";
 import moment from "moment";
@@ -156,19 +162,20 @@ export const verifyPhone = async (req, resp) => {
     //   return handleResponse(400, "OTP expired", {}, resp);
     // }
 
-    if (user.otp_phone !== otp) {
-
+    if (!otpMatches(user.otp_phone, otp)) {
       return handleResponse(401, "Invalid Code", {}, resp);
-      
+    }
+    if (isOtpExpired(user.otp_phone_expiry_at)) {
+      return handleResponse(401, "OTP expired", {}, resp);
     }
 
     user.is_phone_verified = true;
-    user.phone_otp = null;
-    user.phone_otp_expiry = null;
+    user.otp_phone = null;
+    user.otp_phone_expiry_at = null;
 
     await user.save();
 
-    const token = generateToken(user.toObject());
+    const token = generateToken(authPayloadFromUser(user));
 
     return handleResponse(200, "verified successfully", { token, role }, resp);
   } catch (err) {
@@ -180,21 +187,29 @@ export const verifyPhone = async (req, resp) => {
 export const verifyEmail = async (req, resp) => {
   try {
     const { email, otp } = req.body;
+    if (typeof email !== "string" || !email.trim()) {
+      return handleResponse(400, "Email is required", {}, resp);
+    }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.trim() });
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const role = await Role.findById(user.role).select("id name");
 
-    if (user.otp !== otp) {
-      return handleResponse(401, "Invalid Code", {}, resp);
+    if (!otpMatches(user.otp, otp)) {
+      const locked = await recordFailedOtp(user);
+      return handleResponse(401, locked ? "Too many attempts. Request a new code." : "Invalid Code", {}, resp);
+    }
+    if (isOtpExpired(user.otp_expires_at)) {
+      return handleResponse(401, "OTP expired", {}, resp);
     }
 
     user.is_email_verified = true;
     user.otp = null;
+    user.otp_expires_at = null;
 
     await user.save();
 
-    const token = generateToken(user.toObject());
+    const token = generateToken(authPayloadFromUser(user));
 
     return handleResponse(
       200,
@@ -213,7 +228,9 @@ export const loginPhoneEmail = async (req, resp) => {
     if (!email && !phone)
       return handleResponse(400, "Email or phone is required", {}, resp);
 
-    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    const query = contactQuery({ email, phone });
+    if (!query) return handleResponse(400, "Email or phone is required", {}, resp);
+    const user = await User.findOne(query);
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const role = await Role.findById(user.role).select("id name");
 
@@ -243,7 +260,7 @@ export const loginPhoneEmail = async (req, resp) => {
     return handleResponse(
       200,
       "OTP sent successfully",
-      { otp: user.otp, role: role },
+      { role: role },
       resp,
     );
   } catch (err) {
@@ -373,7 +390,7 @@ export const login = async (req, resp) => {
   try {
     const { identifier, password, fcm_token , type} = req.body;
 
-    if (!identifier || !password) {
+    if (typeof identifier !== "string" || !identifier.trim() || typeof password !== "string") {
       return handleResponse(
         400,
         "Identifier and password are required",
@@ -382,12 +399,13 @@ export const login = async (req, resp) => {
       );
     }
 
+    const lookup = identifier.trim();
     const user = await User.findOne({
-      $or: [{ phone: identifier }, { email: identifier }],
+      $or: [{ phone: lookup }, { email: lookup }],
     });
 
     if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
+      return handleResponse(401, "Invalid credentials", {}, resp);
     }
 
     const role = await Role.findById(user.role).select("id name");
@@ -475,7 +493,7 @@ export const login = async (req, resp) => {
       await activeUser.save();
     }
 
-    const token = generateToken(activeUser.toObject());
+    const token = generateToken(authPayloadFromUser(activeUser));
 
       let is_client = false;
     if(type == "User" && role.name == "Vendor") {
@@ -724,7 +742,7 @@ export const verifyPhoneAndLogin = async (req, resp) => {
       });
     }
 
-    const token = generateToken(activeUser.toObject());
+    const token = generateToken(authPayloadFromUser(activeUser));
 
     return handleResponse(
       200,
@@ -892,6 +910,8 @@ export const changePassword = async (req, resp) => {
 
     const hashedPassword = await hashPassword(new_password);
     user.password = hashedPassword;
+    user.password_updateAt = new Date();
+    user.token_invalid_before = new Date();
     await user.save();
     return handleResponse(200, "Password changed successfully", {}, resp);
   } catch (err) {
@@ -906,7 +926,7 @@ export const getProfile = async (req, resp) => {
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
     const show_welcome_msg = await consumeShowWelcomeMsg(user._id);
-    const profile = user.toObject();
+    const profile = toPublicUser(user);
     profile.show_welcome_msg = show_welcome_msg;
 
     return handleResponse(200, "Profile fetched successfully", profile, resp);
@@ -953,12 +973,10 @@ export const forgotPassword = async (req, resp) => {
 
     await user.save();
 
-    console.log(user);
-
     return handleResponse(
       200,
       "Code sent successfully",
-      { otp: user.otp },
+      {},
       resp,
     );
   } catch (err) {
@@ -975,7 +993,9 @@ export const verifyOTP = async (req, resp) => {
       return handleResponse(400, "Email or phone is required", {}, resp);
     }
 
-    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    const query = contactQuery({ email, phone });
+    if (!query) return handleResponse(400, "Email or phone is required", {}, resp);
+    const user = await User.findOne(query);
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
@@ -984,15 +1004,19 @@ export const verifyOTP = async (req, resp) => {
       return handleResponse(400, "Invalid type", {}, resp);
     }
 
-    if (user.otp != otp) {
-      return handleResponse(401, "Invalid Code", {}, resp);
+    if (!otpMatches(user.otp, otp)) {
+      const locked = await recordFailedOtp(user);
+      return handleResponse(401, locked ? "Too many attempts. Request a new code." : "Invalid Code", {}, resp);
+    }
+    if (isOtpExpired(user.otp_expires_at)) {
+      return handleResponse(401, "OTP expired", {}, resp);
     }
     user.otp = null;
     user.otp_expires_at = null;
     user.otp_for = null;
     await user.save();
 
-    const token = generateOneMinToken(user.toObject());
+    const token = generateOneMinToken(authPayloadFromUser(user));
 
     await resp.cookie("forgot-password", token, cookieOptions);
 
@@ -1009,6 +1033,11 @@ export const GoogleLogin = async (req, res) => {
 
     if (!users) {
       return handleResponse(401, "Unauthorized user", {}, res);
+    }
+
+    const allowedGoogleRoles = ["User", "Vendor"];
+    if (!allowedGoogleRoles.includes(role_type)) {
+      return handleResponse(400, "Invalid role_type", {}, res);
     }
 
   
@@ -1134,7 +1163,7 @@ export const GoogleLogin = async (req, res) => {
       // }
     }
 
-    const token = generateOneMinToken(user.toObject());
+    const token = generateToken(authPayloadFromUser(user));
 
     return handleResponse(
       200,
@@ -1158,7 +1187,9 @@ export const resendPhoneEmailOTP = async (req, resp) => {
     if (!phone && !email) {
       return handleResponse(400, "Phone or email is required", {}, resp);
     }
-    const user = await User.findOne({ $or: [{ phone }, { email }] });
+    const query = contactQuery({ email, phone });
+    if (!query) return handleResponse(400, "Email or phone is required", {}, resp);
+    const user = await User.findOne(query);
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
@@ -1179,6 +1210,7 @@ export const resetPassword = async (req, resp) => {
     const user = await User.findById(req.user._id);
     if (!user) return handleResponse(404, "User not found", {}, resp);
     user.password = await hashPassword(password);
+    user.token_invalid_before = new Date();
     await user.save();
     return handleResponse(200, "Password reset successfully", {}, resp);
   } catch (err) {
@@ -1240,6 +1272,7 @@ export const setPassword = async (req, resp) => {
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
     user.password = await hashPassword(password);
+    user.token_invalid_before = new Date();
     await user.save();
 
     return handleResponse(200, "Password set successfully", {}, resp);

@@ -11,7 +11,14 @@ const seedAdmin = async () => {
   try {
     await dbConnection();
 
-    const existingUser = await User.findOne({ email: "admin@gmail.com" });
+    const email = process.env.ADMIN_EMAIL;
+    const password = process.env.ADMIN_PASSWORD;
+    if (!email || !password) {
+      console.log("ADMIN_EMAIL and ADMIN_PASSWORD are required");
+      process.exit(1);
+    }
+
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       console.log(" admin already exists");
       process.exit();
@@ -26,8 +33,8 @@ const seedAdmin = async () => {
     const user = await User.create({
       first_name: "Ask",
       last_name : "Service",
-      email: "admin@gmail.com",
-      password:  await hashPassword("12345678"),
+      email,
+      password:  await hashPassword(password),
       is_email_verified : true,
       role: role._id,
       status : "ACTIVE",

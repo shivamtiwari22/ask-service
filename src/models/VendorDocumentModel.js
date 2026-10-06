@@ -50,5 +50,7 @@ const VendorDocumentSchema = new mongoose.Schema(
   },
 );
 
+VendorDocumentSchema.index({ user_id: 1 });
+
 const VendorDocument = mongoose.model("VendorDocument", VendorDocumentSchema);
 export default VendorDocument;

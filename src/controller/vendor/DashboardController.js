@@ -840,9 +840,15 @@ export const unlockLead = async (req, res) => {
     ? (lead.service_category?.credit || 3)
     : (lead.service_category?.company_credit || 3)
     : lead.computed_point ;
-    const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
-    if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
-    if (wallet.amount < creditsRequired) {
+    const updatedWallet = await VendorCreditWallet.findOneAndUpdate(
+      { user_id: vendorId, amount: { $gte: creditsRequired } },
+      { $inc: { amount: -creditsRequired } },
+      { new: true },
+    );
+    if (!updatedWallet) {
+      const wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
+      if (!wallet) return handleResponse(500, "Credit wallet not found", {}, res);
+      if (wallet.amount < creditsRequired) {
       const lowBalanceTitle = "Solde de points faible";
       const lowBalanceBody = `Votre solde de points est faible (${wallet.amount})`;
       const vendor = await User.findById(vendorId).select("fcm_token").lean();
@@ -866,12 +872,11 @@ export const unlockLead = async (req, res) => {
       }
 
       return handleResponse(402, "Insufficient points. Please buy more points.", { required: creditsRequired, balance: wallet.amount }, res);
+      }
+      return handleResponse(402, "Insufficient points. Please buy more points.", { required: creditsRequired, balance: wallet.amount }, res);
     }
 
-    wallet.amount -= creditsRequired;
-    await wallet.save();
-
-    const balanceAfter = wallet.amount;
+    const balanceAfter = updatedWallet.amount;
     const serviceTitle = lead.service_category?.title || "Lead";
     const description = `Prospect débloqué ${serviceTitle} in ${lead.city || ""}`;
 
@@ -1394,16 +1399,41 @@ const PACKAGE_KEY_MAP = {
 export const purchaseCredits = async (req, res) => {
   try {
     const vendorId = req.user._id;
-    const { package_id, package_key } = req.body;
+    const { package_id, package_key, session_id } = req.body;
 
-    if (!package_id && !package_key) {
+    if (!session_id) {
+      return handleResponse(400, "session_id is required", {}, res);
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    if (!session || session.payment_status !== "paid") {
+      return handleResponse(400, "Payment not completed", {}, res);
+    }
+    if (String(session.metadata?.user_id || "") !== String(vendorId)) {
+      return handleResponse(403, "Payment does not belong to this vendor", {}, res);
+    }
+
+    const alreadyCredited = await Transaction.findOne({
+      stripe_session_id: session_id,
+      reference_type: "credit_purchase",
+    }).lean();
+    if (alreadyCredited) {
+      return handleResponse(200, "Credits already added for this payment", {
+        creditBalance: alreadyCredited.balance_after,
+        transaction: { id: alreadyCredited._id, transaction_number: alreadyCredited.transaction_number },
+      }, res);
+    }
+
+    if (!package_id && !package_key && !session.metadata?.package_id) {
       return handleResponse(400, "package_id or package_key is required", {}, res);
     }
 
     let pkg = null;
-    if (package_id) {
+    const resolvedPackageId = package_id || session.metadata?.package_id;
+    if (resolvedPackageId) {
       pkg = await CreditPackage.findOne({
-        _id: package_id,
+        _id: resolvedPackageId,
         status: "ACTIVE",
         deletedAt: null,
       }).lean();
@@ -1420,6 +1450,13 @@ export const purchaseCredits = async (req, res) => {
 
     const totalCredits = (pkg.credits || 0) + (pkg.bonus_credits || 0);
     if (totalCredits <= 0) return handleResponse(400, "Invalid package", {}, res);
+
+    const vatRate = Number(process.env.VAT_RATE || 0);
+    const expectedCents = Math.round((Number(pkg.price) + (Number(pkg.price) * vatRate) / 100) * 100);
+    const paidCents = Number(session.amount_total || 0);
+    if (!Number.isFinite(expectedCents) || expectedCents <= 0 || Math.abs(paidCents - expectedCents) > 1) {
+      return handleResponse(400, "Payment amount does not match the package", {}, res);
+    }
 
     let wallet = await VendorCreditWallet.findOne({ user_id: vendorId });
     if (!wallet) {
@@ -1443,7 +1480,8 @@ export const purchaseCredits = async (req, res) => {
       plat_form: "stripe",
       amount_paid: pkg ? pkg.price * process.env.VAT_RATE/100 + pkg.price : 0,
       currency: pkg.currency || "EUR",
-      payment_method: req.body.payment_method || null,
+      payment_method: req.body.payment_method || "Stripe",
+      stripe_session_id: session_id,
     });
     if (tx && tx._id) {
       await Transaction.updateOne(
@@ -1743,7 +1781,28 @@ export const AllQuotes = async (req, res) => {
 export const createCheckoutSession = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { amount } = req.body;
+    const { package_id, package_key } = req.body;
+
+    let pkg = null;
+    if (package_id) {
+      pkg = await CreditPackage.findOne({
+        _id: package_id,
+        status: "ACTIVE",
+        deletedAt: null,
+      }).lean();
+    }
+    if (!pkg && package_key) {
+      pkg = PACKAGE_KEY_MAP[String(package_key).toLowerCase()] || null;
+    }
+    if (!pkg) {
+      return handleResponse(400, "package_id or package_key is required", {}, res);
+    }
+
+    const vatRate = Number(process.env.VAT_RATE || 0);
+    const unitAmount = Math.round((Number(pkg.price) + (Number(pkg.price) * vatRate) / 100) * 100);
+    if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
+      return handleResponse(400, "Invalid package price", {}, res);
+    }
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -1755,9 +1814,9 @@ export const createCheckoutSession = async (req, res) => {
           price_data: {
             currency: "eur",
             product_data: {
-              name: "Service Payment",
+              name: pkg.name || "Service Payment",
             },
-            unit_amount: Math.round(Number(amount) * 100),
+            unit_amount: unitAmount,
           },
           quantity: 1,
         },
@@ -1769,6 +1828,8 @@ export const createCheckoutSession = async (req, res) => {
       cancel_url: `${process.env.FRONTEND_URL}/vendor/credits?stripe_payment_status=fail`,
       metadata: {
         user_id: userId.toString(),
+        ...(package_id ? { package_id: String(package_id) } : {}),
+        ...(package_key ? { package_key: String(package_key) } : {}),
       },
     });
 
@@ -1795,22 +1856,24 @@ export const createCheckoutSession = async (req, res) => {
 
 export const verifyPaymentFromStripe = async (req, res) => {
   try {
+    const vendorId = req.user?._id;
     const { session_id } = req.params;
 
-    if (!session_id) {
+    if (!vendorId) {
+      return handleResponse(401, "Unauthorized", {}, res);
+    }
+    if (!session_id || typeof session_id !== "string") {
       return handleResponse(400, "Session ID required", {}, res);
     }
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-    // 🔥 fetch session from stripe
     const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    if (!session) {
-      return handleResponse(404, "Session not found", {}, res);
+    if (!session || session.metadata?.user_id !== String(vendorId)) {
+      return handleResponse(403, "Forbidden", {}, res);
     }
 
-    // 🔥 check payment status
     if (session.payment_status === "paid") {
       // await Payment.findOneAndUpdate(
       //   { session_id },

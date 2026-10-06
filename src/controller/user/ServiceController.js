@@ -5,6 +5,7 @@ import {
   generateSetPasswordToken,
   generateToken,
   hashPassword,
+  authPayloadFromUser,
 } from "../../../utils/auth.js";
 import {
   createReference,
@@ -759,6 +760,15 @@ export const verifySignupLogin = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
+    if (user.is_email_verified && user.is_phone_verified) {
+      return handleResponse(
+        400,
+        "Account already verified. Please login.",
+        { flow: "LOGIN_REQUIRED" },
+        resp,
+      );
+    }
+
     const errors = {};
 
     // ===== EMAIL =====
@@ -805,7 +815,7 @@ export const verifySignupLogin = async (req, resp) => {
     user.otp_for = null;
     await user.save();
 
-    const token = generateToken(user);
+    const token = generateToken(authPayloadFromUser(user));
 
     return handleResponse(
       200,
@@ -2171,10 +2181,10 @@ export const updateServiceRequest = async (req, resp) => {
       return handleResponse(404, "Service request not found", {}, resp);
     }
 
-    // if (req.user && request.user.toString() !== req.user._id.toString()) {
-    //   await session.abortTransaction();
-    //   return handleResponse(403, "Unauthorized access", {}, resp);
-    // }
+    if (!req.user || request.user.toString() !== req.user._id.toString()) {
+      await session.abortTransaction();
+      return handleResponse(404, "Service request not found", {}, resp);
+    }
 
     // category validation
     if (service_category) {

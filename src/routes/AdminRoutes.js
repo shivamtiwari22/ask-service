@@ -112,9 +112,9 @@ const router = express.Router();
 router.post("/login", validateLoginAdmin, adminLogin);
 router.put(
   "/update-profile",
-  userProfileUpload,
   authenticateToken,
   checkRoleAuth(["Admin"]),
+  userProfileUpload,
   updateAdminProfile,
 );
 router.get("/get-profile", authenticateToken, getAdminProfile);

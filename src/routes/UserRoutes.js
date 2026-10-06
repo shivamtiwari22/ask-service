@@ -197,9 +197,9 @@ router.post("/login/email-otp", requestEmailLoginOTP);
 // update profile
 router.put(
   "/update-profile",
-  userProfileUpload,
   userAuthenticateToken,
   checkRoleAuth(["User"]),
+  userProfileUpload,
   updateUserProfile,
 );
 
@@ -379,7 +379,6 @@ router.get(
   notificationController.older,
 );
 
-router.get("/message-test", notificationController.testPush);
 router.get(
   "/message-notify/:user_id",
   userAuthenticateToken,

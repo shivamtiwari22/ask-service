@@ -29,6 +29,8 @@ RoleModelSchema.path("updatedAt").get(function (value) {
   return value ? moment(value).format("DD-MM-YYYY [at] hh:mm A") : null;
 });
 
+RoleModelSchema.index({ chat: 1, createdAt: -1 });
+
 const Message = mongoose.model("Message", RoleModelSchema);
 
 export default Message;

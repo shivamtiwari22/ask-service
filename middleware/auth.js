@@ -14,6 +14,10 @@ export const authenticateToken = async (req, res, next) => {
 
     const decoded = verifyToken(token, JWT_SECRET);
 
+    if (decoded.purpose !== "access") {
+      return handleResponse(401, "Invalid token", {}, res);
+    }
+
     const user = await User.findById(decoded._id).select("-password").populate("role");
 
     if (!user) {
@@ -29,12 +33,14 @@ export const authenticateToken = async (req, res, next) => {
       );
     }
 
-    // if (
-    //   user.status != "ACTIVE" &&
-    //   !["User", "Vendor"].includes(user.role.name)
-    // ) {
-    //   return handleResponse(401, "User is not active", {}, res);
-    // }
+    if (
+      user.token_invalid_before &&
+      decoded.iat &&
+      decoded.iat * 1000 < new Date(user.token_invalid_before).getTime()
+    ) {
+      return handleResponse(401, "Token has been revoked", {}, res);
+    }
+
     req.user = user;
 
     next();
@@ -74,16 +80,28 @@ export const userAuthenticateToken = async (req, res, next) => {
       );
     }
 
+    if (
+      user.token_invalid_before &&
+      decoded.iat &&
+      decoded.iat * 1000 < new Date(user.token_invalid_before).getTime()
+    ) {
+      return handleResponse(401, "Token has been revoked", {}, res);
+    }
+
     if (user.status != "ACTIVE") {
       return handleResponse(401, "User is not active", {}, res);
     }
 
-    if (user.email_verified == false) {
-      return handleResponse(401, "Email is not verified", {}, res);
+    if (decoded.purpose !== "access") {
+      return handleResponse(401, "Invalid token", {}, res);
     }
 
-    if (user.phone_verified == false) {
-      return handleResponse(401, "Phone is not verified", {}, res);
+    const isVendor = Boolean(user.is_vendor) || user.role?.name === "Vendor";
+    const requireClientPhone = process.env.REQUIRE_CLIENT_PHONE_VERIFIED === "true";
+    if (!isVendor && requireClientPhone && user.is_phone_verified !== true) {
+      return handleResponse(403, "Phone verification required", {
+        flow: "PHONE_VERIFICATION_REQUIRED",
+      }, res);
     }
 
     req.user = user;
@@ -105,11 +123,9 @@ export const checkRoleAuth = (allowedRoles = []) => {
       if (!user || !user.role) {
         return handleResponse(401, "Unauthorized", {}, res);
       }
-  
 
-      if (!user.is_vendor) {
-      
-      if (!allowedRoles.includes(user.role.name)) {
+      const roleName = user.role?.name;
+      if (!roleName || !allowedRoles.includes(roleName)) {
         return handleResponse(
           403,
           "You are not allowed to access this resource",
@@ -117,7 +133,6 @@ export const checkRoleAuth = (allowedRoles = []) => {
           res,
         );
       }
-    }
 
       next();
     } catch (err) {
@@ -138,6 +153,10 @@ export const authenticateForgotPasswordToken = (
       }
 
       const decoded = verifyToken(token, JWT_SECRET);
+
+      if (decoded.purpose !== "forgot_password") {
+        return handleResponse(401, "Invalid token", {}, res);
+      }
 
       const user = await User.findById(decoded._id).select("-password").populate("role");
 
@@ -167,6 +186,9 @@ export const optionalAuthenticateToken = async (req, res, next) => {
     }
 
     const decoded = verifyToken(token, JWT_SECRET);
+    if (decoded.purpose !== "access") {
+      return next();
+    }
     const user = await User.findById(decoded._id).select("-password").populate("role");
 
     if (!user) {

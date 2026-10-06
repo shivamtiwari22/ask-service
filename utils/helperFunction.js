@@ -349,17 +349,19 @@ export function buildAvailableLeadDisplayStatus({
   };
 }
 
+const secureCookie = process.env.NODE_ENV === "production";
+
 export const cookieOptions = {
-  maxAge: 60 * 1000,
+  maxAge: 10 * 60 * 1000,
   httpOnly: true,
-  secure: false,
+  secure: secureCookie,
   sameSite: "lax",
 };
 
 export const documentUploadCookieOptions = {
   maxAge: 15 * 60 * 1000,
   httpOnly: true,
-  secure: false,
+  secure: secureCookie,
   sameSite: "lax"
 };
 

@@ -36,6 +36,8 @@ RoleModelSchema.path("updatedAt").get(function (value) {
   return value ? moment(value).format("DD-MM-YYYY [at] hh:mm A") : null;
 });
 
+RoleModelSchema.index({ users: 1, updatedAt: -1 });
+
 const Chat = mongoose.model("Chat", RoleModelSchema);
 
 export default Chat;

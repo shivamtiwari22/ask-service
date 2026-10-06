@@ -26,6 +26,10 @@ const TransactionModel = mongoose.Schema(
       type :String ,
       default : "Stripe"
     },
+    stripe_session_id: {
+      type: String,
+      default: null,
+    },
     status: {
       type: String,
       enum: ["pending", "completed", "failed", "refunded"],

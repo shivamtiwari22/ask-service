@@ -141,29 +141,8 @@ class notificationController {
 
 
     static testPush = async (req, res) => {
-    try {
-  
-      const title = "Nouveau message";
-      const body = "Ceci est une notification push de test !";
-      const tokens = [
-        'cdiL5aAkoljIGMl-d_1Wd3:APA91bFH6S2-ErpmcXjy6Zy5wNFLq_k6bXd4AIEvXFPUhH9T5FraiT0oZ9nlRBmCnGqG7QVOusEmNhvEv_0-p8KsqxI293zraw-HJ4dESlLK49xP2vTHcXs'
-        // 'cvN-_psvT7-w_0Izc9dFON:APA91bEMQENf9607D6Danc1ZCz9xBmvUVprNkoypcwhXK3cPvvQ7iE3vqVV84jqoNnmHqlQbb-rRRWepnamlXtlc5Z9pKx-RE-Ez4CQxpebRnd-e69RcVE_yqSBVgD_G5jXnWlR6RlT3',
-        // 'fCnp3HovsVjARzfhejzxpy:APA91bE_XhYyKB3w7yOoj8sGxGkwLP8-oFjarAlIG5j4dJg2g2YhQ1XK0eNZ6QVv0wBnKrsI2UpfYNurcEI-kZFG2JqnqV10AepaB2njgdKkt7PR8Wv3LpPKf9BV3C8BVO1LH3t6d7Ti'
-      ];
-
-        pushNotification(tokens,title,body)
-
-    // const not =   notifications(1,"testing titile","description");
-
-
-      return handleResponse(200, "send", {}, res);
-
-    } catch (error) {
-      console.log(error);
-      return handleResponse(500, error.message, {}, res);
-    }
-  };
-
+      return handleResponse(404, "Not found", {}, res);
+    };
 
   static ChatMessages = async (req,res) => {
         const {user_id} = req.params

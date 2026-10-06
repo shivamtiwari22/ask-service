@@ -3,10 +3,12 @@ import path from "path";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import handleResponse from "../../../utils/http-response.js";
+import { escapeRegex } from "../../../utils/auth.js";
 import Message from "../../models/MessageModel.js";
 import User from "../../models/UserModel.js";
 import Chat from "../../models/ChatModel.js";
 import VendorReview from "../../models/VendorReviewModel.js";
+import VendorQuote from "../../models/VendorQuoteModel.js";
 import pushNotification from "../../../config/pushNotification.js";
 import Notification from "../../models/NotificationModel.js";
 import UserNotification from "../../models/userNotificationModel.js";
@@ -101,6 +103,23 @@ class ChatController {
         );
       }
 
+      if (quote_id) {
+        const quote = await VendorQuote.findById(quote_id)
+          .populate("service_request_id", "user")
+          .lean();
+        if (!quote) {
+          return handleResponse(404, "Quote not found", {}, res);
+        }
+        const vendorId = String(quote.vendor_id);
+        const clientId = String(quote.service_request_id?.user || "");
+        const me = String(req.user._id);
+        const other = String(userId);
+        const allowed = new Set([vendorId, clientId]);
+        if (!allowed.has(me) || !allowed.has(other) || me === other) {
+          return handleResponse(403, "You are not allowed to access this chat", {}, res);
+        }
+      }
+
       var isChat = await Chat.find({
         isGroupChat: false,
         $and: [
@@ -179,6 +198,9 @@ class ChatController {
 
         handleResponse(200, "chat access", isChat[0], res);
       } else {
+        if (!quote_id) {
+          return handleResponse(400, "quote_id is required", {}, res);
+        }
         var chatData = {
           chatName: "sender",
           isGroupChat: false,
@@ -241,24 +263,28 @@ class ChatController {
   static fetchChats = async (req, res) => {
     const { search } = req.query;
 
-    let userIds = [req.user._id];
+    const chatFilter = {
+      users: req.user._id,
+      isGroupChat: false,
+    };
 
     if (search) {
+      const safe = escapeRegex(String(search).slice(0, 50));
       const users = await User.find({
         $or: [
-          { first_name: { $regex: search, $options: "i" } },
-          { last_name: { $regex: search, $options: "i" } },
+          { first_name: { $regex: safe, $options: "i" } },
+          { last_name: { $regex: safe, $options: "i" } },
         ],
-      });
+      }).select("_id");
 
-      userIds.push(...users.map((u) => u._id));
+      chatFilter.$and = [
+        { users: req.user._id },
+        { users: { $in: users.map((u) => u._id) } },
+      ];
     }
 
     try {
-      const chats = await Chat.find({
-        users: { $in: userIds },
-        isGroupChat: false,
-      })
+      const chats = await Chat.find(chatFilter)
         .populate({
           path: "quote_id",
           populate: {
@@ -369,6 +395,14 @@ class ChatController {
     const skip = (page - 1) * limit;
 
     try {
+      const chatAccess = await Chat.findOne({
+        _id: req.params.chatId,
+        users: req.user._id,
+      }).select("_id");
+      if (!chatAccess) {
+        return handleResponse(403, "You are not allowed to access this chat", {}, res);
+      }
+
       const messages = await Message.find({ chat: req.params.chatId })
         .lean()
         .sort({ _id: -1 })
@@ -439,6 +473,14 @@ class ChatController {
     if (!chatId) {
       console.log("Invalid data passed into request");
       return handleResponse(400, "Chat Id is required", {}, res);
+    }
+
+    const chatAccess = await Chat.findOne({
+      _id: chatId,
+      users: req.user._id,
+    }).select("_id");
+    if (!chatAccess) {
+      return handleResponse(403, "You are not allowed to access this chat", {}, res);
     }
 
     let media;
@@ -617,6 +659,14 @@ class ChatController {
 
     if (!message) return res.status(404).json({ message: "Message not found" });
 
+    const chatAccess = await Chat.findOne({
+      _id: message.chat,
+      users: userId,
+    }).select("_id");
+    if (!chatAccess) {
+      return handleResponse(403, "You are not allowed to access this chat", {}, res);
+    }
+
     const existing = message.reactions.find(
       (r) => r.user.toString() === userId.toString(),
     );
@@ -646,6 +696,14 @@ class ChatController {
     try {
       const { chatId } = req.params;
 
+      const chatAccess = await Chat.findOne({
+        _id: chatId,
+        users: req.user._id,
+      }).select("_id");
+      if (!chatAccess) {
+        return handleResponse(403, "You are not allowed to access this chat", {}, res);
+      }
+
       await Message.updateMany(
         {
           chat: chatId,
@@ -663,6 +721,17 @@ class ChatController {
   static MarkMessagesSeen = async (req, res) => {
     try {
       const { id } = req.params;
+      const existing = await Message.findById(id).select("chat");
+      if (!existing) {
+        return handleResponse(404, "Message not found", {}, res);
+      }
+      const chatAccess = await Chat.findOne({
+        _id: existing.chat,
+        users: req.user._id,
+      }).select("_id");
+      if (!chatAccess) {
+        return handleResponse(403, "You are not allowed to access this chat", {}, res);
+      }
 
       const msg = await Message.updateOne(
         { _id: id },
@@ -678,7 +747,10 @@ class ChatController {
 
   static singleChat = async (req, res) => {
     try {
-      const chat = await Chat.findById(req.params.id).lean();
+      const chat = await Chat.findOne({
+        _id: req.params.id,
+        users: req.user._id,
+      }).lean();
 
       if (!chat) {
         return handleResponse(404, "Chat not found", {}, res);

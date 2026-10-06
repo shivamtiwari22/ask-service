@@ -66,6 +66,10 @@ const UserSchema = mongoose.Schema(
       ],
       default: null,
     },
+    otp_attempts: {
+      type: Number,
+      default: 0,
+    },
     password: {
       type: String,
       required: true,
@@ -76,13 +80,11 @@ const UserSchema = mongoose.Schema(
       enum: ["ACTIVE", "INACTIVE", "PENDING", "BLOCKED"],
       default: "ACTIVE",
     },
-
     kyc_status: {
       type: String,
       enum: ["ACTIVE", "PENDING", "REJECTED"],
       default: "PENDING",
     },
-
     role: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Role",
@@ -99,6 +101,10 @@ const UserSchema = mongoose.Schema(
     },
     password_updateAt: {
       type: Date,
+    },
+    token_invalid_before: {
+      type: Date,
+      default: null,
     },
     verified_at: {
       type: Date,
@@ -187,8 +193,26 @@ const UserSchema = mongoose.Schema(
   {
     timestamps: {},
     retainNullValues: true,
-    toJSON: { getters: true },
-    toObject: { getters: true },
+    toJSON: {
+      getters: true,
+      transform: (_doc, ret) => {
+        delete ret.password;
+        delete ret.otp;
+        delete ret.otp_phone;
+        delete ret.email_verification_token;
+        return ret;
+      },
+    },
+    toObject: {
+      getters: true,
+      transform: (_doc, ret) => {
+        delete ret.password;
+        delete ret.otp;
+        delete ret.otp_phone;
+        delete ret.email_verification_token;
+        return ret;
+      },
+    },
   },
 );
 

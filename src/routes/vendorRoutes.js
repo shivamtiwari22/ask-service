@@ -145,7 +145,7 @@ router.get("/transactions/export/csv",userAuthenticateToken, checkRoleAuth(["Ven
 router.get("/transactions/export/pdf",userAuthenticateToken, checkRoleAuth(["Vendor"]),exportTransactionsListPdf);
 
 router.post("/stipe-checkout", userAuthenticateToken, checkRoleAuth(["Vendor"]), createCheckoutSession);
-router.put("/verify-payment/:session_id", verifyPaymentFromStripe);
+router.put("/verify-payment/:session_id", userAuthenticateToken, checkRoleAuth(["Vendor"]), verifyPaymentFromStripe);
 
 
 
@@ -176,7 +176,6 @@ router.put("/notification/markAsRead/:id",  userAuthenticateToken , checkRoleAut
 router.get("/notification/older",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.older) 
 
 
-router.get("/message-test", notificationController.testPush)
 router.get("/message-notify/:user_id",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.ChatMessages)
 
 

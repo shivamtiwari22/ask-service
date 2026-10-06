@@ -3,7 +3,7 @@ import cron from "node-cron";
 import ServiceRequest from "../src/models/ServiceRequestModel.js";
 import VendorQuote from "../src/models/VendorQuoteModel.js";
 
-cron.schedule("0 0 * * *", async () => {
+if (process.env.CRON_ENABLED === "true") cron.schedule("0 0 * * *", async () => {
   try {
     console.log("Running ServiceRequest Expiry Cron...");
 

@@ -20,27 +20,52 @@ import "./cron/accountDeletionReminderCron.js";
 import { Server } from "socket.io";
 import http from "http";
 import Message from "./src/models/MessageModel.js";
+import Chat from "./src/models/ChatModel.js";
+import User from "./src/models/UserModel.js";
 import initBucket from "./utils/initBucket.js";
+import { verifyToken } from "./utils/auth.js";
+import mongoose from "mongoose";
 
 const app = express();
 app.set("trust proxy", 1);
 dotenv.config();
 
-dbConnection();
 initBucket();
 
-// app.use(cors());
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.ADMIN_URL,
+  ...(process.env.CORS_ORIGIN || "").split(","),
+]
+  .map((value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    try {
+      return new URL(raw).origin;
+    } catch {
+      return raw.replace(/\/$/, "");
+    }
+  })
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: "*",
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
   }),
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 const server = http.createServer(app);
 app.use(
   helmet({
-    crossOriginResourcePolicy: false, // ✅ disable blocking
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   }),
 );
 app.use(xss());
@@ -81,7 +106,7 @@ app.use((req, res, next) => {
 
 const limit = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10000,
+  max: 300,
   handler: (req, res) => {
     const ip = req.ip;
     const blockDuration = 4 * 60 * 1000;
@@ -99,120 +124,194 @@ const limit = rateLimit({
 
 app.use(limit);
 
+const authLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  handler: (req, res) => {
+    return handleResponse(429, "Too many attempts. Try again later.", {}, res);
+  },
+});
+
+const authPaths = [
+  "/api/user/login",
+  "/api/user/signup",
+  "/api/user/verify-email",
+  "/api/user/verify-phone",
+  "/api/user/verify-phone-login",
+  "/api/user/verify-signup-login",
+  "/api/user/forgot-password",
+  "/api/user/verify-forgot-password-otp",
+  "/api/user/login-phone-email",
+  "/api/user/login/email-otp",
+  "/api/vendor/login",
+  "/api/vendor/register",
+  "/api/vendor/verify-otp",
+  "/api/vendor/forgot-password",
+  "/api/vendor/verify-forgot-password-otp",
+  "/api/admin/login",
+  "/api/admin/forgot-password",
+  "/api/admin/verify-otp",
+];
+for (const authPath of authPaths) {
+  app.use(authPath, authLimit);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static("public"));
-
-app.use("", express.static(path.join(__dirname, "")));
+app.use("/public", express.static(path.join(__dirname, "public")));
 
 app.use("/api/admin", AdminRoutes);
 app.use("/api/user", UserRoutes);
 app.use("/api/vendor", VendorRoutes);
-app.get("/download", async (req, res) => {
-  const fileUrl = req.query.url;
-
-  const response = await fetch(fileUrl);
-  const buffer = await response.arrayBuffer();
-
-  res.setHeader("Content-Disposition", "attachment");
-  res.setHeader("Content-Type", response.headers.get("content-type"));
-
-  res.send(Buffer.from(buffer));
+app.get("/health", (req, res) => {
+  const dbReady = mongoose.connection.readyState === 1;
+  res.status(dbReady ? 200 : 503).json({ ok: dbReady });
 });
 
 app.get("/", (req, res) => {
   res.send("API is running..");
 });
 
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error(err);
+  return handleResponse(500, "Internal Server Error", {}, res);
+});
+
 const PORT = process.env.PORT || process.env.port || 3200;
 
+await dbConnection();
 
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-const io = new Server(server);
-const onlineUsers = new Set()
+const shutdown = (signal) => {
+  console.log(`${signal} received, closing server`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10000).unref();
+};
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+const io = new Server(server, {
+  cors: { origin: allowedOrigins, credentials: true },
+});
+const onlineUsers = new Set();
+
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    if (!token || typeof token !== "string") return next(new Error("Unauthorized"));
+    const decoded = verifyToken(token);
+    if (decoded.purpose !== "access") return next(new Error("Unauthorized"));
+    const user = await User.findById(decoded._id).select("_id status deletedAt");
+    if (!user || user.deletedAt || user.status !== "ACTIVE") {
+      return next(new Error("Unauthorized"));
+    }
+    socket.userId = String(user._id);
+    return next();
+  } catch {
+    return next(new Error("Unauthorized"));
+  }
+});
+
+async function socketCanAccessChat(chatId, userId) {
+  if (!chatId) return false;
+  const chat = await Chat.findById(chatId).select("users");
+  if (!chat) return false;
+  return (chat.users || []).some((id) => String(id) === String(userId));
+}
+
 io.on("connection", (socket) => {
-  let currentUser = null; 
+  const currentUserId = socket.userId;
 
-  socket.on("setup", (userData) => {
-    currentUser = userData;
-    socket.join(userData.id);
+  socket.on("setup", () => {
+    socket.join(currentUserId);
     socket.emit("connected");
-
- onlineUsers.add(userData.id);
-
+    onlineUsers.add(currentUserId);
     socket.emit("online:users", Array.from(onlineUsers));
-    io.emit("user:online", userData.id);
-    // console.log("User online:", userData.id);
+    io.emit("user:online", currentUserId);
   });
 
-  socket.on("join chat", (room) => {
-    socket.join(room);
-    // console.log("User Joined Room:", room);
+  socket.on("join chat", async (room) => {
+    if (!room) return;
+    const chat = await Chat.findOne({ _id: room, users: currentUserId }).select("_id");
+    if (!chat) return;
+    socket.join(String(room));
   });
 
-  socket.on("typing", (room) => socket.in(room).emit("typing"));
-  socket.on("stop typing", (room) => socket.in(room).emit("stop typing"));
+  socket.on("typing", async (room) => {
+    if (!(await socketCanAccessChat(room, currentUserId))) return;
+    socket.in(String(room)).emit("typing");
+  });
+  socket.on("stop typing", async (room) => {
+    if (!(await socketCanAccessChat(room, currentUserId))) return;
+    socket.in(String(room)).emit("stop typing");
+  });
 
-  socket.on("new message", (newMessageRecieved) => {
-    const chat = newMessageRecieved.chat;
-    if (!chat?.users) return;
-    chat.users.forEach((user) => {
-      if (user === newMessageRecieved.sender.id) return;
-      socket.in(user).emit("message recieved", newMessageRecieved);
+  socket.on("new message", async (newMessageRecieved) => {
+    const chat = newMessageRecieved?.chat;
+    const chatId = chat?._id || chat?.id || chat;
+    if (!(await socketCanAccessChat(chatId, currentUserId))) return;
+    const senderId = String(newMessageRecieved?.sender?.id || newMessageRecieved?.sender?._id || "");
+    if (senderId && senderId !== currentUserId) return;
+    (chat?.users || []).forEach((user) => {
+      const userId = user?._id || user?.id || user;
+      if (String(userId) === currentUserId) return;
+      socket.in(String(userId)).emit("message recieved", newMessageRecieved);
     });
   });
 
-socket.on("message:seen", async ({ messageId, chatId, userId }) => {
-  await Message.updateOne(
-    { _id: messageId },             // ← _id is what MongoDB actually uses
-    { $addToSet: { readBy: userId } }
-  );
-  socket.in(chatId).emit("message:seen:update", {
-    messageId,
-    userId,
-    chatId,                         // ← add this so frontend cache patch works reliably
+  socket.on("message:seen", async ({ messageId, chatId }) => {
+    if (!messageId || !chatId) return;
+    const chat = await Chat.findOne({ _id: chatId, users: currentUserId }).select("_id");
+    if (!chat) return;
+    await Message.updateOne(
+      { _id: messageId, chat: chatId },
+      { $addToSet: { readBy: currentUserId } },
+    );
+    socket.in(chatId).emit("message:seen:update", {
+      messageId,
+      userId: currentUserId,
+      chatId,
+    });
   });
-});
 
-  socket.on(
-    "message:reaction",
-    async ({ messageId, emoji, userId, chatId }) => {
-      await Message.updateOne(
-        { id: messageId },
-        { $pull: { reactions: { user: userId } } },
-      );
-      if (!emoji) {
-        socket
-          .in(chatId)
-          .emit("message:reaction:update", { messageId, emoji: null, userId });
-        return;
-      }
-      await Message.updateOne(
-        { id: messageId },
-        { $push: { reactions: { emoji, user: userId } } },
-      );
-      socket
-        .in(chatId)
-        .emit("message:reaction:update", { messageId, emoji, userId });
-    },
-  );
+  socket.on("message:reaction", async ({ messageId, emoji, chatId }) => {
+    if (!messageId || !chatId) return;
+    const chat = await Chat.findOne({ _id: chatId, users: currentUserId }).select("_id");
+    if (!chat) return;
+    await Message.updateOne(
+      { _id: messageId, chat: chatId },
+      { $pull: { reactions: { user: currentUserId } } },
+    );
+    if (!emoji) {
+      socket.in(chatId).emit("message:reaction:update", {
+        messageId,
+        emoji: null,
+        userId: currentUserId,
+      });
+      return;
+    }
+    await Message.updateOne(
+      { _id: messageId, chat: chatId },
+      { $push: { reactions: { emoji, user: currentUserId } } },
+    );
+    socket.in(chatId).emit("message:reaction:update", {
+      messageId,
+      emoji,
+      userId: currentUserId,
+    });
+  });
 
-  // ✅ Fix: disconnect gives a reason string, NOT userData
   socket.on("disconnect", () => {
-    if (!currentUser) return;
-    // console.log("User disconnected:", currentUser.id);
-
-    const room = io.sockets.adapter.rooms.get(currentUser.id);
+    const room = io.sockets.adapter.rooms.get(currentUserId);
     const remainingSockets = room ? room.size : 0;
-
     if (remainingSockets === 0) {
-      // No more connections → truly offline
-      io.emit("user:offline", currentUser.id);
+      onlineUsers.delete(currentUserId);
+      io.emit("user:offline", currentUserId);
     }
   });
 });

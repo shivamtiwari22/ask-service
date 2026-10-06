@@ -12,7 +12,7 @@ import {
  * Soft-deleted for 7 days → send reminder: 7 days left before permanent deletion.
  * Runs daily at 00:30 so it doesn't collide with the midnight permanent-delete cron.
  */
-cron.schedule("30 0 * * *", async () => {
+if (process.env.CRON_ENABLED === "true") cron.schedule("30 0 * * *", async () => {
   try {
     console.log("Running Account Deletion Reminder Cron...");
 

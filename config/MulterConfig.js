@@ -80,7 +80,32 @@ const storage = (uploadPath) =>
         },
     });
 
-const upload = (uploadPath) => multer({ storage: storage(uploadPath) });
+const ALLOWED_UPLOAD_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
+  "audio/webm",
+  "audio/ogg",
+  "video/mp4",
+  "video/webm",
+]);
+
+const upload = (uploadPath) =>
+  multer({
+    storage: storage(uploadPath),
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+    fileFilter: (_req, file, cb) => {
+      if (ALLOWED_UPLOAD_MIME.has(file.mimetype)) {
+        return cb(null, true);
+      }
+      return cb(new Error("Unsupported file type"));
+    },
+  });
 
 
 

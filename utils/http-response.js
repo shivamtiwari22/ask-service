@@ -118,12 +118,17 @@ function handleResponse(code, msg, data, res) {
   }
 
 
+  const clientMessage = statusCode >= 500
+    ? translateText(statusMessages[statusCode] || "Internal Server Error", responseLanguage)
+    : localizedMessage;
+  const clientData = statusCode >= 500 ? {} : data;
+
   res.status(statusCode).json({
     http_status_code: statusCode,
     http_status_msg: localizedHttpStatusMessage,
     success,
-    data: data,
-    message: localizedMessage,
+    data: clientData,
+    message: clientMessage,
     language: responseLanguage,
     timestamp: moment().toISOString()
   });

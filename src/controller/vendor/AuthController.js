@@ -6,6 +6,12 @@ import {
   generate15minToken,
   generateToken,
   hashPassword,
+  authPayloadFromUser,
+  otpMatches,
+  isOtpExpired,
+  toPublicUser,
+  contactQuery,
+  recordFailedOtp,
 } from "../../../utils/auth.js";
 import handleResponse from "../../../utils/http-response.js";
 import Role from "../../models/RoleModel.js";
@@ -234,9 +240,13 @@ export const resendOTP = async (req, resp) => {
       );
     }
 
-    const user = await User.findOne({
-      $or: [{ email: identifier }, { phone: identifier }],
-    });
+    if (typeof identifier !== "string" || !identifier.trim()) {
+      return handleResponse(400, "Identifier is required", {}, resp);
+    }
+    const lookup = identifier.trim();
+    const user = await User.findOne(
+      identifierType === "EMAIL" ? { email: lookup } : { phone: lookup },
+    );
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
@@ -326,36 +336,49 @@ export const verifyRegistrationOTP = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
 
-    if (type !== "SIGNUP") {
+    if (type !== "SIGNUP" || user.otp_for !== "SIGNUP") {
       return handleResponse(400, "Invalid type", {}, resp);
     }
     let emailVerified = user.is_email_verified;
     let phoneVerified = user.is_phone_verified;
 
-    if (otp_email) {
-   
+    if (!otp_email && !otp_phone) {
+      return handleResponse(400, "OTP is required", {}, resp);
+    }
 
-      if (user.otp != otp_email) {
-        return handleResponse(401, "Invalid Email OTP", {}, resp);
+    if (otp_email) {
+      if (!otpMatches(user.otp, otp_email)) {
+        const locked = await recordFailedOtp(user);
+        return handleResponse(
+          401,
+          locked ? "Too many attempts. Request a new code." : "Invalid Email OTP",
+          {},
+          resp,
+        );
       }
-      // if (moment(user.otp_expires_at).isBefore(moment())) {
-      //   return handleResponse(401, "Email Verification OTP expired", {}, resp);
-      // }
+      if (isOtpExpired(user.otp_expires_at)) {
+        return handleResponse(401, "Email Verification OTP expired", {}, resp);
+      }
 
       user.otp = null;
       user.otp_expires_at = null;
-      user.is_email_verified = true;
       user.is_email_verified = true;
       emailVerified = true;
     }
 
     if (otp_phone) {
-      if (user.otp_phone != otp_phone) {
-        return handleResponse(401, "Invalid Phone OTP", {}, resp);
+      if (!otpMatches(user.otp_phone, otp_phone)) {
+        const locked = await recordFailedOtp(user);
+        return handleResponse(
+          401,
+          locked ? "Too many attempts. Request a new code." : "Invalid Phone OTP",
+          {},
+          resp,
+        );
       }
-      // if (moment(user.otp_phone_expiry_at).isBefore(moment())) {
-      //   return handleResponse(401, "Phone Verification OTP expired", {}, resp);
-      // }
+      if (isOtpExpired(user.otp_phone_expiry_at)) {
+        return handleResponse(401, "Phone Verification OTP expired", {}, resp);
+      }
       user.otp_phone = null;
       user.otp_phone_expiry_at = null;
       user.is_phone_verified = true;
@@ -368,20 +391,31 @@ export const verifyRegistrationOTP = async (req, resp) => {
 
     await user.save();
 
-    if (emailVerified && phoneVerified) {
-      const token = generate15minToken(user.toObject());
-      await resp.cookie(
-        "service-selection-document-upload",
-        token,
-        documentUploadCookieOptions,
+    if (!emailVerified) {
+      return handleResponse(
+        403,
+        "Email verification required",
+        {
+          flow: "EMAIL_VERIFICATION_REQUIRED",
+          emailVerified,
+          phoneVerified,
+        },
+        resp,
       );
     }
+
+    const token = generateToken(authPayloadFromUser(user));
+    await resp.cookie(
+      "service-selection-document-upload",
+      generate15minToken(authPayloadFromUser(user)),
+      documentUploadCookieOptions,
+    );
 
     const fialResponse = {
       emailVerified,
       phoneVerified,
-      userData: user.toObject(),
-      token: generateToken(user.toObject()),
+      userData: toPublicUser(user),
+      token,
     };
 
     return handleResponse(
@@ -400,7 +434,7 @@ export const loginVendor = async (req, resp) => {
   try {
     const { identifier, password, fcm_token } = req.body;
 
-    if (!identifier || !password) {
+    if (typeof identifier !== "string" || !identifier.trim() || typeof password !== "string") {
       return handleResponse(
         400,
         "Identifier and password are required",
@@ -409,12 +443,13 @@ export const loginVendor = async (req, resp) => {
       );
     }
 
+    const lookup = identifier.trim();
     const user = await User.findOne({
-      $or: [{ phone: identifier }, { email: identifier }],
+      $or: [{ phone: lookup }, { email: lookup }],
     });
 
     if (!user) {
-      return handleResponse(404, "User not found", {}, resp);
+      return handleResponse(401, "Invalid credentials", {}, resp);
     }
 
     const role = await Role.findById(user.role).select("id name");
@@ -472,7 +507,7 @@ export const loginVendor = async (req, resp) => {
       await activeUser.save();
     }
 
-    const token = generateToken(activeUser.toObject());
+    const token = generateToken(authPayloadFromUser(activeUser));
 
     return handleResponse(
       200,
@@ -718,6 +753,7 @@ export const changePassword = async (req, resp) => {
     const hashedPassword = await hashPassword(new_password);
     user.password = hashedPassword;
     user.password_updateAt = new Date();
+    user.token_invalid_before = new Date();
     await user.save();
 
     return handleResponse(200, "Password changed successfully", {}, resp);
@@ -779,7 +815,7 @@ export const getProfile = async (req, resp) => {
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
     const show_welcome_msg = await consumeShowWelcomeMsg(user._id);
-    const profile = user.toObject();
+    const profile = toPublicUser(user);
     profile.show_welcome_msg = show_welcome_msg;
 
     return handleResponse(200, "Profile fetched successfully", profile, resp);
@@ -795,7 +831,9 @@ export const forgotPassword = async (req, resp) => {
     if (!email && !phone)
       return handleResponse(400, "Email or phone is required", {}, resp);
 
-    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    const query = contactQuery({ email, phone });
+    if (!query) return handleResponse(400, "Email or phone is required", {}, resp);
+    const user = await User.findOne(query);
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
     user.otp = generateOTP();
@@ -805,7 +843,7 @@ export const forgotPassword = async (req, resp) => {
     return handleResponse(
       200,
       "Code sent successfully",
-      { otp: user.otp },
+      {},
       resp,
     );
   } catch (err) {
@@ -820,7 +858,9 @@ export const resendPhoneEmailOTP = async (req, resp) => {
     if (!phone && !email) {
       return handleResponse(400, "Phone or email is required", {}, resp);
     }
-    const user = await User.findOne({ $or: [{ phone }, { email }] });
+    const query = contactQuery({ email, phone });
+    if (!query) return handleResponse(400, "Email or phone is required", {}, resp);
+    const user = await User.findOne(query);
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
@@ -843,7 +883,9 @@ export const verifyOTP = async (req, resp) => {
       return handleResponse(400, "Email or phone is required", {}, resp);
     }
 
-    const user = await User.findOne({ $or: [{ email }, { phone }] });
+    const query = contactQuery({ email, phone });
+    if (!query) return handleResponse(400, "Email or phone is required", {}, resp);
+    const user = await User.findOne(query);
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
     }
@@ -852,15 +894,18 @@ export const verifyOTP = async (req, resp) => {
       return handleResponse(400, "Invalid type", {}, resp);
     }
 
-    if (user.otp != otp) {
+    if (!otpMatches(user.otp, otp)) {
       return handleResponse(401, "Invalid Code", {}, resp);
+    }
+    if (isOtpExpired(user.otp_expires_at)) {
+      return handleResponse(401, "OTP expired", {}, resp);
     }
     user.otp = null;
     user.otp_expires_at = null;
     user.otp_for = null;
     await user.save();
 
-    const token = generateOneMinToken(user.toObject());
+    const token = generateOneMinToken(authPayloadFromUser(user));
     await resp.cookie("forgot-password", token, cookieOptions);
     return handleResponse(200, "Code verified successfully", { token }, resp);
   } catch (err) {
@@ -875,6 +920,7 @@ export const resetPassword = async (req, resp) => {
     const user = await User.findById(req.user._id);
     if (!user) return handleResponse(404, "User not found", {}, resp);
     user.password = await hashPassword(password);
+    user.token_invalid_before = new Date();
 
     await user.save();
 
@@ -1487,15 +1533,38 @@ export const availableLeads = async (req, resp) => {
 
 export const singleService = async (req, resp) => {
   try {
+    const vendorId = req.user?._id;
     const leads = await ServiceRequest.findById(req.params.id)
       .populate({
         path: "service_category",
-        select: "title credit",
+        select: "title credit company_credit",
       })
+      .populate("user", "first_name last_name email phone profile_pic")
       .lean();
 
     if (!leads) {
       return handleResponse(404, "service not found", {}, resp);
+    }
+
+    const unlocked = vendorId
+      ? await VendorLeadUnlock.findOne({
+          vendor_id: vendorId,
+          service_request_id: leads._id,
+        }).lean()
+      : null;
+
+    if (!unlocked) {
+      leads.contact_details = maskVendorLeadContactDetails(leads.contact_details);
+      if (leads.user) {
+        leads.user = {
+          ...leads.user,
+          phone: (leads.user.phone || "").slice(0, 3) + " *******",
+          email: (leads.user.email || "").replace(
+            /(.{2})(.*)(@.*)/,
+            "$1*******$3",
+          ),
+        };
+      }
     }
 
     return handleResponse(200, "service", leads, resp);
