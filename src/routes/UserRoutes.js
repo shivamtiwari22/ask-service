@@ -291,10 +291,6 @@ router.post(
 // set password from email invite link
 router.post("/set-password", setPassword);
 
-router.get("/test", (req, res) => {
-  return handleResponse(200, "User route is working fine", {}, res);
-});
-
 // chat
 
 router.get(
