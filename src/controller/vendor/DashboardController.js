@@ -1387,6 +1387,16 @@ export const getCreditBalance = async (req, res) => {
   }
 };
 
+const retrieveStripeSession = async (sessionId) => {
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    return await stripe.checkout.sessions.retrieve(sessionId);
+  } catch (err) {
+    if (err?.type === "StripeInvalidRequestError") return null;
+    throw err;
+  }
+};
+
 const PACKAGE_KEY_MAP = {
   starter: DEFAULT_CREDIT_PACKAGES[0],
   professional: DEFAULT_CREDIT_PACKAGES[1],
@@ -1405,9 +1415,11 @@ export const purchaseCredits = async (req, res) => {
       return handleResponse(400, "session_id is required", {}, res);
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const session = await stripe.checkout.sessions.retrieve(session_id);
-    if (!session || session.payment_status !== "paid") {
+    const session = await retrieveStripeSession(session_id);
+    if (!session) {
+      return handleResponse(400, "Invalid session_id", {}, res);
+    }
+    if (session.payment_status !== "paid") {
       return handleResponse(400, "Payment not completed", {}, res);
     }
     if (String(session.metadata?.user_id || "") !== String(vendorId)) {
@@ -1866,11 +1878,12 @@ export const verifyPaymentFromStripe = async (req, res) => {
       return handleResponse(400, "Session ID required", {}, res);
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const session = await retrieveStripeSession(session_id);
+    if (!session) {
+      return handleResponse(400, "Invalid session_id", {}, res);
+    }
 
-    const session = await stripe.checkout.sessions.retrieve(session_id);
-
-    if (!session || session.metadata?.user_id !== String(vendorId)) {
+    if (session.metadata?.user_id !== String(vendorId)) {
       return handleResponse(403, "Forbidden", {}, res);
     }
 

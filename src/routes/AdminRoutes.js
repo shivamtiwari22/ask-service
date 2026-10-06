@@ -431,8 +431,8 @@ router.put(
 router.post(
   "/update-global-setting",
   authenticateToken,
-  multipleglobalUpload ,
   checkRoleAuth(["Admin"]),
+  multipleglobalUpload,
   addOrUpdateGlobal,
 );
 

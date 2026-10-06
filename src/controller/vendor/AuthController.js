@@ -1787,13 +1787,7 @@ export const GoogleLogin = async (req, res) => {
       );
     }
 
-    const token = jwt.sign(
-      {
-        userID: user._id,
-      },
-      process.env.JWT_SECRET_KEY,
-      { expiresIn: "30d" },
-    );
+    const token = generateToken(authPayloadFromUser(user));
 
     return handleResponse(
       200,

@@ -164,10 +164,18 @@ app.use("/public", express.static(path.join(__dirname, "public")));
 app.use("/api/admin", AdminRoutes);
 app.use("/api/user", UserRoutes);
 app.use("/api/vendor", VendorRoutes);
-app.get("/health", (req, res) => {
-  const dbReady = mongoose.connection.readyState === 1;
-  res.status(dbReady ? 200 : 503).json({ ok: dbReady });
-});
+const healthCheck = async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) throw new Error("DB not connected");
+    await mongoose.connection.db.admin().ping();
+    return res.status(200).json({ ok: true, db: "up" });
+  } catch {
+    return res.status(503).json({ ok: false, db: "down" });
+  }
+};
+app.get("/health", healthCheck);
+app.get("/healthz", healthCheck);
+app.get("/api/healthz", healthCheck);
 
 app.get("/", (req, res) => {
   res.send("API is running..");

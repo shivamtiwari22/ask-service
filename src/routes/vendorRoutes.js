@@ -179,9 +179,4 @@ router.get("/notification/older",  userAuthenticateToken , checkRoleAuth(["Vendo
 router.get("/message-notify/:user_id",  userAuthenticateToken , checkRoleAuth(["Vendor"]) , notificationController.ChatMessages)
 
 
-
-router.get("/", (req, resp) => {
-  return handleResponse(200, "Vendor test successful", {}, resp);
-});
-
 export default router;

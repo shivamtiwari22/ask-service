@@ -5,6 +5,7 @@ import Role from "../../models/RoleModel.js";
 import normalizePath from "../../../utils/imageNormalizer.js";
 import moment from "moment";
 import { cookieOptions } from "../../../utils/helperFunction.js";
+import { sendEmail } from "../../../config/emailConfig.js";
 
 // login admin panel
 export const adminLogin = async (req, resp) => {
