@@ -125,7 +125,12 @@ export const checkRoleAuth = (allowedRoles = []) => {
       }
 
       const roleName = user.role?.name;
-      if (!roleName || !allowedRoles.includes(roleName)) {
+      const effectiveRoles = roleName ? [roleName] : [];
+      if (roleName === "Vendor" || user.is_vendor) {
+        effectiveRoles.push("User");
+      }
+
+      if (!effectiveRoles.some((role) => allowedRoles.includes(role))) {
         return handleResponse(
           403,
           "You are not allowed to access this resource",
