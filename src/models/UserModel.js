@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { sanitizeObjectIdArray } from "../../utils/helperFunction.js";
+import { hashOtpField } from "../../utils/otp.js";
 
 const UserSchema = mongoose.Schema(
   {
@@ -38,10 +39,12 @@ const UserSchema = mongoose.Schema(
     otp: {
       type: String,
       default: null,
+      set: hashOtpField,
     },
     otp_phone: {
       type: String,
       default: null,
+      set: hashOtpField,
     },
     otp_expires_at: {
       type: Date,
@@ -217,6 +220,11 @@ const UserSchema = mongoose.Schema(
 );
 
 UserSchema.index({ email: 1 }, { unique: true });
+// Most users store phone: null, which a sparse index would still index; the partial filter skips them.
+UserSchema.index(
+  { phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $type: "string", $gt: "" } } },
+);
 UserSchema.index({ role: 1 });
 UserSchema.index({ service: 1 });
 UserSchema.index({ status: 1 });

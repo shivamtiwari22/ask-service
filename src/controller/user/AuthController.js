@@ -99,9 +99,10 @@ export const signup = async (req, resp) => {
       status: "ACTIVE",
       is_phone_verified: false,
       is_email_verified: false,
-      phone_otp: phoneOtp,
-      phone_otp_expiry: moment().add(5, "minutes").toDate(),
-      otp: emailOtp,
+      otp_phone: normalizedPhone ? phoneOtp : null,
+      otp_phone_expiry_at: normalizedPhone ? moment().add(5, "minutes").toDate() : null,
+      otp: email ? emailOtp : null,
+      otp_expires_at: email ? moment().add(5, "minutes").toDate() : null,
       email_verification_token: emailToken,
       fcm_token : fcm_token ? [fcm_token]: []
     });
@@ -234,7 +235,8 @@ export const loginPhoneEmail = async (req, resp) => {
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const role = await Role.findById(user.role).select("id name");
 
-    user.otp = generateOTP();
+    const emailOtp = generateOTP();
+    user.otp = emailOtp;
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
     user.otp_phone = generateOTP();
@@ -243,7 +245,7 @@ export const loginPhoneEmail = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Code de vérification",
-        html: await verificationMail(user.first_name, user.otp),
+        html: await verificationMail(user.first_name, emailOtp),
       });
     }
 
@@ -450,7 +452,7 @@ export const login = async (req, resp) => {
       const newToken = crypto.randomBytes(32).toString("hex");
       const otp = generateOTP();
       user.otp = otp;
-      // user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
+      user.otp_expires_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_EMAIL";
       await user.save();
 
@@ -659,6 +661,7 @@ export const resendEmailVerification = async (req, resp) => {
     const otp = generateOTP();
 
     user.otp = otp;
+    user.otp_expires_at = moment().add(5, "minutes").toDate();
     await user.save();
 
     await sendEmail({
@@ -704,7 +707,7 @@ export const verifyPhoneAndLogin = async (req, resp) => {
       return handleResponse(400, "OTP expired", {}, resp);
     }
 
-    if (user.otp_phone !== otp) {
+    if (!otpMatches(user.otp_phone, otp)) {
       return handleResponse(401, "Invalid Code", {}, resp);
     }
 
@@ -958,7 +961,8 @@ export const forgotPassword = async (req, resp) => {
 
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
-    user.otp = generateOTP();
+    const otp = generateOTP();
+    user.otp = otp;
     user.otp_expires_at = moment().add(1, "minutes").toDate();
     user.otp_for = type;
     // user.otp_phone = generateOTP();
@@ -967,7 +971,7 @@ export const forgotPassword = async (req, resp) => {
       await sendEmail({
         to: email,
         subject: "Code de vérification",
-        html: await verificationMail(user.first_name, user.otp),
+        html: await verificationMail(user.first_name, otp),
       });
     }
 

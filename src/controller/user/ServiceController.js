@@ -6,6 +6,8 @@ import {
   generateToken,
   hashPassword,
   authPayloadFromUser,
+  otpMatches,
+  signupContactLookup,
 } from "../../../utils/auth.js";
 import {
   createReference,
@@ -474,13 +476,14 @@ export const initiateServiceRequest = async (req, resp) => {
       ) {
         await session.abortTransaction();
 
-        emailOwner.otp = generateOTP();
+        const emailOtp = generateOTP();
+        emailOwner.otp = emailOtp;
         await emailOwner.save();
 
         await sendEmail({
           to: email,
           subject: "Code de vérification",
-          html: await verificationMail(emailOwner.first_name, emailOwner.otp),
+          html: await verificationMail(emailOwner.first_name, emailOtp),
         });
 
         return handleResponse(
@@ -508,16 +511,14 @@ export const initiateServiceRequest = async (req, resp) => {
       // existingUser.phone_otp_expiry = moment().add(5, "minutes").toDate();
 
       try {
-        existingUser.otp = generateOTP();
+        const emailOtp = generateOTP();
+        existingUser.otp = emailOtp;
         await existingUser.save();
 
         await sendEmail({
           to: existingUser.email,
           subject: "Code de vérification",
-          html: await verificationMail(
-            existingUser.first_name,
-            existingUser.otp,
-          ),
+          html: await verificationMail(existingUser.first_name, emailOtp),
         });
       } catch (e) {
         console.log(e);
@@ -752,9 +753,12 @@ export const verifySignupLogin = async (req, resp) => {
   try {
     const { email, phone, otp_email, otp_phone } = req.body;
 
-    const user = await User.findOne({
-      $or: [{ email }, { phone }],
-    });
+    const lookup = signupContactLookup({ email, phone });
+    if (!lookup) {
+      return handleResponse(400, "Email or phone is required", {}, resp);
+    }
+
+    const user = await User.findOne(lookup);
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);
@@ -776,7 +780,7 @@ export const verifySignupLogin = async (req, resp) => {
       if (!otp_email) errors.email = "Email OTP required";
       else if (moment().isAfter(user.otp_expires_at))
         errors.email = "Email OTP expired";
-      else if (user.otp !== otp_email) errors.email = "Invalid Email OTP";
+      else if (!otpMatches(user.otp, otp_email)) errors.email = "Invalid Email OTP";
       else {
         user.is_email_verified = true;
         user.otp = null;
@@ -789,7 +793,7 @@ export const verifySignupLogin = async (req, resp) => {
       if (!otp_phone) errors.phone = "Phone OTP required";
       else if (moment().isAfter(user.otp_phone_expiry_at))
         errors.phone = "Phone OTP expired";
-      else if (user.otp_phone !== otp_phone) errors.phone = "Invalid Phone OTP";
+      else if (!otpMatches(user.otp_phone, otp_phone)) errors.phone = "Invalid Phone OTP";
       else {
         user.is_phone_verified = true;
         user.otp_phone = null;

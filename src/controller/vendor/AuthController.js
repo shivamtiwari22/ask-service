@@ -138,6 +138,7 @@ export const registerVendor = async (req, resp) => {
       role = await Role.create({ name: "Vendor" });
     }
 
+    const emailOtp = generateOTP();
     const payload = {
       first_name,
       last_name,
@@ -147,7 +148,7 @@ export const registerVendor = async (req, resp) => {
       role: role._id,
       status: "ACTIVE",
       kyc_status: "PENDING",
-      otp: generateOTP(),
+      otp: emailOtp,
       otp_phone: generateOTP(),
       otp_expires_at: moment().add(1, "minutes").toDate(),
       otp_phone_expiry_at: moment().add(1, "minutes").toDate(),
@@ -176,7 +177,7 @@ export const registerVendor = async (req, resp) => {
       await sendEmail({
         to: user.email,
         subject: "Vérifiez votre adresse e-mail",
-        html: await verificationMail(user.first_name, user.otp, {
+        html: await verificationMail(user.first_name, emailOtp, {
           forVendor: true,
         }),
       });
@@ -253,16 +254,15 @@ export const resendOTP = async (req, resp) => {
     }
 
     if (identifierType === "EMAIL") {
-      user.otp = generateOTP();
+      const emailOtp = generateOTP();
+      user.otp = emailOtp;
       user.otp_expires_at = moment().add(2, "minutes").toDate();
-
-      console.log("us");
 
       try {
         await sendEmail({
           to: user.email,
           subject: "Vérifiez votre adresse e-mail",
-          html: await verificationMail(user.first_name, user.otp, {
+          html: await verificationMail(user.first_name, emailOtp, {
           forVendor: true,
         }),
         });
@@ -270,12 +270,13 @@ export const resendOTP = async (req, resp) => {
         console.log(e);
       }
     } else {
-      user.otp_phone = generateOTP();
+      const phoneOtp = generateOTP();
+      user.otp_phone = phoneOtp;
       user.otp_phone_expiry_at = moment().add(2, "minutes").toDate();
 
       try {
         
-        let msg = `Votre code de vérification est ${user.otp_phone}. Saisissez-le pour vérifier votre numéro de téléphone.`;
+        let msg = `Votre code de vérification est ${phoneOtp}. Saisissez-le pour vérifier votre numéro de téléphone.`;
 
         const response = await axios.post(
           "https://rest.clicksend.com/v3/sms/send",
@@ -462,6 +463,7 @@ export const loginVendor = async (req, resp) => {
     if (isEmailLogin && !user.is_email_verified) {
       const otp = generateOTP();
       user.otp = otp;
+      user.otp_expires_at = moment().add(5, "minutes").toDate();
       user.otp_for = "VERIFY_EMAIL";
       await user.save();
 

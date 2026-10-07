@@ -49,6 +49,7 @@ import {
   createCheckoutSession ,
   verifyPaymentFromStripe,
   getCreditPurchaseInvoice,
+  stripeWebhook,
 } from "../controller/vendor/DashboardController.js";
 import { serviceDocumentUpload, userProfileUpload, quoteDocumentUpload, chatMediaUpload } from "../../utils/multer.js";
 import {
@@ -129,6 +130,8 @@ router.post("/leads/:leadId/quotes", userAuthenticateToken, checkRoleAuth(["Vend
 router.get("/credits/packages", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditPackages);
 router.get("/credits/balance", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditBalance);
 router.post("/credits/purchase", userAuthenticateToken, checkRoleAuth(["Vendor"]), purchaseCredits);
+// Stripe calls this directly; it is authenticated by the Stripe-Signature header, not a JWT.
+router.post("/credits/webhook", express.raw({ type: "application/json" }), stripeWebhook);
 router.get("/credits/invoice/:transactionId", userAuthenticateToken, checkRoleAuth(["Vendor"]), getCreditPurchaseInvoice);
 
 router.get("/transactions", userAuthenticateToken, checkRoleAuth(["Vendor"]), getTransactionsList);

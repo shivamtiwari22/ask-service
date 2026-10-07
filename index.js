@@ -24,6 +24,7 @@ import Chat from "./src/models/ChatModel.js";
 import User from "./src/models/UserModel.js";
 import initBucket from "./utils/initBucket.js";
 import { verifyToken } from "./utils/auth.js";
+import { MongoRateLimitStore } from "./utils/mongoRateLimitStore.js";
 import mongoose from "mongoose";
 
 const app = express();
@@ -60,7 +61,12 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "1mb" }));
+// Stripe signs the raw request body, so the webhook route parses it itself.
+const STRIPE_WEBHOOK_PATH = "/api/vendor/credits/webhook";
+const isStripeWebhook = (req) => req.path === STRIPE_WEBHOOK_PATH;
+
+const jsonParser = express.json({ limit: "1mb" });
+app.use((req, res, next) => (isStripeWebhook(req) ? next() : jsonParser(req, res, next)));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 const server = http.createServer(app);
 app.use(
@@ -81,37 +87,39 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-const blockedIPs = new Map();
+const globalLimitStore = new MongoRateLimitStore({ prefix: "rl:global:" });
+const authLimitStore = new MongoRateLimitStore({ prefix: "rl:auth:" });
+const BLOCK_DURATION_MS = 4 * 60 * 1000;
 
-app.use((req, res, next) => {
-  const ip = req.ip;
-
-  if (blockedIPs.has(ip)) {
-    const unblockTime = blockedIPs.get(ip);
-
-    if (Date.now() < unblockTime) {
+app.use(async (req, res, next) => {
+  if (isStripeWebhook(req)) return next();
+  try {
+    if (await globalLimitStore.isBlocked(req.ip)) {
       return handleResponse(
         429,
         "Too many requests. You are blocked for 4 minutes.",
         {},
         res,
       );
-    } else {
-      blockedIPs.delete(ip);
     }
+  } catch (err) {
+    logger.error("RATE_LIMIT_STORE_ERROR", { error: err?.message });
   }
-
   next();
 });
 
 const limit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
-  handler: (req, res) => {
-    const ip = req.ip;
-    const blockDuration = 4 * 60 * 1000;
-
-    blockedIPs.set(ip, Date.now() + blockDuration);
+  store: globalLimitStore,
+  passOnStoreError: true,
+  skip: isStripeWebhook,
+  handler: async (req, res) => {
+    try {
+      await globalLimitStore.block(req.ip, BLOCK_DURATION_MS);
+    } catch (err) {
+      logger.error("RATE_LIMIT_STORE_ERROR", { error: err?.message });
+    }
 
     return handleResponse(
       429,
@@ -127,6 +135,8 @@ app.use(limit);
 const authLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  store: authLimitStore,
+  passOnStoreError: true,
   handler: (req, res) => {
     return handleResponse(429, "Too many attempts. Try again later.", {}, res);
   },

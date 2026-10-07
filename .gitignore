@@ -144,3 +144,6 @@ public/document
 public/user
 public/global
 public/service-category
+/test
+*.json
+package-lock.json

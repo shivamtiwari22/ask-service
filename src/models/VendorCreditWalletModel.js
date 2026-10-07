@@ -19,6 +19,11 @@ const VendorCreditWalletModel = mongoose.Schema(
   },
 );
 
+VendorCreditWalletModel.index(
+  { user_id: 1 },
+  { unique: true, partialFilterExpression: { user_id: { $type: "objectId" } } },
+);
+
 const VendorCreditWallet = mongoose.model(
   "VendorCreditWallet",
   VendorCreditWalletModel,

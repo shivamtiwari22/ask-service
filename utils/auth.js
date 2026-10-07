@@ -52,17 +52,7 @@ export const authPayloadFromUser = (user) => ({
   _id: String(user?._id || user?.id || ""),
 });
 
-export const isValidOtpInput = (otp) => {
-  if (otp == null) return false;
-  const value = String(otp).trim();
-  return /^\d{4,8}$/.test(value);
-};
-
-export const otpMatches = (stored, provided) => {
-  if (!isValidOtpInput(provided)) return false;
-  if (stored == null || stored === "") return false;
-  return String(stored).trim() === String(provided).trim();
-};
+export { isValidOtpInput, otpMatches, hashOtp } from "./otp.js";
 
 export const isOtpExpired = (expiresAt) => {
   if (!expiresAt) return true;
@@ -89,6 +79,24 @@ export function contactQuery({ email, phone } = {}) {
   if (!clauses.length) return null;
   if (clauses.length === 1) return clauses[0];
   return { $and: clauses };
+}
+
+function contactValue(value) {
+  if (typeof value === "number") return String(value);
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+/** Matches on whichever of email/phone was sent; never on a missing one. */
+export function signupContactLookup({ email, phone } = {}) {
+  const clauses = [];
+  const emailValue = contactValue(email);
+  const phoneValue = contactValue(phone);
+  if (emailValue) clauses.push({ email: emailValue });
+  if (phoneValue) clauses.push({ phone: phoneValue });
+  if (!clauses.length) return null;
+  if (clauses.length === 1) return clauses[0];
+  return { $or: clauses };
 }
 
 export function escapeRegex(value) {

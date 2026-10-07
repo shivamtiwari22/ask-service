@@ -141,6 +141,8 @@ const FR_TRANSLATIONS = {
   "Invalid role type": "Type de rôle invalide",
   "Invalid service category": "Catégorie de service invalide",
   "Invalid service_id": "service_id invalide",
+  "Invalid session_id": "session_id invalide",
+  "Invalid signature": "Signature invalide",
   "Invalid status value": "Valeur de statut invalide",
   "Invalid status. Must be one of: ${...}":
     "Statut invalide. Doit être l'un de : ${...}",
