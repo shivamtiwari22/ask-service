@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import mongoose from "mongoose";
 import Stripe from "stripe";
 import Transaction from "../src/models/TransactionModel.js";
@@ -64,8 +65,7 @@ export async function resolveCreditPackage({ package_id, package_key } = {}) {
 }
 
 const isDuplicateSessionError = (err) =>
-  err?.code === 11000 &&
-  (err?.keyPattern?.stripe_session_id || String(err?.message || "").includes("stripe_session_id"));
+  err?.code === 11000 && Boolean(err?.keyPattern?._id || /index: _id_/.test(String(err?.message || "")));
 
 async function findCreditedTransaction(sessionId) {
   return Transaction.findOne({
@@ -74,10 +74,17 @@ async function findCreditedTransaction(sessionId) {
   }).lean();
 }
 
+/** Same Stripe session always maps to the same Transaction _id. */
+export function transactionIdForSession(sessionId) {
+  const hex = crypto.createHash("sha256").update(`stripe:${sessionId}`).digest("hex");
+  return new mongoose.Types.ObjectId(hex.slice(0, 24));
+}
+
 /**
  * Credits a paid Stripe Checkout session exactly once. Used by both
- * POST /credits/purchase and the Stripe webhook; the unique index on
- * Transaction.stripe_session_id makes the second caller a no-op.
+ * POST /credits/purchase and the Stripe webhook; the Transaction _id is
+ * derived from the session id, so the built-in unique _id index makes the
+ * second caller a no-op.
  */
 export async function creditCheckoutSession(
   session,
@@ -113,7 +120,7 @@ export async function creditCheckoutSession(
     throw new CreditPurchaseError(400, "Payment amount does not match the package");
   }
 
-  const txId = new mongoose.Types.ObjectId();
+  const txId = transactionIdForSession(session.id);
   const createdAt = new Date();
   let transaction;
   let wallet;

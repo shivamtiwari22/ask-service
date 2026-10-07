@@ -150,8 +150,8 @@ export const registerVendor = async (req, resp) => {
       kyc_status: "PENDING",
       otp: emailOtp,
       otp_phone: generateOTP(),
-      otp_expires_at: moment().add(1, "minutes").toDate(),
-      otp_phone_expiry_at: moment().add(1, "minutes").toDate(),
+      otp_expires_at: moment().add(5, "minutes").toDate(),
+      otp_phone_expiry_at: moment().add(5, "minutes").toDate(),
       otp_for: "SIGNUP",
       is_phone_verified: false,
       is_email_verified: false,
@@ -256,7 +256,7 @@ export const resendOTP = async (req, resp) => {
     if (identifierType === "EMAIL") {
       const emailOtp = generateOTP();
       user.otp = emailOtp;
-      user.otp_expires_at = moment().add(2, "minutes").toDate();
+      user.otp_expires_at = moment().add(5, "minutes").toDate();
 
       try {
         await sendEmail({
@@ -272,7 +272,7 @@ export const resendOTP = async (req, resp) => {
     } else {
       const phoneOtp = generateOTP();
       user.otp_phone = phoneOtp;
-      user.otp_phone_expiry_at = moment().add(2, "minutes").toDate();
+      user.otp_phone_expiry_at = moment().add(5, "minutes").toDate();
 
       try {
         
@@ -839,7 +839,7 @@ export const forgotPassword = async (req, resp) => {
     if (!user) return handleResponse(404, "User not found", {}, resp);
 
     user.otp = generateOTP();
-    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_expires_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
     await user.save();
     return handleResponse(
@@ -867,7 +867,7 @@ export const resendPhoneEmailOTP = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
     user.otp = generateOTP();
-    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_expires_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
     await user.save();
     return handleResponse(200, "Code sent successfully", {}, resp);

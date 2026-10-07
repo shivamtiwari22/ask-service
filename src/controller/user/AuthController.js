@@ -99,10 +99,10 @@ export const signup = async (req, resp) => {
       status: "ACTIVE",
       is_phone_verified: false,
       is_email_verified: false,
-      otp_phone: normalizedPhone ? phoneOtp : null,
-      otp_phone_expiry_at: normalizedPhone ? moment().add(5, "minutes").toDate() : null,
-      otp: email ? emailOtp : null,
-      otp_expires_at: email ? moment().add(5, "minutes").toDate() : null,
+      phone_otp: phoneOtp,
+      phone_otp_expiry: moment().add(5, "minutes").toDate(),
+      otp: emailOtp,
+      otp_expires_at: moment().add(5, "minutes").toDate(),
       email_verification_token: emailToken,
       fcm_token : fcm_token ? [fcm_token]: []
     });
@@ -237,7 +237,7 @@ export const loginPhoneEmail = async (req, resp) => {
 
     const emailOtp = generateOTP();
     user.otp = emailOtp;
-    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_expires_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
     user.otp_phone = generateOTP();
 
@@ -963,7 +963,7 @@ export const forgotPassword = async (req, resp) => {
 
     const otp = generateOTP();
     user.otp = otp;
-    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_expires_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
     // user.otp_phone = generateOTP();
 
@@ -1044,7 +1044,6 @@ export const GoogleLogin = async (req, res) => {
       return handleResponse(400, "Invalid role_type", {}, res);
     }
 
-  
 
     let firstName = "First";
     let lastName = "Last";
@@ -1198,7 +1197,7 @@ export const resendPhoneEmailOTP = async (req, resp) => {
       return handleResponse(404, "User not found", {}, resp);
     }
     user.otp = generateOTP();
-    user.otp_expires_at = moment().add(1, "minutes").toDate();
+    user.otp_expires_at = moment().add(5, "minutes").toDate();
     user.otp_for = type;
     await user.save();
     return handleResponse(200, "OTP sent successfully", {}, resp);

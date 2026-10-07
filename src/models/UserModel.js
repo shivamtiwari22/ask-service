@@ -220,11 +220,6 @@ const UserSchema = mongoose.Schema(
 );
 
 UserSchema.index({ email: 1 }, { unique: true });
-// Most users store phone: null, which a sparse index would still index; the partial filter skips them.
-UserSchema.index(
-  { phone: 1 },
-  { unique: true, partialFilterExpression: { phone: { $type: "string", $gt: "" } } },
-);
 UserSchema.index({ role: 1 });
 UserSchema.index({ service: 1 });
 UserSchema.index({ status: 1 });

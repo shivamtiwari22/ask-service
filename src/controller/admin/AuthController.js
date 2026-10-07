@@ -163,7 +163,7 @@ export const forgotPassword = async (req, resp) => {
     const user = await User.findOne({ email });
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const otp = generateOTP();
-    const otp_expires_at = moment().add(1, "minutes").toDate();
+    const otp_expires_at = moment().add(5, "minutes").toDate();
     const otp_for = "FORGOT_PASSWORD";
     const updateUser = await User.findByIdAndUpdate(
       user?._id,
@@ -247,7 +247,7 @@ export const resendOTP = async (req, resp) => {
     const user = await User.findOne({ email });
     if (!user) return handleResponse(404, "User not found", {}, resp);
     const otp = generateOTP();
-    const otp_expires_at = moment().add(1, "minutes").toDate();
+    const otp_expires_at = moment().add(5, "minutes").toDate();
 
     const updateUser = await User.findByIdAndUpdate(
       user._id,

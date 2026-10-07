@@ -7,7 +7,6 @@ import {
   hashPassword,
   authPayloadFromUser,
   otpMatches,
-  signupContactLookup,
 } from "../../../utils/auth.js";
 import {
   createReference,
@@ -478,6 +477,7 @@ export const initiateServiceRequest = async (req, resp) => {
 
         const emailOtp = generateOTP();
         emailOwner.otp = emailOtp;
+        emailOwner.otp_expires_at = moment().add(5, "minutes").toDate();
         await emailOwner.save();
 
         await sendEmail({
@@ -513,6 +513,7 @@ export const initiateServiceRequest = async (req, resp) => {
       try {
         const emailOtp = generateOTP();
         existingUser.otp = emailOtp;
+        existingUser.otp_expires_at = moment().add(5, "minutes").toDate();
         await existingUser.save();
 
         await sendEmail({
@@ -753,12 +754,9 @@ export const verifySignupLogin = async (req, resp) => {
   try {
     const { email, phone, otp_email, otp_phone } = req.body;
 
-    const lookup = signupContactLookup({ email, phone });
-    if (!lookup) {
-      return handleResponse(400, "Email or phone is required", {}, resp);
-    }
-
-    const user = await User.findOne(lookup);
+    const user = await User.findOne({
+      $or: [{ email }, { phone }],
+    });
 
     if (!user) {
       return handleResponse(404, "User not found", {}, resp);

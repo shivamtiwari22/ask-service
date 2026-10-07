@@ -74,11 +74,5 @@ const TransactionModel = mongoose.Schema(
   },
 );
 
-TransactionModel.index({ user_id: 1, createdAt: -1 });
-TransactionModel.index(
-  { stripe_session_id: 1 },
-  { unique: true, partialFilterExpression: { stripe_session_id: { $type: "string" } } },
-);
-
 const Transaction = mongoose.model("Transaction", TransactionModel);
 export default Transaction;

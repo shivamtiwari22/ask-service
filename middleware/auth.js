@@ -96,14 +96,6 @@ export const userAuthenticateToken = async (req, res, next) => {
       return handleResponse(401, "Invalid token", {}, res);
     }
 
-    const isVendor = Boolean(user.is_vendor) || user.role?.name === "Vendor";
-    const requireClientPhone = process.env.REQUIRE_CLIENT_PHONE_VERIFIED === "true";
-    if (!isVendor && requireClientPhone && user.is_phone_verified !== true) {
-      return handleResponse(403, "Phone verification required", {
-        flow: "PHONE_VERIFICATION_REQUIRED",
-      }, res);
-    }
-
     req.user = user;
     next();
   } catch (error) {

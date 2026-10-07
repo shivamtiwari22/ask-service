@@ -81,24 +81,6 @@ export function contactQuery({ email, phone } = {}) {
   return { $and: clauses };
 }
 
-function contactValue(value) {
-  if (typeof value === "number") return String(value);
-  if (typeof value !== "string") return "";
-  return value.trim();
-}
-
-/** Matches on whichever of email/phone was sent; never on a missing one. */
-export function signupContactLookup({ email, phone } = {}) {
-  const clauses = [];
-  const emailValue = contactValue(email);
-  const phoneValue = contactValue(phone);
-  if (emailValue) clauses.push({ email: emailValue });
-  if (phoneValue) clauses.push({ phone: phoneValue });
-  if (!clauses.length) return null;
-  if (clauses.length === 1) return clauses[0];
-  return { $or: clauses };
-}
-
 export function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
